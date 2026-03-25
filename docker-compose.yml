@@ -31,6 +31,8 @@ services:
       DEBUG: ${DEBUG}
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
+    ports:
+      - "${BACKEND_PORT:-8080}:80"
 
   frontend:
     build:
