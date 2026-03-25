@@ -1,0 +1,71 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: fiscio-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: fiscio-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      APP_NAME: ${APP_NAME}
+      DEBUG: ${DEBUG}
+    volumes:
+      # firebase-credentials.json deve existir no host antes de subir
+      - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: fiscio-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+  cron:
+    build:
+      context: ./backend
+    container_name: fiscio-cron
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+    volumes:
+      - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
+    command: >
+      sh -c "
+        echo '0 0 * * * python /app/generate_recurring.py >> /var/log/fiscio-recurring.log 2>&1' > /etc/cron.d/fiscio &&
+        echo '0 * * * * python /app/send_reminders.py >> /var/log/fiscio-reminders.log 2>&1' >> /etc/cron.d/fiscio &&
+        chmod 0644 /etc/cron.d/fiscio &&
+        crontab /etc/cron.d/fiscio &&
+        cron -f
+      "
+
+volumes:
+  postgres_data:
