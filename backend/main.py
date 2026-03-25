@@ -32,6 +32,24 @@ Base.metadata.create_all(bind=engine)
 #   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'pix';
 #   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS original_date DATE;
 
+# Seed: cria usuário admin padrão se o banco estiver vazio
+def seed_default_admin():
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            password_hash = bcrypt.hashpw("admin".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            admin = User(name="Admin", email="admin", password_hash=password_hash, is_admin=True, is_active=True)
+            db.add(admin)
+            db.commit()
+            print("✅ Usuário admin padrão criado (email: admin, senha: admin)")
+    except Exception as e:
+        print(f"⚠️ Erro ao criar usuário admin padrão: {e}")
+    finally:
+        db.close()
+
+seed_default_admin()
+
 # Initialize Firebase Admin SDK
 try:
     FirebaseService.initialize('/opt/budget-system/backend/firebase-credentials.json')
