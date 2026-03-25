@@ -30,10 +30,9 @@ services:
       APP_NAME: ${APP_NAME}
       DEBUG: ${DEBUG}
     volumes:
-      # firebase-credentials.json deve existir no host antes de subir
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8080}:8000"
 
   frontend:
     build:
@@ -43,7 +42,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3001}:80"
 
   cron:
     build:
