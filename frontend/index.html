@@ -2243,28 +2243,46 @@
 
         document.getElementById('loginForm').onsubmit = async (e) => {
             e.preventDefault();
+            const errEl = document.getElementById('loginError');
+            errEl.classList.add('hidden');
             try {
                 const form = new URLSearchParams();
                 form.append('username', document.getElementById('loginEmail').value);
                 form.append('password', document.getElementById('loginPassword').value);
-                
-                const res = await fetch(`${API}/auth/login`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: form
-                });
-                
+
+                let res;
+                try {
+                    res = await fetch(`${API}/auth/login`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: form
+                    });
+                } catch (networkErr) {
+                    errEl.textContent = 'Erro de rede: backend inacessível (' + networkErr.message + ')';
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+
+                if (!res.ok) {
+                    let detail = 'Erro ' + res.status;
+                    try { const d = await res.json(); detail = d.detail || detail; } catch (_) {}
+                    if (res.status === 401) detail = 'Email ou senha incorretos';
+                    errEl.textContent = detail;
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+
                 const data = await res.json();
                 token = data.access_token;
                 user = data.user;
-                
+
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
-                
+
                 showDashboard();
             } catch (err) {
-                document.getElementById('loginError').textContent = 'Email ou senha incorretos';
-                document.getElementById('loginError').classList.remove('hidden');
+                errEl.textContent = 'Erro inesperado: ' + err.message;
+                errEl.classList.remove('hidden');
             }
         };
 
