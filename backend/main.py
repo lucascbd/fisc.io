@@ -906,13 +906,13 @@ async def get_inflation_data(
             p = sum(cat_monthly_count[cat_id].get(m, 0) for m in prev_months) / n_prev if n_prev > 0 else 0.0
             # Q: avg adj valor in prev months (total adj / n_prev months)
             q = sum(cat_monthly_adj[cat_id].get(m, 0.0) for m in prev_months) / n_prev if n_prev > 0 else 0.0
-            # S: adj avg price (ticket médio) in prev months
-            s = round(q / p, 2) if p > 0 else 0.0
+            # S: adj avg price (ticket médio) in prev months — sem round para preservar precisão
+            s = q / p if p > 0 else 0.0
             # N: count last month
             n_last = cat_monthly_count[cat_id].get(last_month, 0)
-            # T: adj avg price last month
+            # T: adj avg price last month — sem round para preservar precisão
             valor_last_adj = cat_monthly_adj[cat_id].get(last_month, 0.0)
-            t = round(valor_last_adj / n_last, 2) if n_last > 0 else 0.0
+            t = valor_last_adj / n_last if n_last > 0 else 0.0
             # Effects (in R$)
             preco = round((t - s) * n_last, 2)
             volume = round((n_last - p) * s, 2)
@@ -923,7 +923,7 @@ async def get_inflation_data(
             if p > 0 or n_last > 0:
                 price_volume.append({
                     "category_id": cat_id, "name": name, "icon": icon,
-                    "avg_price_prev": s, "avg_price_last": t,
+                    "avg_price_prev": round(s, 2), "avg_price_last": round(t, 2),
                     "vol_prev": round(p, 1), "vol_last": n_last,
                     "efeito_preco": preco, "efeito_volume": volume,
                     "efeito_preco_pct": preco_pct, "efeito_volume_pct": volume_pct,
