@@ -35,8 +35,11 @@ Base.metadata.create_all(bind=engine)
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
     import os
+    import subprocess
+    from urllib.parse import urlparse
     from database import SessionLocal
     from sqlalchemy import text
+
     db = SessionLocal()
     try:
         # Admin padrão
@@ -47,21 +50,40 @@ def run_seeds():
             db.commit()
             print("✅ Usuário admin padrão criado (email: admin@admin.com, senha: admin)")
 
-        # Dados iniciais (categories, ipca)
+        # Dados iniciais (categories, ipca) via psql
         seed_file = os.path.join(os.path.dirname(__file__), "seeds", "initial_data.sql")
         if os.path.exists(seed_file):
             categories_empty = db.execute(text("SELECT COUNT(*) FROM categories")).scalar() == 0
             ipca_empty = db.execute(text("SELECT COUNT(*) FROM ipca")).scalar() == 0
             if categories_empty or ipca_empty:
+                db_url = os.environ.get("DATABASE_URL", "")
+                parsed = urlparse(db_url)
+                # Extrai token \restrict do topo do arquivo (pg_dump moderno)
                 with open(seed_file, "r", encoding="utf-8") as f:
-                    sql = f.read()
-                if sql.strip():
-                    db.execute(text(sql))
-                    db.commit()
+                    first_line = f.readline().strip()
+                token = first_line.split()[1] if first_line.startswith("\\restrict") else None
+                preamble = f"\\unrestrict {token}\n" if token else "\\unrestrict\n"
+                with open(seed_file, "rb") as f:
+                    seed_content = f.read()
+                env = os.environ.copy()
+                env["PGPASSWORD"] = parsed.password or ""
+                result = subprocess.run(
+                    ["psql",
+                     "-h", parsed.hostname or "localhost",
+                     "-p", str(parsed.port or 5432),
+                     "-U", parsed.username or "postgres",
+                     "-d", parsed.path.lstrip("/"),
+                     "--no-psqlrc"],
+                    input=preamble.encode() + seed_content,
+                    capture_output=True,
+                    env=env,
+                )
+                if result.returncode == 0:
                     print("✅ Dados iniciais carregados (categories/ipca)")
+                else:
+                    print(f"⚠️ Seed parcial: {result.stderr.decode()[:500]}")
     except Exception as e:
         print(f"⚠️ Erro no seed inicial: {e}")
-        db.rollback()
     finally:
         db.close()
 
