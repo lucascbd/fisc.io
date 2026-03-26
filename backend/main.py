@@ -39,10 +39,10 @@ def seed_default_admin():
     try:
         if db.query(User).count() == 0:
             password_hash = bcrypt.hashpw("admin".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-            admin = User(name="Admin", email="admin", password_hash=password_hash, is_admin=True, is_active=True)
+            admin = User(name="Admin", email="admin@admin.com", password_hash=password_hash, is_admin=True, is_active=True)
             db.add(admin)
             db.commit()
-            print("✅ Usuário admin padrão criado (email: admin, senha: admin)")
+            print("✅ Usuário admin padrão criado (email: admin@admin.com, senha: admin)")
     except Exception as e:
         print(f"⚠️ Erro ao criar usuário admin padrão: {e}")
     finally:
