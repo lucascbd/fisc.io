@@ -10,6 +10,9 @@ Controle suas despesas, monitore sua inflação real e gerencie contas compartil
 
 ## Funcionalidades
 
+### 📱 PWA
+Funciona como PWA, pode ser instalado no celular como app nativo.
+
 ### 💸 Controle de despesas
 Registre despesas com categoria, data, número de parcelas e método de pagamento. Cada despesa fica associada a quem pagou e como foi dividida.
 
@@ -35,7 +38,7 @@ Para cada categoria, o app decompõe a variação dos seus gastos em dois fatore
 Defina targets mensais por categoria e método de pagamento. O app compara seus gastos reais com as metas definidas e sinaliza quando você está próximo ou acima do limite.
 
 ### 🔔 Notificações push
-Receba notificações quando uma despesa for adicionada ou editada, e lembretes mensais com o fechamento do balanço. Funciona como PWA — pode ser instalado no celular como app nativo.
+Receba notificações quando uma despesa for adicionada ou editada, e lembretes mensais com o fechamento do balanço.
 
 ### 🌙 Dark mode
 Interface completa em modo escuro ou claro, com preferência salva por dispositivo.
