@@ -32,23 +32,40 @@ Base.metadata.create_all(bind=engine)
 #   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'pix';
 #   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS original_date DATE;
 
-# Seed: cria usuário admin padrão se o banco estiver vazio
-def seed_default_admin():
+# Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
+def run_seeds():
+    import os
     from database import SessionLocal
+    from sqlalchemy import text
     db = SessionLocal()
     try:
+        # Admin padrão
         if db.query(User).count() == 0:
             password_hash = bcrypt.hashpw("admin".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
             admin = User(name="Admin", email="admin@admin.com", password_hash=password_hash, is_admin=True, is_active=True)
             db.add(admin)
             db.commit()
             print("✅ Usuário admin padrão criado (email: admin@admin.com, senha: admin)")
+
+        # Dados iniciais (categories, ipca)
+        seed_file = os.path.join(os.path.dirname(__file__), "seeds", "initial_data.sql")
+        if os.path.exists(seed_file):
+            categories_empty = db.execute(text("SELECT COUNT(*) FROM categories")).scalar() == 0
+            ipca_empty = db.execute(text("SELECT COUNT(*) FROM ipca")).scalar() == 0
+            if categories_empty or ipca_empty:
+                with open(seed_file, "r", encoding="utf-8") as f:
+                    sql = f.read()
+                if sql.strip():
+                    db.execute(text(sql))
+                    db.commit()
+                    print("✅ Dados iniciais carregados (categories/ipca)")
     except Exception as e:
-        print(f"⚠️ Erro ao criar usuário admin padrão: {e}")
+        print(f"⚠️ Erro no seed inicial: {e}")
+        db.rollback()
     finally:
         db.close()
 
-seed_default_admin()
+run_seeds()
 
 # Initialize Firebase Admin SDK
 try:
