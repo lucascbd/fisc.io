@@ -54,8 +54,7 @@ def run_seeds():
         seed_file = os.path.join(os.path.dirname(__file__), "seeds", "initial_data.sql")
         if os.path.exists(seed_file):
             categories_empty = db.execute(text("SELECT COUNT(*) FROM categories")).scalar() == 0
-            ipca_empty = db.execute(text("SELECT COUNT(*) FROM ipca")).scalar() == 0
-            if categories_empty or ipca_empty:
+            if categories_empty:
                 db_url = os.environ.get("DATABASE_URL", "")
                 parsed = urlparse(db_url)
                 # Remove linha \restrict (psql moderno) para não bloquear execução
