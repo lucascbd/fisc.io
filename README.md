@@ -11,19 +11,19 @@ Controle suas despesas, monitore sua inflação real e gerencie contas compartil
 ## Funcionalidades
 
 ### 💸 Controle de despesas
-Registre despesas com categoria, data, número de parcelas e método de pagamento (Pix, Cartão ou Vale). Cada despesa fica associada a quem pagou e como foi dividida.
+Registre despesas com categoria, data, número de parcelas e método de pagamento. Cada despesa fica associada a quem pagou e como foi dividida.
 
 ### 👥 Perfis de divisão
-Crie perfis de rateio com percentuais personalizados por usuário — por exemplo, 60% Lucas / 40% Marcel. Cada despesa compartilhada referencia um perfil, e o sistema calcula automaticamente quanto cabe a cada pessoa no período.
+Crie perfis de rateio com percentuais personalizados por usuário — por exemplo, 60% Usuario 1 / 40% Usuario 2. Cada despesa compartilhada referencia um perfil, e o sistema calcula automaticamente quanto cabe a cada pessoa no período.
 
 ### ⚖️ Balanço entre usuários
-O app calcula o balanço líquido entre todos os participantes: quem está no positivo (tem a receber) e quem está no negativo (deve). O cálculo considera quem pagou cada despesa e qual era a divisão acordada — inclusive quando o pagador não faz parte do perfil de divisão.
+O app calcula o balanço líquido entre todos os participantes: quem está no positivo (tem a receber) e quem está no negativo (deve). O cálculo considera quem pagou cada despesa e qual era a divisão acordada.
 
 ### 🔁 Despesas recorrentes
 Cadastre despesas fixas mensais (aluguel, streaming, assinaturas). Um cron job roda todo dia à meia-noite e gera automaticamente as despesas do mês caso ainda não tenham sido criadas — tolerante a falhas, se o servidor estiver offline o dia 1 ele gera assim que voltar.
 
 ### 📊 Gráficos e análises
-Visualize seus gastos por categoria, por método de pagamento e por período. O gráfico de barras empilhadas por método de pagamento respeita a lógica de quem pagou: despesas pagas por outro usuário aparecem como Pix (reembolso), não como Cartão de quem pagou originalmente.
+Visualize seus gastos por categoria, por método de pagamento e por período.
 
 ### 📈 Sua inflação real
 A aba Inflação calcula a variação de preços que você realmente sentiu no bolso — não o IPCA genérico. O cálculo leva em conta suas categorias de gasto, seus volumes de consumo e os pesos reais de cada item na sua carteira. O resultado é comparado com o IPCA Índice Geral para mostrar se você está acima ou abaixo da média.
