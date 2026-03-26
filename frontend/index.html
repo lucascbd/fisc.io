@@ -5444,8 +5444,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                                     html += `<div><b>Total:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_prev)}</span> ➔ <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_last)}</span></div>`;
                                                 }
                                                 if (d.avg_price_last != null) {
+                                                    const fmtVol = v => v == null ? '—' : (v % 1 === 0 ? String(v) : Number(v).toFixed(1).replace('.', ','));
                                                     html += `<div><b>Ticket:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_prev)}</span> ➔ <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_last)}</span></div>`;
-                                                    html += `<div><b>Qtd:</b> <span style="color:${numColor}">${Number(d.vol_prev).toFixed(1)}</span> ➔ <span style="color:${numColor}">${d.vol_last}</span></div>`;
+                                                    html += `<div><b>Qtd:</b> <span style="color:${numColor}">${fmtVol(d.vol_prev)}</span> ➔ <span style="color:${numColor}">${fmtVol(d.vol_last)}</span></div>`;
                                                 }
                                                 return html;
                                             });
