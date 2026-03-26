@@ -279,21 +279,3 @@ class ExpenseService:
             func.coalesce(func.sum(ExpenseSplit.balance), 0)
         ).filter(ExpenseSplit.user_id == user_id).scalar()
         return Decimal(str(result))
-    
-    @staticmethod
-    def get_all_balances(db: Session):
-        """Get balances for all users"""
-        users = db.query(User).filter(User.is_active == True).all()
-        
-        balances = []
-        for user in users:
-            balance = ExpenseService.get_user_balance(db, user.id)
-            balances.append({
-                "user_id": user.id,
-                "user_name": user.name,
-                "balance": float(balance),
-                "to_receive": float(balance) if balance > 0 else 0,
-                "to_pay": float(-balance) if balance < 0 else 0
-            })
-        
-        return balances
