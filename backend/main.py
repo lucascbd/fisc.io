@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, date
 from jose import JWTError, jwt
 from typing import List, Optional
 import json
+import os
 from pydantic import BaseModel
 import bcrypt
 from decimal import Decimal
@@ -105,7 +106,8 @@ run_seeds()
 
 # Initialize Firebase Admin SDK
 try:
-    FirebaseService.initialize('/opt/budget-system/backend/firebase-credentials.json')
+    firebase_creds = os.environ.get("FIREBASE_CREDENTIALS_PATH", "/app/firebase-credentials.json")
+    FirebaseService.initialize(firebase_creds)
     print("✅ Firebase Admin SDK inicializado com sucesso")
 except Exception as e:
     print(f"⚠️ Firebase não inicializado: {e}")
