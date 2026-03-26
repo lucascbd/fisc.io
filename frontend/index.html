@@ -1901,6 +1901,7 @@
                 <!-- Gráfico 2b: Donut média por categoria (ajustado) -->
                 <div class="mb-6">
                     <div class="mb-3">
+                        <h3 class="text-lg md:text-xl font-bold">Média</h3>
                         <p id="adjustedDonutAverage" class="hidden"></p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">
@@ -2243,28 +2244,46 @@
 
         document.getElementById('loginForm').onsubmit = async (e) => {
             e.preventDefault();
+            const errEl = document.getElementById('loginError');
+            errEl.classList.add('hidden');
             try {
                 const form = new URLSearchParams();
                 form.append('username', document.getElementById('loginEmail').value);
                 form.append('password', document.getElementById('loginPassword').value);
-                
-                const res = await fetch(`${API}/auth/login`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: form
-                });
-                
+
+                let res;
+                try {
+                    res = await fetch(`${API}/auth/login`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: form
+                    });
+                } catch (networkErr) {
+                    errEl.textContent = 'Erro de rede: backend inacessível (' + networkErr.message + ')';
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+
+                if (!res.ok) {
+                    let detail = 'Erro ' + res.status;
+                    try { const d = await res.json(); detail = d.detail || detail; } catch (_) {}
+                    if (res.status === 401) detail = 'Email ou senha incorretos';
+                    errEl.textContent = detail;
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+
                 const data = await res.json();
                 token = data.access_token;
                 user = data.user;
-                
+
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
-                
+
                 showDashboard();
             } catch (err) {
-                document.getElementById('loginError').textContent = 'Email ou senha incorretos';
-                document.getElementById('loginError').classList.remove('hidden');
+                errEl.textContent = 'Erro inesperado: ' + err.message;
+                errEl.classList.remove('hidden');
             }
         };
 
@@ -5099,9 +5118,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     const monthly = isMyInfl ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
                                     showChartTooltip('inflTooltip', ctx.chart, ctx.tooltip, dark => {
                                         const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
+                                        const nc = dark ? '#9aa0a6' : '#5f6368';
                                         return `<div style="font-weight:600;margin-bottom:2px;">${label}</div>${hr}`
-                                            + `<div><b>Acum.:</b> ${fmtPct(acum)}%</div>`
-                                            + `<div><b>Mês:</b> ${fmtPct(monthly||0)}%</div>`;
+                                            + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(acum)}%</span></div>`
+                                            + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
                                     });
                                 }
                             },
@@ -5175,9 +5195,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
                                         showChartTooltip('catInflTooltip', ctx.chart, ctx.tooltip, dark => {
                                             const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
+                                            const nc = dark ? '#9aa0a6' : '#5f6368';
                                             return `<div style="font-weight:600;margin-bottom:2px;">${ds.label}</div>${hr}`
-                                                + `<div><b>Acum.:</b> ${fmtPct(dp.parsed.y)}%</div>`
-                                                + `<div><b>Mês:</b> ${fmtPct(rate)}%</div>`;
+                                                + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`
+                                                + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
                                         });
                                     }
                                 },
@@ -5284,7 +5305,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                             const posItems = chart.data.labels.map((label, i) => ({
                                                 text: donutIsMobile
                                                     ? `${donutData[i].icon} ${Math.round(donutData[i].avg).toLocaleString('pt-BR')}`
-                                                    : `${donutData[i].icon} R$ ${formatBRL(donutData[i].avg)}`,
+                                                    : `${donutData[i].icon} R$ ${Math.round(donutData[i].avg).toLocaleString('pt-BR')}`,
                                                 fillStyle: donutData[i].color,
                                                 fontColor: textColor,
                                                 hidden: false,
@@ -5294,7 +5315,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                             const negItems = donutNegData.map(d => ({
                                                 text: donutIsMobile
                                                     ? `${d.icon} −${Math.abs(Math.round(d.avg)).toLocaleString('pt-BR')}`
-                                                    : `${d.icon} −R$ ${formatBRL(Math.abs(d.avg))}`,
+                                                    : `${d.icon} −R$ ${Math.round(Math.abs(d.avg)).toLocaleString('pt-BR')}`,
                                                 fillStyle: d.color,
                                                 fontColor: donutNegColor,
                                                 strokeStyle: donutNegColor,

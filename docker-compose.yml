@@ -10,6 +10,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -32,7 +34,7 @@ services:
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
     ports:
-      - "${BACKEND_PORT:-8080}:80"
+      - "${BACKEND_PORT:-8080}:8000"
 
   frontend:
     build:
@@ -61,6 +63,7 @@ services:
       sh -c "
         echo '0 0 * * * python /app/generate_recurring.py >> /var/log/fiscio-recurring.log 2>&1' > /etc/cron.d/fiscio &&
         echo '0 * * * * python /app/send_reminders.py >> /var/log/fiscio-reminders.log 2>&1' >> /etc/cron.d/fiscio &&
+        echo '0 0 * * * python /app/ipca_ingest.py >> /var/log/fiscio-ipca.log 2>&1' >> /etc/cron.d/fiscio &&
         chmod 0644 /etc/cron.d/fiscio &&
         crontab /etc/cron.d/fiscio &&
         cron -f
