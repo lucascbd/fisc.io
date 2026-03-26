@@ -116,9 +116,10 @@ O banco de dados **não é apagado** em atualizações. Apenas o código do back
 
 ---
 
-### 5. Restaurar backup
+### 5. Restaurar backup (opcional)
 
 ```bash
+# Caso queira migrar o banco de uma instância para outra.
 # Apaga e recria o banco (necessário para evitar conflitos de schema)
 docker exec -i fiscio-db psql -U budget_user -d postgres -c "DROP DATABASE budget_db WITH (FORCE);"
 docker exec -i fiscio-db psql -U budget_user -d postgres -c "CREATE DATABASE budget_db OWNER budget_user;"
