@@ -1,5 +1,6 @@
 """Expense business logic"""
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date
 from dateutil.relativedelta import relativedelta
@@ -273,12 +274,11 @@ class ExpenseService:
     
     @staticmethod
     def get_user_balance(db: Session, user_id: int) -> Decimal:
-        """Get total balance for a user"""
-        splits = db.query(ExpenseSplit).filter(
-            ExpenseSplit.user_id == user_id
-        ).all()
-        
-        return sum((Decimal(str(s.balance)) if s.balance is not None else Decimal('0') for s in splits), Decimal('0'))
+        """Get total balance for a user via SQL SUM"""
+        result = db.query(
+            func.coalesce(func.sum(ExpenseSplit.balance), 0)
+        ).filter(ExpenseSplit.user_id == user_id).scalar()
+        return Decimal(str(result))
     
     @staticmethod
     def get_all_balances(db: Session):
