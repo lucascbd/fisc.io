@@ -7061,6 +7061,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         // Inicializar Firebase
         async function initializeFirebase() {
             try {
+                // Service Workers requerem HTTPS ou localhost
+                if (!('serviceWorker' in navigator)) {
+                    console.warn('⚠️ Service Worker não disponível (requer HTTPS). Notificações push desabilitadas.');
+                    return;
+                }
+
                 // Registrar Service Worker PRIMEIRO
                 console.log('📋 Registrando Service Worker...');
                 const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
