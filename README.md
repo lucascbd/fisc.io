@@ -99,7 +99,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 Na primeira vez que o backend sobe com o banco vazio, ele cria automaticamente:
 
-- Usuário admin padrão: `admin@admin.com` / `admin`
+- Usuário admin padrão: `admin@admin.com` / senha: `admin`
 - Tabelas `categories` e `ipca` populadas com dados iniciais (via `backend/seeds/initial_data.sql`)
 
 > **Troque a senha do admin após o primeiro login.**
