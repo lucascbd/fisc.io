@@ -2,9 +2,43 @@
 
 Gerenciador de finanças pessoais — self-hosted, open source.
 
-Controle despesas compartilhadas, monitore inflação, defina metas e gerencie contas recorrentes.
+Controle suas despesas, monitore sua inflação real e gerencie contas compartilhadas com total privacidade. Seus dados ficam no seu servidor.
 
 **Stack:** FastAPI · PostgreSQL 16 · Vanilla JS · Nginx · Docker
+
+---
+
+## Funcionalidades
+
+### 💸 Controle de despesas
+Registre despesas com categoria, data, número de parcelas e método de pagamento (Pix, Cartão ou Vale). Cada despesa fica associada a quem pagou e como foi dividida.
+
+### 👥 Perfis de divisão
+Crie perfis de rateio com percentuais personalizados por usuário — por exemplo, 60% Lucas / 40% Marcel. Cada despesa compartilhada referencia um perfil, e o sistema calcula automaticamente quanto cabe a cada pessoa no período.
+
+### ⚖️ Balanço entre usuários
+O app calcula o balanço líquido entre todos os participantes: quem está no positivo (tem a receber) e quem está no negativo (deve). O cálculo considera quem pagou cada despesa e qual era a divisão acordada — inclusive quando o pagador não faz parte do perfil de divisão.
+
+### 🔁 Despesas recorrentes
+Cadastre despesas fixas mensais (aluguel, streaming, assinaturas). Um cron job roda todo dia à meia-noite e gera automaticamente as despesas do mês caso ainda não tenham sido criadas — tolerante a falhas, se o servidor estiver offline o dia 1 ele gera assim que voltar.
+
+### 📊 Gráficos e análises
+Visualize seus gastos por categoria, por método de pagamento e por período. O gráfico de barras empilhadas por método de pagamento respeita a lógica de quem pagou: despesas pagas por outro usuário aparecem como Pix (reembolso), não como Cartão de quem pagou originalmente.
+
+### 📈 Sua inflação real
+A aba Inflação calcula a variação de preços que você realmente sentiu no bolso — não o IPCA genérico. O cálculo leva em conta suas categorias de gasto, seus volumes de consumo e os pesos reais de cada item na sua carteira. O resultado é comparado com o IPCA Índice Geral para mostrar se você está acima ou abaixo da média.
+
+### 🔧 Análise Preço × Volume
+Para cada categoria, o app decompõe a variação dos seus gastos em dois fatores: quanto mudou por causa de preço (inflação) e quanto mudou por causa de volume (você consumiu mais ou menos). Isso permite entender se você está gastando mais porque os preços subiram ou porque mudou seu padrão de consumo.
+
+### 🎯 Metas por categoria
+Defina targets mensais por categoria e método de pagamento. O app compara seus gastos reais com as metas definidas e sinaliza quando você está próximo ou acima do limite.
+
+### 🔔 Notificações push
+Receba notificações quando uma despesa for adicionada ou editada, e lembretes mensais com o fechamento do balanço. Funciona como PWA — pode ser instalado no celular como app nativo.
+
+### 🌙 Dark mode
+Interface completa em modo escuro ou claro, com preferência salva por dispositivo.
 
 ---
 
