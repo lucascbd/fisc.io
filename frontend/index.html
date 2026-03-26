@@ -2944,7 +2944,7 @@
                 const profile = profiles.find(p => p.id === e.split_profile_id);
                 const profileName = profile?.name || 'Perfil desconhecido';
                 
-                const pmIcon = `<img src="/${{'cartao':'cartao-48.png','vale':'vale-48.png','pix':'pix-48.png'}[e.payment_method||'pix']||'pix-48.png'}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;display:inline;">`;
+                const pmIcon = `<img src="/${{'cartao':'cartao-48.png','vale':'vale-48.png','pix':'pix-48.png'}[e.payment_method||'pix']||'pix-48.png'}" style="width:16px;height:16px;object-fit:contain;display:inline-block;vertical-align:middle;margin-bottom:3px;">`;
                 return `
                 <div class="bg-white rounded-lg shadow p-4 mb-4">
                     <div class="flex justify-between items-start">
