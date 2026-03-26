@@ -1901,7 +1901,7 @@
                 <!-- Gráfico 2b: Donut média por categoria (ajustado) -->
                 <div class="mb-6">
                     <div class="mb-3">
-                        <h3 class="text-base font-semibold text-gray-700 dark:text-gray-300">Média</h3>
+                        <h3 class="text-lg md:text-xl font-bold">Média</h3>
                         <p id="adjustedDonutAverage" class="hidden"></p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">
@@ -5083,7 +5083,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 fill: true, tension: 0.3,
                                 datalabels: {
                                     align: 'top', anchor: 'end', offset: 4,
-                                    color: isDark ? '#9aa0a6' : '#5f6368', font: { size: 11, weight: 'bold' },
+                                    color: '#1a73e8', font: { size: 11, weight: 'bold' },
                                     formatter: v => fmtPct(v) + '%'
                                 }
                             },
@@ -5095,7 +5095,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 borderDash: [5, 3], fill: false, tension: 0.3,
                                 datalabels: {
                                     align: 'bottom', anchor: 'start', offset: 4,
-                                    color: isDark ? '#9aa0a6' : '#5f6368', font: { size: 11, weight: 'bold' },
+                                    color: '#ea4335', font: { size: 11, weight: 'bold' },
                                     formatter: v => fmtPct(v) + '%'
                                 }
                             }
@@ -5118,9 +5118,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     const monthly = isMyInfl ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
                                     showChartTooltip('inflTooltip', ctx.chart, ctx.tooltip, dark => {
                                         const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
+                                        const nc = dark ? '#9aa0a6' : '#5f6368';
                                         return `<div style="font-weight:600;margin-bottom:2px;">${label}</div>${hr}`
-                                            + `<div><b>Acum.:</b> ${fmtPct(acum)}%</div>`
-                                            + `<div><b>Mês:</b> ${fmtPct(monthly||0)}%</div>`;
+                                            + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(acum)}%</span></div>`
+                                            + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
                                     });
                                 }
                             },
@@ -5194,17 +5195,18 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
                                         showChartTooltip('catInflTooltip', ctx.chart, ctx.tooltip, dark => {
                                             const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
+                                            const nc = dark ? '#9aa0a6' : '#5f6368';
                                             return `<div style="font-weight:600;margin-bottom:2px;">${ds.label}</div>${hr}`
-                                                + `<div><b>Acum.:</b> ${fmtPct(dp.parsed.y)}%</div>`
-                                                + `<div><b>Mês:</b> ${fmtPct(rate)}%</div>`;
+                                                + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`
+                                                + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
                                         });
                                     }
                                 },
                                 datalabels: { display: false }
                             },
                             scales: {
-                                x: { ticks: { color: isDark ? '#9aa0a6' : '#5f6368' }, grid: { color: gridColor } },
-                                y: { ticks: { color: isDark ? '#9aa0a6' : '#5f6368', callback: v => fmtPct(v, 1) + '%' }, grid: { color: gridColor } }
+                                x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                                y: { ticks: { color: textColor, callback: v => fmtPct(v, 1) + '%' }, grid: { color: gridColor } }
                             }
                         },
                         plugins: [window.ChartDataLabels].filter(Boolean)
