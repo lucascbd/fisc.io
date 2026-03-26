@@ -23,7 +23,7 @@ Crie perfis de rateio com percentuais personalizados por usuário — por exempl
 O app calcula o balanço líquido entre todos os participantes: quem está no positivo (tem a receber) e quem está no negativo (deve). O cálculo considera quem pagou cada despesa e qual era a divisão acordada.
 
 ### 🔁 Despesas recorrentes
-Cadastre despesas fixas mensais (aluguel, streaming, assinaturas). Um cron job roda todo dia à meia-noite e gera automaticamente as despesas do mês caso ainda não tenham sido criadas — tolerante a falhas, se o servidor estiver offline o dia 1 ele gera assim que voltar.
+Cadastre despesas fixas mensais (aluguel, streaming, assinaturas). Um cron job roda todo dia à meia-noite e gera automaticamente as despesas do mês caso ainda não tenham sido criadas — tolerante a falhas, se o servidor estiver offline no dia 1 ele gera assim que voltar.
 
 ### 📊 Gráficos e análises
 Visualize seus gastos por categoria, por método de pagamento e por período.
