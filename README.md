@@ -10,8 +10,8 @@ Controle suas despesas, monitore sua inflação real e gerencie contas compartil
 
 ## Funcionalidades
 
-💸 Controle de despesas
-Registre despesas com categoria, data, número de parcelas e método de pagamento. Cada despesa fica associada a quem pagou e como foi dividida.
+### 💸 Controle de despesas
+#### Registre despesas com categoria, data, número de parcelas e método de pagamento. Cada despesa fica associada a quem pagou e como foi dividida.
 
 👥 Perfis de divisão
 Crie perfis de rateio com percentuais personalizados por usuário — por exemplo, 60% Usuario 1 / 40% Usuario 2. Cada despesa compartilhada referencia um perfil, e o sistema calcula automaticamente quanto cabe a cada pessoa no período.
