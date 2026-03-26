@@ -32,7 +32,7 @@ Visualize seus gastos por categoria, por método de pagamento e por período.
 A aba Inflação calcula a variação de preços que você realmente sentiu no bolso — não o IPCA genérico. O cálculo leva em conta suas categorias de gasto, seus volumes de consumo e os pesos reais de cada item na sua carteira. O resultado é comparado com o IPCA Índice Geral para mostrar se você está acima ou abaixo da média.
 
 ### 🔧 Análise Preço × Volume
-Para cada categoria, o app decompõe a variação dos seus gastos em dois fatores: quanto mudou por causa de preço (inflação) e quanto mudou por causa de volume (você consumiu mais ou menos). Isso permite entender se você está gastando mais porque os preços subiram ou porque mudou seu padrão de consumo.
+Para cada categoria, o app decompõe a variação dos seus gastos em dois fatores: quanto mudou por causa de preço (inflação ou ticket médio maior) e quanto mudou por causa de volume (você consumiu mais ou menos). Isso permite entender se você está gastando mais porque os preços subiram ou porque mudou seu padrão de consumo.
 
 ### 🎯 Metas por categoria
 Defina targets mensais por categoria e método de pagamento. O app compara seus gastos reais com as metas definidas e sinaliza quando você está próximo ou acima do limite.
