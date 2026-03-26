@@ -35,8 +35,8 @@ Base.metadata.create_all(bind=engine)
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
     import os
-    import subprocess
-    from urllib.parse import urlparse
+    import io
+    import psycopg2
     from database import SessionLocal
     from sqlalchemy import text
 
@@ -50,38 +50,54 @@ def run_seeds():
             db.commit()
             print("✅ Usuário admin padrão criado (email: admin@admin.com, senha: admin)")
 
-        # Dados iniciais (categories, ipca) via psql
+        # Dados iniciais (categories, ipca) via psycopg2
         seed_file = os.path.join(os.path.dirname(__file__), "seeds", "initial_data.sql")
-        if os.path.exists(seed_file):
-            categories_empty = db.execute(text("SELECT COUNT(*) FROM categories")).scalar() == 0
-            if categories_empty:
-                db_url = os.environ.get("DATABASE_URL", "")
-                parsed = urlparse(db_url)
-                # Remove linha \restrict (psql moderno) para não bloquear execução
-                with open(seed_file, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                filtered = [l for l in lines if not l.strip().startswith("\\restrict")]
-                seed_content = "".join(filtered).encode("utf-8")
-                env = os.environ.copy()
-                env["PGPASSWORD"] = parsed.password or ""
-                result = subprocess.run(
-                    ["psql",
-                     "-h", parsed.hostname or "localhost",
-                     "-p", str(parsed.port or 5432),
-                     "-U", parsed.username or "postgres",
-                     "-d", parsed.path.lstrip("/"),
-                     "--no-psqlrc"],
-                    input=seed_content,
-                    capture_output=True,
-                    env=env,
+        if os.path.exists(seed_file) and db.execute(text("SELECT COUNT(*) FROM categories")).scalar() == 0:
+            db_url = os.environ.get("DATABASE_URL", "")
+            conn = psycopg2.connect(db_url)
+            conn.autocommit = True
+            cur = conn.cursor()
+
+            # Cria tabela ipca se não existir
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS public.ipca (
+                    "NC" integer, "NN" text, "MC" integer, "MN" text,
+                    "V" numeric(12,2), "D1C" integer, "D1N" text,
+                    "D2C" integer, "D2N" text, "D3C" integer, "D3N" text,
+                    "D4C" integer, "D4N" text,
+                    sidra_row_hash text NOT NULL,
+                    ingested_at timestamp without time zone DEFAULT now() NOT NULL
                 )
-                if result.returncode == 0:
-                    print("✅ Dados iniciais carregados (categories/ipca)")
-                else:
-                    print(f"⚠️ Seed parcial (stderr): {result.stderr.decode()[:500]}")
-                    print(f"⚠️ Seed parcial (stdout): {result.stdout.decode()[:500]}")
+            """)
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ipca_rowhash_uidx ON public.ipca (sidra_row_hash)")
+
+            # Parseia blocos COPY do dump e executa via copy_expert
+            with open(seed_file, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+                if line.startswith("COPY ") and "FROM stdin" in line:
+                    copy_header = line.strip()
+                    i += 1
+                    data_lines = []
+                    while i < len(lines) and lines[i].rstrip("\n") != "\\.":
+                        data_lines.append(lines[i])
+                        i += 1
+                    data = "".join(data_lines)
+                    cur.copy_expert(copy_header, io.StringIO(data))
+                elif line.startswith("SELECT setval("):
+                    cur.execute(line.strip())
+                i += 1
+
+            cur.close()
+            conn.close()
+            print("✅ Dados iniciais carregados (categories/ipca)")
     except Exception as e:
+        import traceback
         print(f"⚠️ Erro no seed inicial: {e}")
+        traceback.print_exc()
     finally:
         db.close()
 
