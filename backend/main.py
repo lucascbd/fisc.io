@@ -58,13 +58,11 @@ def run_seeds():
             if categories_empty or ipca_empty:
                 db_url = os.environ.get("DATABASE_URL", "")
                 parsed = urlparse(db_url)
-                # Extrai token \restrict do topo do arquivo (pg_dump moderno)
+                # Remove linha \restrict (psql moderno) para não bloquear execução
                 with open(seed_file, "r", encoding="utf-8") as f:
-                    first_line = f.readline().strip()
-                token = first_line.split()[1] if first_line.startswith("\\restrict") else None
-                preamble = f"\\unrestrict {token}\n" if token else "\\unrestrict\n"
-                with open(seed_file, "rb") as f:
-                    seed_content = f.read()
+                    lines = f.readlines()
+                filtered = [l for l in lines if not l.strip().startswith("\\restrict")]
+                seed_content = "".join(filtered).encode("utf-8")
                 env = os.environ.copy()
                 env["PGPASSWORD"] = parsed.password or ""
                 result = subprocess.run(
@@ -74,14 +72,15 @@ def run_seeds():
                      "-U", parsed.username or "postgres",
                      "-d", parsed.path.lstrip("/"),
                      "--no-psqlrc"],
-                    input=preamble.encode() + seed_content,
+                    input=seed_content,
                     capture_output=True,
                     env=env,
                 )
                 if result.returncode == 0:
                     print("✅ Dados iniciais carregados (categories/ipca)")
                 else:
-                    print(f"⚠️ Seed parcial: {result.stderr.decode()[:500]}")
+                    print(f"⚠️ Seed parcial (stderr): {result.stderr.decode()[:500]}")
+                    print(f"⚠️ Seed parcial (stdout): {result.stdout.decode()[:500]}")
     except Exception as e:
         print(f"⚠️ Erro no seed inicial: {e}")
     finally:
