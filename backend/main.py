@@ -255,6 +255,14 @@ def visible_expense_ids_subquery(db: Session, current_user: User):
         )
     ).subquery()
 
+
+def _month_date_range(year: int, mon: int):
+    """Retorna (start_date, end_date) para um mês, compatível com índice B-tree em due_date."""
+    start = date(year, mon, 1)
+    end = date(year + 1, 1, 1) if mon == 12 else date(year, mon + 1, 1)
+    return start, end
+
+
 # ============================================================================
 # HEALTH & ROOT
 # ============================================================================
@@ -715,7 +723,21 @@ async def get_inflation_data(
     filter_user_ids = set(int(x) for x in user_ids.split(',')) if user_ids else None
 
     # 1. Buscar parcelas visíveis com categoria e código IPCA
-    splits_raw = db.execute(text("""
+    # Quando filter_months é informado, filtra no SQL para evitar carregar toda a tabela
+    sql_date_filter = ""
+    sql_params: dict = {"uid": current_user.id}
+    if filter_months:
+        parsed = sorted(filter_months)
+        min_y, min_m = map(int, min(parsed).split('-'))
+        max_y, max_m = map(int, max(parsed).split('-'))
+        sql_start = date(min_y, min_m, 1)
+        sql_end_y, sql_end_m = (max_y + 1, 1) if max_m == 12 else (max_y, max_m + 1)
+        sql_end = date(sql_end_y, sql_end_m, 1)
+        sql_date_filter = "AND es.due_date >= :sql_start AND es.due_date < :sql_end"
+        sql_params["sql_start"] = sql_start
+        sql_params["sql_end"] = sql_end
+
+    splits_raw = db.execute(text(f"""
         SELECT es.user_id, es.user_amount, es.due_date, e.category_id,
                c.ipca_category_code, c.name as cat_name, c.icon as cat_icon,
                COALESCE(es.user_percentage, 1.0) as user_pct,
@@ -729,8 +751,9 @@ async def get_inflation_data(
             LEFT JOIN split_profile_users spu ON spu.profile_id = e2.split_profile_id
             WHERE e2.paid_by_user_id = :uid OR spu.user_id = :uid
         )
+        {sql_date_filter}
         ORDER BY es.due_date
-    """), {"uid": current_user.id}).fetchall()
+    """), sql_params).fetchall()
 
     filtered = []
     # Track ALL splits per expense per month to detect shared expenses
@@ -1001,11 +1024,11 @@ async def reorder_categories(
 ):
     """Reorder categories by updating display_order (admin only)"""
     try:
+        cats = {c.id: c for c in db.query(Category).filter(Category.id.in_(data.category_ids)).all()}
         for index, category_id in enumerate(data.category_ids):
-            category = db.query(Category).filter(Category.id == category_id).first()
-            if category:
-                category.display_order = index
-        
+            if category_id in cats:
+                cats[category_id].display_order = index
+
         db.commit()
         return {"message": "Categories reordered successfully"}
     except Exception as e:
@@ -1389,14 +1412,15 @@ async def list_expenses(
     
     if month:
         year, mon = map(int, month.split('-'))
+        start_date, end_date = _month_date_range(year, mon)
         expense_ids_subquery = db.query(ExpenseSplit.expense_id).filter(
-            extract('year', ExpenseSplit.due_date) == year,
-            extract('month', ExpenseSplit.due_date) == mon
+            ExpenseSplit.due_date >= start_date,
+            ExpenseSplit.due_date < end_date
         ).distinct().subquery()
         query = query.filter(Expense.id.in_(expense_ids_subquery))
-    
+
     expenses = query.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
-    
+
     return [{
         "id": e.id,
         "description": e.description,
@@ -1429,27 +1453,28 @@ async def list_expenses_with_splits(
 
     if month:
         year, mon = map(int, month.split('-'))
+        start_date, end_date = _month_date_range(year, mon)
         expense_ids_subquery = db.query(ExpenseSplit.expense_id).filter(
-            extract('year', ExpenseSplit.due_date) == year,
-            extract('month', ExpenseSplit.due_date) == mon
+            ExpenseSplit.due_date >= start_date,
+            ExpenseSplit.due_date < end_date
         ).distinct().subquery()
-        
+
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
             joinedload(Expense.category),
             joinedload(Expense.split_profile)
         ).filter(Expense.id.in_(expense_ids_subquery)).filter(Expense.id.in_(vis))
         expenses = q.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
-        
+
         expense_ids = [e.id for e in expenses]
         splits_query = db.query(ExpenseSplit).options(
             joinedload(ExpenseSplit.user)
         ).filter(
             ExpenseSplit.expense_id.in_(expense_ids),
-            extract('year', ExpenseSplit.due_date) == year,
-            extract('month', ExpenseSplit.due_date) == mon
+            ExpenseSplit.due_date >= start_date,
+            ExpenseSplit.due_date < end_date
         ).all() if expense_ids else []
-        
+
     else:
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
@@ -1741,27 +1766,29 @@ async def get_dashboard(
     # Filtro de visibilidade: usuário só vê despesas em que está envolvido
     vis = visible_expense_ids_subquery(db, current_user)
 
+    dash_start_date = dash_end_date = None
     if month:
-        year, mon = map(int, month.split('-'))
+        dash_year, dash_mon = map(int, month.split('-'))
+        dash_start_date, dash_end_date = _month_date_range(dash_year, dash_mon)
         expense_ids_subquery = db.query(ExpenseSplit.expense_id).filter(
-            extract('year', ExpenseSplit.due_date) == year,
-            extract('month', ExpenseSplit.due_date) == mon
+            ExpenseSplit.due_date >= dash_start_date,
+            ExpenseSplit.due_date < dash_end_date
         ).distinct().subquery()
-        
+
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
             joinedload(Expense.category),
             joinedload(Expense.split_profile)
         ).filter(Expense.id.in_(expense_ids_subquery)).filter(Expense.id.in_(vis))
         expenses_query = q.order_by(Expense.expense_date.desc()).all()
-        
+
         expense_ids = [e.id for e in expenses_query]
         splits_query = db.query(ExpenseSplit).options(
             joinedload(ExpenseSplit.user)
         ).filter(
             ExpenseSplit.expense_id.in_(expense_ids),
-            extract('year', ExpenseSplit.due_date) == year,
-            extract('month', ExpenseSplit.due_date) == mon
+            ExpenseSplit.due_date >= dash_start_date,
+            ExpenseSplit.due_date < dash_end_date
         ).all() if expense_ids else []
     else:
         q = db.query(Expense).options(
@@ -1770,7 +1797,7 @@ async def get_dashboard(
             joinedload(Expense.split_profile)
         ).filter(Expense.id.in_(vis))
         expenses_query = q.order_by(Expense.expense_date.desc()).limit(500).all()
-        
+
         expense_ids = [e.id for e in expenses_query]
         splits_query = db.query(ExpenseSplit).options(
             joinedload(ExpenseSplit.user)
@@ -1816,38 +1843,32 @@ async def get_dashboard(
             } for s in splits]
         })
     
-    # 5. Balances (agregação SQL)
+    # 5. Balances — 1 query com GROUP BY em vez de N queries (uma por usuário)
+    bal_q = db.query(
+        ExpenseSplit.user_id,
+        func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance'),
+        func.coalesce(func.sum(ExpenseSplit.paid_amount), 0).label('total_paid'),
+        func.coalesce(func.sum(ExpenseSplit.user_amount), 0).label('total_owed')
+    )
+    if dash_start_date:
+        bal_q = bal_q.filter(
+            ExpenseSplit.due_date >= dash_start_date,
+            ExpenseSplit.due_date < dash_end_date
+        )
+    bal_by_user = {row.user_id: row for row in bal_q.group_by(ExpenseSplit.user_id).all()}
+
     balances_data = []
     for user in users_list:
-        if month:
-            year, mon = map(int, month.split('-'))
-            result = db.query(
-                func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance'),
-                func.coalesce(func.sum(ExpenseSplit.paid_amount), 0).label('total_paid'),
-                func.coalesce(func.sum(ExpenseSplit.user_amount), 0).label('total_owed')
-            ).filter(
-                ExpenseSplit.user_id == user.id,
-                extract('year', ExpenseSplit.due_date) == year,
-                extract('month', ExpenseSplit.due_date) == mon
-            ).first()
-        else:
-            result = db.query(
-                func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance'),
-                func.coalesce(func.sum(ExpenseSplit.paid_amount), 0).label('total_paid'),
-                func.coalesce(func.sum(ExpenseSplit.user_amount), 0).label('total_owed')
-            ).filter(
-                ExpenseSplit.user_id == user.id
-            ).first()
-        
-        balance = float(result.balance) if result.balance else 0
+        row = bal_by_user.get(user.id)
+        balance = float(row.balance) if row else 0.0
         balances_data.append({
             "user_id": user.id,
             "user_name": user.name,
             "balance": balance,
             "to_receive": balance if balance > 0 else 0,
             "to_pay": -balance if balance < 0 else 0,
-            "total_paid": float(result.total_paid) if result.total_paid else 0,
-            "total_owed": float(result.total_owed) if result.total_owed else 0
+            "total_paid": float(row.total_paid) if row else 0.0,
+            "total_owed": float(row.total_owed) if row else 0.0
         })
     
     # 6. Totais pré-calculados
@@ -1859,7 +1880,6 @@ async def get_dashboard(
     
     # Calcular total do período baseado nas parcelas (não no total das despesas)
     if month:
-        year, mon = map(int, month.split('-'))
         period_total = 0
         seen_installments = set()
         
@@ -1892,44 +1912,39 @@ async def get_balances(
     _: User = Depends(get_current_user)
 ):
     """
-    Get balances - OTIMIZADO com agregação SQL
+    Get balances — 1 query GROUP BY em vez de N queries (uma por usuário)
     """
     users = db.query(User).filter(User.is_active == True).all()
-    
+
+    bal_q = db.query(
+        ExpenseSplit.user_id,
+        func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance'),
+        func.coalesce(func.sum(ExpenseSplit.paid_amount), 0).label('total_paid'),
+        func.coalesce(func.sum(ExpenseSplit.user_amount), 0).label('total_owed')
+    )
+    if month:
+        year, mon = map(int, month.split('-'))
+        start_date, end_date = _month_date_range(year, mon)
+        bal_q = bal_q.filter(
+            ExpenseSplit.due_date >= start_date,
+            ExpenseSplit.due_date < end_date
+        )
+    bal_by_user = {row.user_id: row for row in bal_q.group_by(ExpenseSplit.user_id).all()}
+
     balances = []
     for user in users:
-        if month:
-            year, mon = map(int, month.split('-'))
-            # Query agregada por usuário com filtro de mês
-            result = db.query(
-                func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance'),
-                func.coalesce(func.sum(ExpenseSplit.paid_amount), 0).label('total_paid'),
-                func.coalesce(func.sum(ExpenseSplit.user_amount), 0).label('total_owed')
-            ).filter(
-                ExpenseSplit.user_id == user.id,
-                extract('year', ExpenseSplit.due_date) == year,
-                extract('month', ExpenseSplit.due_date) == mon
-            ).first()
-        else:
-            result = db.query(
-                func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance'),
-                func.coalesce(func.sum(ExpenseSplit.paid_amount), 0).label('total_paid'),
-                func.coalesce(func.sum(ExpenseSplit.user_amount), 0).label('total_owed')
-            ).filter(
-                ExpenseSplit.user_id == user.id
-            ).first()
-        
-        balance = float(result.balance) if result.balance else 0
+        row = bal_by_user.get(user.id)
+        balance = float(row.balance) if row else 0.0
         balances.append({
             "user_id": user.id,
             "user_name": user.name,
             "balance": balance,
             "to_receive": balance if balance > 0 else 0,
             "to_pay": -balance if balance < 0 else 0,
-            "total_paid": float(result.total_paid) if result.total_paid else 0,
-            "total_owed": float(result.total_owed) if result.total_owed else 0
+            "total_paid": float(row.total_paid) if row else 0.0,
+            "total_owed": float(row.total_owed) if row else 0.0
         })
-    
+
     return balances
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/splits")
