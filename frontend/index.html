@@ -2371,9 +2371,14 @@
                 const currentMonth=new Date().toISOString().slice(0,7);
                 const homeSelect=document.getElementById('homeMonthFilter');
                 const expenseSelect=document.getElementById('expenseMonthFilter');
-                const options=months.map(m=>`<option value="${m.value}" ${m.value===currentMonth?'selected':''}>${m.label}</option>`).join('');
+                const prevHome=homeSelect.value;
+                const prevExpense=expenseSelect.value;
+                const options=months.map(m=>`<option value="${m.value}">${m.label}</option>`).join('');
                 homeSelect.innerHTML=options;expenseSelect.innerHTML=options;
-                if(!months.find(m=>m.value===currentMonth)&&months.length>0){homeSelect.value=months[months.length-1].value;expenseSelect.value=months[months.length-1].value;}
+                const homeTarget=prevHome&&months.find(m=>m.value===prevHome)?prevHome:currentMonth;
+                const expenseTarget=prevExpense&&months.find(m=>m.value===prevExpense)?prevExpense:currentMonth;
+                homeSelect.value=homeTarget||(months.length>0?months[months.length-1].value:'');
+                expenseSelect.value=expenseTarget||(months.length>0?months[months.length-1].value:'');
                 
                 // ✅ Atualizar filtros dependentes do mês
                 await updateExpenseFilters();
@@ -3655,23 +3660,11 @@
                             console.error('❌ sendExpenseNotification não definida!');
                         }
                         
-                        // Auto-filtrar para o mês da despesa criada
-                        const [year, month] = expenseDate.split('-');
-                        const targetMonth = `${year}-${month}`;
-                        
                         closeModal();
-                        
-                        // ✅ Atualizar lista de meses disponíveis
+
+                        // ✅ Atualizar lista de meses disponíveis (preserva seleção atual)
                         await loadMonths();
-                        
-                        // Atualizar filtros para o mês da despesa
-                        if (document.getElementById('homeMonthFilter')) {
-                            document.getElementById('homeMonthFilter').value = targetMonth;
-                        }
-                        if (document.getElementById('expenseMonthFilter')) {
-                            document.getElementById('expenseMonthFilter').value = targetMonth;
-                        }
-                        
+
                         loadExpenses();
                         loadDashboardData();
                     } catch (err) {
