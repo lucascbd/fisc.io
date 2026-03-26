@@ -1786,7 +1786,7 @@
                 <div class="mb-6">
                     <div class="mb-3"><h3 class="text-lg md:text-xl font-bold">Despesas por mês</h3></div>
                     <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;">
-                        <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Período</label><div style="position:relative;"><button type="button" id="barChartDropdownBtn" onclick="toggleBarChartDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="barChartSelectedText" class="truncate">12 meses</span><span>▼</span></button><div id="barChartDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:120px;"><div id="barChartMonthsContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div></div></div></div>
+                        <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Período</label><div style="position:relative;"><button type="button" id="barChartDropdownBtn" onclick="toggleBarChartDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="barChartSelectedText" class="truncate">12 meses</span><span>▼</span></button><div id="barChartDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:120px;"><div id="barChartMonthsContainer" class="p-2" style="max-height:230px;overflow-y:auto;white-space:nowrap;"></div></div></div></div>
                         <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Categoria</label><div style="position:relative;"><button type="button" id="catFilterDropdownBtn" onclick="toggleCatFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="catFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="catFilterDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:160px;"><div id="catFilterContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div></div></div></div>
                         <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Despesas</label><div style="position:relative;"><button type="button" id="userFilterDropdownBtn" onclick="toggleUserFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="userFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="userFilterDropdown" class="hidden absolute top-full right-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:100%;width:max-content;"><div id="userFilterContainer" class="p-2" style="white-space:nowrap;"><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" checked onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" checked onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label></div></div></div></div>
                     </div>
@@ -4992,17 +4992,17 @@
                     monthHtml += `
                         <div style="border-bottom:1px solid #f1f3f4; margin-bottom:4px; padding-bottom:4px;">
                             <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
-                                <span id="infl-yr-arrow-${yr}" class="text-xs text-gray-400" style="width:12px;cursor:pointer;user-select:none;" onclick="toggleInflYearCollapse('${yr}')">${isLatest ? '▼' : '▶'}</span>
                                 <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
                                     <input type="checkbox" class="infl-year-cb" data-year="${yr}"
                                         ${isLatest ? 'checked' : ''}
                                         onchange="toggleInflYear('${yr}', this.checked)">
                                     <span class="text-sm">${yr}</span>
                                 </label>
+                                <span id="infl-yr-arrow-${yr}" class="text-xs text-gray-400" style="cursor:pointer;user-select:none;padding:0 4px;" onclick="toggleInflYearCollapse('${yr}')">${isLatest ? '▼' : '▶'}</span>
                             </div>
                             <div id="infl-yr-months-${yr}" ${isLatest ? '' : 'style="display:none"'}>
                                 ${byYear[yr].map(m => `
-                                <label class="flex items-center gap-2 py-0.5 cursor-pointer px-2 rounded hover:bg-gray-100" style="padding-left:24px;">
+                                <label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;">
                                     <input type="checkbox" class="infl-month-cb" value="${m}" data-year="${yr}"
                                         ${isLatest ? 'checked' : ''}
                                         onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflation();">
@@ -5552,14 +5552,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const allChecked = barByYear[yr].every(m => last12Months.includes(m));
                     return `<div style="border-bottom:1px solid #f1f3f4;margin-bottom:4px;padding-bottom:4px;">
                         <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
-                            <span id="bar-yr-arrow-${yr}" class="text-xs text-gray-400" style="width:12px;cursor:pointer;user-select:none;" onclick="toggleBarYearCollapse('${yr}')">${isLatest?'▼':'▶'}</span>
                             <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
                                 <input type="checkbox" class="bar-year-cb" data-year="${yr}" ${allChecked?'checked':''} onchange="toggleBarYear('${yr}', this.checked)">
                                 <span class="text-sm">${yr}</span>
                             </label>
+                            <span id="bar-yr-arrow-${yr}" class="text-xs text-gray-400" style="cursor:pointer;user-select:none;padding:0 4px;" onclick="toggleBarYearCollapse('${yr}')">${isLatest?'▼':'▶'}</span>
                         </div>
                         <div id="bar-yr-months-${yr}" ${isLatest?'':'style="display:none"'}>
-                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer px-2 rounded hover:bg-gray-100" style="padding-left:24px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${last12Months.includes(m)?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
+                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${last12Months.includes(m)?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
                         </div>
                     </div>`;
                 }).join('');
