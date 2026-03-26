@@ -4764,10 +4764,30 @@
         function updateBarChartSelectedText() {
             const checkboxes = document.querySelectorAll('.bar-chart-month:checked');
             const count = checkboxes.length;
-            const text = count === 0 ? 'Nenhum' : 
-                         count === 1 ? '1 mês' : 
+            const text = count === 0 ? 'Nenhum' :
+                         count === 1 ? '1 mês' :
                          `${count} meses`;
             document.getElementById('barChartSelectedText').textContent = text;
+        }
+
+        function toggleBarYearCollapse(year) {
+            const div = document.getElementById(`bar-yr-months-${year}`);
+            const arrow = document.getElementById(`bar-yr-arrow-${year}`);
+            if (!div) return;
+            const hidden = div.style.display === 'none';
+            div.style.display = hidden ? '' : 'none';
+            if (arrow) arrow.textContent = hidden ? '▼' : '▶';
+        }
+        function toggleBarYear(year, checked) {
+            document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`).forEach(cb => { cb.checked = checked; });
+            updateBarChartSelectedText();
+            updateBarChartFilters();
+        }
+        function syncBarYearCheckbox(year) {
+            const all = document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`);
+            const checked = document.querySelectorAll(`.bar-chart-month[data-year="${year}"]:checked`);
+            const yearCb = document.querySelector(`.bar-year-cb[data-year="${year}"]`);
+            if (yearCb) yearCb.checked = all.length > 0 && all.length === checked.length;
         }
 
         function updateUserFilterSelectedText() {
@@ -4843,7 +4863,15 @@
             const all = document.querySelectorAll(`.infl-month-cb[data-year="${year}"]`);
             const checked = document.querySelectorAll(`.infl-month-cb[data-year="${year}"]:checked`);
             const yearCb = document.querySelector(`.infl-year-cb[data-year="${year}"]`);
-            if (yearCb) yearCb.checked = all.length === checked.length;
+            if (yearCb) yearCb.checked = all.length > 0 && all.length === checked.length;
+        }
+        function toggleInflYearCollapse(year) {
+            const div = document.getElementById(`infl-yr-months-${year}`);
+            const arrow = document.getElementById(`infl-yr-arrow-${year}`);
+            if (!div) return;
+            const hidden = div.style.display === 'none';
+            div.style.display = hidden ? '' : 'none';
+            if (arrow) arrow.textContent = hidden ? '▼' : '▶';
         }
         function updateInflCatText() {
             const total = document.querySelectorAll('.infl-cat-cb').length;
@@ -4963,19 +4991,24 @@
                     const isLatest = yr === latestYear;
                     monthHtml += `
                         <div style="border-bottom:1px solid #f1f3f4; margin-bottom:4px; padding-bottom:4px;">
-                            <label class="flex items-center gap-2 py-1 cursor-pointer px-2 rounded font-semibold hover:bg-blue-50">
-                                <input type="checkbox" class="infl-year-cb" data-year="${yr}"
-                                    ${isLatest ? 'checked' : ''}
-                                    onchange="toggleInflYear('${yr}', this.checked)">
-                                <span class="text-sm">${yr}</span>
-                            </label>
-                            ${byYear[yr].map(m => `
-                            <label class="flex items-center gap-2 py-0.5 cursor-pointer px-2 rounded hover:bg-gray-100" style="padding-left:20px;">
-                                <input type="checkbox" class="infl-month-cb" value="${m}" data-year="${yr}"
-                                    ${isLatest ? 'checked' : ''}
-                                    onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflation();">
-                                <span class="text-sm">${m}</span>
-                            </label>`).join('')}
+                            <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
+                                <span id="infl-yr-arrow-${yr}" class="text-xs text-gray-400" style="width:12px;cursor:pointer;user-select:none;" onclick="toggleInflYearCollapse('${yr}')">${isLatest ? '▼' : '▶'}</span>
+                                <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
+                                    <input type="checkbox" class="infl-year-cb" data-year="${yr}"
+                                        ${isLatest ? 'checked' : ''}
+                                        onchange="toggleInflYear('${yr}', this.checked)">
+                                    <span class="text-sm">${yr}</span>
+                                </label>
+                            </div>
+                            <div id="infl-yr-months-${yr}" ${isLatest ? '' : 'style="display:none"'}>
+                                ${byYear[yr].map(m => `
+                                <label class="flex items-center gap-2 py-0.5 cursor-pointer px-2 rounded hover:bg-gray-100" style="padding-left:24px;">
+                                    <input type="checkbox" class="infl-month-cb" value="${m}" data-year="${yr}"
+                                        ${isLatest ? 'checked' : ''}
+                                        onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflation();">
+                                    <span class="text-sm">${m}</span>
+                                </label>`).join('')}
+                            </div>
                         </div>`;
                 });
                 document.getElementById('inflMonthContainer').innerHTML = monthHtml || '<p class="text-xs text-gray-400 p-2">Sem dados</p>';
@@ -5510,17 +5543,27 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 pieSelect.innerHTML=months.map(m=>`<option value="${m}" ${m===selectedMonth?'selected':''}>${m}</option>`).join('');
                 const barContainer=document.getElementById('barChartMonthsContainer');
                 const last12Months=months.slice(-12);
-                barContainer.innerHTML = months.map(m => `
-                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded">
-                        <input type="checkbox" 
-                               class="bar-chart-month" 
-                               value="${m}" 
-                               ${last12Months.includes(m) ? 'checked' : ''}
-                               onchange="updateBarChartFilters();">
-                        <span class="text-sm">${m}</span>
-                    </label>
-                `).join('');
-                
+                // Group by year — years collapsed except the latest
+                const barByYear = {};
+                months.forEach(m => { const y=m.slice(0,4); if(!barByYear[y])barByYear[y]=[]; barByYear[y].push(m); });
+                const barLatestYear = Object.keys(barByYear).sort().pop();
+                barContainer.innerHTML = Object.keys(barByYear).sort((a,b)=>b-a).map(yr => {
+                    const isLatest = yr === barLatestYear;
+                    const allChecked = barByYear[yr].every(m => last12Months.includes(m));
+                    return `<div style="border-bottom:1px solid #f1f3f4;margin-bottom:4px;padding-bottom:4px;">
+                        <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
+                            <span id="bar-yr-arrow-${yr}" class="text-xs text-gray-400" style="width:12px;cursor:pointer;user-select:none;" onclick="toggleBarYearCollapse('${yr}')">${isLatest?'▼':'▶'}</span>
+                            <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
+                                <input type="checkbox" class="bar-year-cb" data-year="${yr}" ${allChecked?'checked':''} onchange="toggleBarYear('${yr}', this.checked)">
+                                <span class="text-sm">${yr}</span>
+                            </label>
+                        </div>
+                        <div id="bar-yr-months-${yr}" ${isLatest?'':'style="display:none"'}>
+                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer px-2 rounded hover:bg-gray-100" style="padding-left:24px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${last12Months.includes(m)?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
+                        </div>
+                    </div>`;
+                }).join('');
+
                 // Atualizar texto inicial
                 updateBarChartSelectedText();
                 
