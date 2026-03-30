@@ -4737,10 +4737,12 @@
                 if (N < 2) return;
                 const isDark = document.body.classList.contains('dark-mode');
                 const bandColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.07)';
-                // Escala de categoria: cada dia ocupa um slot de largura W/N, centrado em (d-0.5)*slotW
-                const slotW = (chartArea.right - chartArea.left) / N;
-                const bandX1 = d => chartArea.left + (d - 1) * slotW;
-                const bandX2 = d => chartArea.left + d * slotW;
+                // Usa o próprio scale do Chart.js para obter o pixel central de cada dia (1-based → tick index d-1)
+                const xScale = chart.scales.x;
+                const center = d => xScale.getPixelForTick(d - 1);
+                const halfSlot = (center(2) - center(1)) / 2;
+                const bandX1 = d => center(d) - halfSlot;
+                const bandX2 = d => center(d) + halfSlot;
                 const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
                 weeks.forEach((w, i) => {
@@ -4764,9 +4766,11 @@
                 if (N < 2) return;
                 const isDark = document.body.classList.contains('dark-mode');
                 const labelColor = isDark ? '#9aa0a6' : '#80868b';
-                const slotW = (chartArea.right - chartArea.left) / N;
-                const bandX1 = d => chartArea.left + (d - 1) * slotW;
-                const bandX2 = d => chartArea.left + d * slotW;
+                const xScale = chart.scales.x;
+                const center = d => xScale.getPixelForTick(d - 1);
+                const halfSlot = (center(2) - center(1)) / 2;
+                const bandX1 = d => center(d) - halfSlot;
+                const bandX2 = d => center(d) + halfSlot;
                 const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
                 ctx.font = '10px sans-serif';
