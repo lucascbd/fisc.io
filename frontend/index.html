@@ -1782,11 +1782,15 @@
                     </div>
                 </div>
 
-                <!-- Gráfico de linha - Gastos por dia do mês -->
+                <!-- Gráfico de linha - Despesas por dia do mês -->
                 <div class="mb-6">
-                    <div class="mb-3">
-                        <h3 class="text-lg md:text-xl font-bold">Gastos por dia</h3>
-                        <p class="text-sm" style="color:#5f6368;">Mesmo filtro de mês e despesas acima · usa data de lançamento</p>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3>
+                        <div class="flex gap-2">
+                            <button id="dailyPmFilterPix" onclick="toggleDailyPmFilter('pix')" title="Pix" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/pix-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <button id="dailyPmFilterCartao" onclick="toggleDailyPmFilter('cartao')" title="Cartão" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/cartao-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <button id="dailyPmFilterVale" onclick="toggleDailyPmFilter('vale')" title="Vale" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/vale-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                        </div>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">
                         <div class="relative h-[220px] md:h-[280px]"><canvas id="dailyLineChart"></canvas></div>
@@ -2404,6 +2408,20 @@
         function stepMonth(id,dir){const s=document.getElementById(id);if(!s)return;const n=s.selectedIndex+dir;if(n>=0&&n<s.options.length){s.selectedIndex=n;s.dispatchEvent(new Event('change'));}}
 
         let activePmFilter=null;
+        let activeDailyPmFilter=null;
+        function toggleDailyPmFilter(method){
+            activeDailyPmFilter = activeDailyPmFilter === method ? null : method;
+            const isDark = document.body.classList.contains('dark-mode');
+            const sb='#1a73e8', sg=isDark?'#1e3a5f':'#e8f0fe', db=isDark?'#3c4043':'#f1f3f4';
+            ['pix','cartao','vale'].forEach(m => {
+                const btn = document.getElementById('dailyPmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
+                if (!btn) return;
+                const on = activeDailyPmFilter === m;
+                btn.style.borderColor = on ? sb : 'transparent';
+                btn.style.background = on ? sg : db;
+            });
+            updateDailyChart();
+        }
         function togglePmFilter(method){
             activePmFilter=activePmFilter===method?null:method;
             const isDark=document.body.classList.contains('dark-mode');
@@ -5911,6 +5929,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const isShared = uids.size > 1 || (uids.size === 1 && !uids.has(user.id));
                     if (isShared && !showShared) continue;
                     if (!isShared && !showIndividual) continue;
+                    // Filtro de forma de pagamento
+                    if (activeDailyPmFilter && expense.payment_method !== activeDailyPmFilter) continue;
                     // Bucket by original_date day (must be within selected month)
                     const origStr = expense.original_date || expense.expense_date;
                     if (!origStr) continue;
@@ -5992,7 +6012,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 grid: { color: gridColor },
                                 ticks: {
                                     color: textColor, font: { size: 11 },
-                                    callback: v => v === 0 ? '' : `R$ ${formatBRL(v)}`
+                                    callback: v => v === 0 ? '' : `R$ ${Math.round(v).toLocaleString('pt-BR')}`
                                 }
                             }
                         }
