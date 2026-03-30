@@ -4704,14 +4704,16 @@
         const weekBandsPlugin = {
             id: 'weekBands',
             // Calcula semanas: Seg→Dom. Semana 1 começa na primeira segunda do mês.
+            // Dias antes da primeira segunda pertencem à semana do mês anterior (num: null = sem rótulo).
             _getWeeks(yr, mn, N) {
-                // Encontra a primeira segunda-feira do mês
                 let firstMon = null;
                 for (let d = 1; d <= N; d++) {
                     if (new Date(yr, mn - 1, d).getDay() === 1) { firstMon = d; break; }
                 }
-                if (firstMon === null) return []; // mês sem segunda (impossível, mas seguro)
+                if (firstMon === null) return [];
                 const weeks = [];
+                // Semana parcial do mês anterior (sem rótulo)
+                if (firstMon > 1) weeks.push({ num: null, start: 1, end: firstMon - 1 });
                 let weekNum = 1;
                 let start = firstMon;
                 for (let d = start + 1; d <= N + 1; d++) {
@@ -4769,6 +4771,7 @@
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'bottom';
                 weeks.forEach(w => {
+                    if (w.num === null) return; // semana parcial do mês anterior — sem rótulo
                     const x1 = Math.max(chartArea.left, px(w.start) - slotW / 2);
                     const x2 = Math.min(chartArea.right, px(w.end) + slotW / 2);
                     const cx = (x1 + x2) / 2;
