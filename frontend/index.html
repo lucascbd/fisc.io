@@ -4737,14 +4737,16 @@
                 if (N < 2) return;
                 const isDark = document.body.classList.contains('dark-mode');
                 const bandColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.07)';
-                const slotW = (chartArea.right - chartArea.left) / (N - 1);
-                const px = d => chartArea.left + (d - 1) * slotW;
+                // Escala de categoria: cada dia ocupa um slot de largura W/N, centrado em (d-0.5)*slotW
+                const slotW = (chartArea.right - chartArea.left) / N;
+                const bandX1 = d => chartArea.left + (d - 1) * slotW;
+                const bandX2 = d => chartArea.left + d * slotW;
                 const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
                 weeks.forEach((w, i) => {
                     if (i % 2 === 1) {
-                        const x1 = Math.max(chartArea.left, px(w.start) - slotW / 2);
-                        const x2 = Math.min(chartArea.right, px(w.end) + slotW / 2);
+                        const x1 = Math.max(chartArea.left, bandX1(w.start));
+                        const x2 = Math.min(chartArea.right, bandX2(w.end));
                         ctx.fillStyle = bandColor;
                         ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
                     }
@@ -4762,8 +4764,9 @@
                 if (N < 2) return;
                 const isDark = document.body.classList.contains('dark-mode');
                 const labelColor = isDark ? '#9aa0a6' : '#80868b';
-                const slotW = (chartArea.right - chartArea.left) / (N - 1);
-                const px = d => chartArea.left + (d - 1) * slotW;
+                const slotW = (chartArea.right - chartArea.left) / N;
+                const bandX1 = d => chartArea.left + (d - 1) * slotW;
+                const bandX2 = d => chartArea.left + d * slotW;
                 const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
                 ctx.font = '10px sans-serif';
@@ -4772,8 +4775,8 @@
                 ctx.textBaseline = 'bottom';
                 weeks.forEach(w => {
                     if (w.num === null) return; // semana parcial do mês anterior — sem rótulo
-                    const x1 = Math.max(chartArea.left, px(w.start) - slotW / 2);
-                    const x2 = Math.min(chartArea.right, px(w.end) + slotW / 2);
+                    const x1 = Math.max(chartArea.left, bandX1(w.start));
+                    const x2 = Math.min(chartArea.right, bandX2(w.end));
                     const cx = (x1 + x2) / 2;
                     ctx.fillText(`Sem ${w.num}`, cx, chartArea.top - 2);
                 });
