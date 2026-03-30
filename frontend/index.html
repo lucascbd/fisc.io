@@ -4700,12 +4700,33 @@
         let lastChartsMonth = ''; // Último mês carregado
         let monthlyBarChart = null;
 
-        // Plugin: faixas de semana no gráfico diário (bandas alternadas Seg→Dom)
+        // Plugin: faixas de semana no gráfico diário (bandas alternadas Seg→Dom, rótulos no topo)
         const weekBandsPlugin = {
             id: 'weekBands',
+            // Calcula semanas: Seg→Dom. Semana 1 começa na primeira segunda do mês.
+            _getWeeks(yr, mn, N) {
+                // Encontra a primeira segunda-feira do mês
+                let firstMon = null;
+                for (let d = 1; d <= N; d++) {
+                    if (new Date(yr, mn - 1, d).getDay() === 1) { firstMon = d; break; }
+                }
+                if (firstMon === null) return []; // mês sem segunda (impossível, mas seguro)
+                const weeks = [];
+                let weekNum = 1;
+                let start = firstMon;
+                for (let d = start + 1; d <= N + 1; d++) {
+                    const isNewWeek = d <= N && new Date(yr, mn - 1, d).getDay() === 1;
+                    if (isNewWeek || d === N + 1) {
+                        weeks.push({ num: weekNum, start, end: d - 1 });
+                        weekNum++;
+                        start = d;
+                    }
+                }
+                return weeks;
+            },
             beforeDraw(chart) {
                 if (chart.canvas.id !== 'dailyLineChart') return;
-                const { ctx, chartArea, scales } = chart;
+                const { ctx, chartArea } = chart;
                 if (!chartArea) return;
                 const monthStr = document.getElementById('pieChartMonths')?.value;
                 if (!monthStr) return;
@@ -4716,22 +4737,43 @@
                 const bandColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.07)';
                 const slotW = (chartArea.right - chartArea.left) / (N - 1);
                 const px = d => chartArea.left + (d - 1) * slotW;
+                const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
-                let weekNum = 0, weekStart = 1;
-                for (let d = 2; d <= N + 1; d++) {
-                    const isNewWeek = d <= N && new Date(yr, mn - 1, d).getDay() === 1;
-                    if (isNewWeek || d === N + 1) {
-                        const weekEnd = d - 1;
-                        if (weekNum % 2 === 1) {
-                            const x1 = Math.max(chartArea.left, px(weekStart) - slotW / 2);
-                            const x2 = Math.min(chartArea.right, px(weekEnd) + slotW / 2);
-                            ctx.fillStyle = bandColor;
-                            ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
-                        }
-                        weekNum++;
-                        weekStart = d;
+                weeks.forEach((w, i) => {
+                    if (i % 2 === 1) {
+                        const x1 = Math.max(chartArea.left, px(w.start) - slotW / 2);
+                        const x2 = Math.min(chartArea.right, px(w.end) + slotW / 2);
+                        ctx.fillStyle = bandColor;
+                        ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
                     }
-                }
+                });
+                ctx.restore();
+            },
+            afterDraw(chart) {
+                if (chart.canvas.id !== 'dailyLineChart') return;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const monthStr = document.getElementById('pieChartMonths')?.value;
+                if (!monthStr) return;
+                const [yr, mn] = monthStr.split('-').map(Number);
+                const N = chart.data.labels.length;
+                if (N < 2) return;
+                const isDark = document.body.classList.contains('dark-mode');
+                const labelColor = isDark ? '#9aa0a6' : '#80868b';
+                const slotW = (chartArea.right - chartArea.left) / (N - 1);
+                const px = d => chartArea.left + (d - 1) * slotW;
+                const weeks = this._getWeeks(yr, mn, N);
+                ctx.save();
+                ctx.font = '10px sans-serif';
+                ctx.fillStyle = labelColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                weeks.forEach(w => {
+                    const x1 = Math.max(chartArea.left, px(w.start) - slotW / 2);
+                    const x2 = Math.min(chartArea.right, px(w.end) + slotW / 2);
+                    const cx = (x1 + x2) / 2;
+                    ctx.fillText(`Sem ${w.num}`, cx, chartArea.top - 2);
+                });
                 ctx.restore();
             }
         };
@@ -5977,6 +6019,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: { top: 18 } },
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: false },
