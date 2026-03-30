@@ -4740,14 +4740,14 @@
                 // Usa posição real dos pontos do dataset (funciona com qualquer offset/scale do Chart.js)
                 const meta = chart.getDatasetMeta(0);
                 if (!meta.data.length) return;
-                const px = d => meta.data[d - 1]?.x ?? chartArea.left;
-                const halfSlot = N > 1 ? (px(2) - px(1)) / 2 : (chartArea.right - chartArea.left) / N;
+                // Banda começa exatamente no tick da segunda-feira (w.start) e termina no tick da próxima segunda (w.end+1)
+                const px = d => d <= N ? (meta.data[d - 1]?.x ?? chartArea.left) : chartArea.right;
                 const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
                 weeks.forEach((w, i) => {
                     if (i % 2 === 1) {
-                        const x1 = Math.max(chartArea.left, px(w.start) - halfSlot);
-                        const x2 = Math.min(chartArea.right, px(w.end) + halfSlot);
+                        const x1 = px(w.start);
+                        const x2 = px(w.end + 1);
                         ctx.fillStyle = bandColor;
                         ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
                     }
@@ -4767,8 +4767,7 @@
                 const labelColor = isDark ? '#9aa0a6' : '#80868b';
                 const meta = chart.getDatasetMeta(0);
                 if (!meta.data.length) return;
-                const px = d => meta.data[d - 1]?.x ?? chartArea.left;
-                const halfSlot = N > 1 ? (px(2) - px(1)) / 2 : (chartArea.right - chartArea.left) / N;
+                const px = d => d <= N ? (meta.data[d - 1]?.x ?? chartArea.left) : chartArea.right;
                 const weeks = this._getWeeks(yr, mn, N);
                 ctx.save();
                 ctx.font = '10px sans-serif';
@@ -4777,8 +4776,8 @@
                 ctx.textBaseline = 'bottom';
                 weeks.forEach(w => {
                     if (w.num === null) return; // semana parcial do mês anterior — sem rótulo
-                    const x1 = Math.max(chartArea.left, px(w.start) - halfSlot);
-                    const x2 = Math.min(chartArea.right, px(w.end) + halfSlot);
+                    const x1 = px(w.start);
+                    const x2 = px(w.end + 1);
                     const cx = (x1 + x2) / 2;
                     ctx.fillText(`Sem ${w.num}`, cx, chartArea.top - 2);
                 });
