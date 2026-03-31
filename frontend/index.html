@@ -1784,28 +1784,32 @@
 
                 <!-- Gráfico de linha - Despesas por dia do mês -->
                 <div class="mb-6">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3>
-                    </div>
-                    <!-- Filtros na linha abaixo do título -->
-                    <div class="flex gap-2 items-center flex-wrap mb-3">
-                        <!-- Filtro de categorias -->
-                        <div style="position:relative;">
-                            <button type="button" id="dailyCatFilterBtn" onclick="toggleDailyCatFilterDropdown()" class="filter-h px-2 text-sm bg-white flex items-center gap-1 border rounded-lg" style="border-color:#dadce0;height:34px;"><span id="dailyCatFilterText" class="truncate" style="max-width:100px;">Todas</span><span style="font-size:10px;">▼</span></button>
-                            <div id="dailyCatFilterDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:160px;">
-                                <div id="dailyCatFilterContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div>
+                    <div class="mb-2"><h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3></div>
+                    <!-- Filtros distribuídos igualmente, PM icons à direita -->
+                    <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;align-items:flex-end;">
+                        <!-- Categoria -->
+                        <div style="flex:1;min-width:0;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Categoria</label>
+                            <div style="position:relative;">
+                                <button type="button" id="dailyCatFilterBtn" onclick="toggleDailyCatFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="dailyCatFilterText" class="truncate">Todas</span><span>▼</span></button>
+                                <div id="dailyCatFilterDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:160px;">
+                                    <div id="dailyCatFilterContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div>
+                                </div>
                             </div>
                         </div>
-                        <!-- Filtro de target R$/dia -->
-                        <div style="position:relative;">
-                            <select id="dailyTargetSelect" onchange="updateDailyChart()" class="filter-h px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;height:34px;cursor:pointer;">
+                        <!-- Meta diária -->
+                        <div style="flex:1;min-width:0;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Meta diária</label>
+                            <select id="dailyTargetSelect" onchange="updateDailyChart()" class="filter-h w-full px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;cursor:pointer;">
                                 <option value="">Sem meta</option>
                             </select>
                         </div>
-                        <!-- Filtros de forma de pagamento -->
-                        <button id="dailyPmFilterPix" onclick="toggleDailyPmFilter('pix')" title="Pix" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/pix-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
-                        <button id="dailyPmFilterCartao" onclick="toggleDailyPmFilter('cartao')" title="Cartão" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/cartao-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
-                        <button id="dailyPmFilterVale" onclick="toggleDailyPmFilter('vale')" title="Vale" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/vale-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                        <!-- Ícones de forma de pagamento (sem título, alinhados à direita) -->
+                        <div class="flex gap-2 items-center" style="flex-shrink:0;padding-bottom:1px;">
+                            <button id="dailyPmFilterPix" onclick="toggleDailyPmFilter('pix')" title="Pix" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/pix-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <button id="dailyPmFilterCartao" onclick="toggleDailyPmFilter('cartao')" title="Cartão" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/cartao-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <button id="dailyPmFilterVale" onclick="toggleDailyPmFilter('vale')" title="Vale" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/vale-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                        </div>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">
                         <div class="relative h-[220px] md:h-[280px]"><canvas id="dailyLineChart"></canvas></div>
@@ -6100,13 +6104,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const textColor = isDark ? '#e8eaed' : '#202124';
                 const gridColor = isDark ? '#3c4043' : '#e0e0e0';
 
-                // Popular seletor de targets R$/dia (só na primeira vez ou ao mudar de mês)
+                // Popular seletor de targets R$/dia; auto-seleciona o primeiro se ainda não há seleção
                 const targetSel = document.getElementById('dailyTargetSelect');
                 if (targetSel) {
                     const dailyTargets = (targets || []).filter(t => t.display_mode === 'daily' && t.is_active !== false);
                     const currentVal = targetSel.value;
+                    // Auto-selecionar o primeiro target elegível se não houver seleção prévia
+                    const defaultVal = currentVal || (dailyTargets.length ? String(dailyTargets[0].id) : '');
                     targetSel.innerHTML = '<option value="">Sem meta</option>' +
-                        dailyTargets.map(t => `<option value="${t.id}" ${String(t.id)===currentVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
+                        dailyTargets.map(t => `<option value="${t.id}" ${String(t.id)===defaultVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
                 }
 
                 // Target selecionado → linha tracejada
@@ -6195,7 +6201,24 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             }
                         }
                     },
-                    plugins: [weekBandsPlugin]
+                    plugins: [weekBandsPlugin, ...(dailyLimit !== null ? [{
+                        id: 'targetLabel',
+                        afterDraw(chart) {
+                            const { ctx, chartArea, scales } = chart;
+                            if (!chartArea || !scales.y) return;
+                            const y = scales.y.getPixelForValue(dailyLimit);
+                            if (y < chartArea.top || y > chartArea.bottom) return;
+                            const isDark = document.body.classList.contains('dark-mode');
+                            const txt = `R$ ${formatBRL(dailyLimit)}`;
+                            ctx.save();
+                            ctx.font = 'bold 11px sans-serif';
+                            ctx.textBaseline = 'bottom';
+                            ctx.textAlign = 'right';
+                            ctx.fillStyle = '#f59e0b';
+                            ctx.fillText(txt, chartArea.right, y - 3);
+                            ctx.restore();
+                        }
+                    }] : [])]
                 });
             } catch (err) {
                 console.error('Erro ao atualizar gráfico diário:', err);
