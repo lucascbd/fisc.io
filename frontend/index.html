@@ -5175,6 +5175,7 @@
                     if (!byYear[y]) byYear[y] = [];
                     byYear[y].push(m);
                 });
+                Object.keys(byYear).forEach(y => byYear[y].sort());
 
                 const currentYearStr = String(new Date().getFullYear());
                 const latestYear = byYear[currentYearStr]
@@ -5781,8 +5782,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 for(const ex of pExps){const us=new Set(ex.splits.filter(s=>{const d=new Date(s.due_date+'T00:00:00');return d.getFullYear()===pyr&&d.getMonth()+1===pmn;}).map(s=>s.user_id));if(us.size>1||(us.size===1&&!us.has(user.id))){pHasShared=true;break;}}
                 const pDrop=document.getElementById('pieExpDropdown')?.querySelector('.p-2');
                 if(pDrop){
-                    const prevPie=Array.from(document.querySelectorAll('.pie-exp-type:checked')).map(cb=>cb.value);
-                    pDrop.innerHTML=`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="individual" ${prevPie.includes('individual')||!prevPie.length?'checked':''} onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Individuais</span></label>${pHasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="compartilhada" ${prevPie.includes('compartilhada')||!prevPie.length?'checked':''} onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}`;updatePieExpText();
+                    pDrop.innerHTML=`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="individual" checked onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Individuais</span></label>${pHasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="compartilhada" checked onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}`;updatePieExpText();
                 }
             }
             await updatePieChart();
