@@ -1782,11 +1782,45 @@
                     </div>
                 </div>
 
+                <!-- Gráfico de linha - Despesas por dia do mês -->
+                <div class="mb-6">
+                    <div class="mb-2"><h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3></div>
+                    <!-- Filtros distribuídos igualmente, PM icons à direita -->
+                    <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;align-items:flex-end;">
+                        <!-- Categoria -->
+                        <div style="flex:1;min-width:0;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Categoria</label>
+                            <div style="position:relative;">
+                                <button type="button" id="dailyCatFilterBtn" onclick="toggleDailyCatFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="dailyCatFilterText" class="truncate">Todas</span><span>▼</span></button>
+                                <div id="dailyCatFilterDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:160px;">
+                                    <div id="dailyCatFilterContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Meta diária -->
+                        <div style="flex:1;min-width:0;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Target</label>
+                            <select id="dailyTargetSelect" onchange="onDailyTargetChange()" class="filter-h w-full px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;cursor:pointer;">
+                                <option value="">Sem meta</option>
+                            </select>
+                        </div>
+                        <!-- Ícones de forma de pagamento (sem título, alinhados à direita) -->
+                        <div class="flex gap-2 items-center" style="flex-shrink:0;padding-bottom:1px;">
+                            <button id="dailyPmFilterPix" onclick="toggleDailyPmFilter('pix')" title="Pix" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/pix-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <button id="dailyPmFilterCartao" onclick="toggleDailyPmFilter('cartao')" title="Cartão" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/cartao-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <button id="dailyPmFilterVale" onclick="toggleDailyPmFilter('vale')" title="Vale" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/vale-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 md:p-6">
+                        <div class="relative h-[220px] md:h-[280px]"><canvas id="dailyLineChart"></canvas></div>
+                    </div>
+                </div>
+
                 <!-- Gráfico de Barras - Despesas por Mês -->
                 <div class="mb-6">
                     <div class="mb-3"><h3 class="text-lg md:text-xl font-bold">Despesas por mês</h3></div>
                     <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;">
-                        <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Período</label><div style="position:relative;"><button type="button" id="barChartDropdownBtn" onclick="toggleBarChartDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="barChartSelectedText" class="truncate">12 meses</span><span>▼</span></button><div id="barChartDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:120px;"><div id="barChartMonthsContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div></div></div></div>
+                        <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Período</label><div style="position:relative;"><button type="button" id="barChartDropdownBtn" onclick="toggleBarChartDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="barChartSelectedText" class="truncate">12 meses</span><span>▼</span></button><div id="barChartDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:120px;"><div id="barChartMonthsContainer" class="p-2" style="max-height:230px;overflow-y:auto;white-space:nowrap;"></div></div></div></div>
                         <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Categoria</label><div style="position:relative;"><button type="button" id="catFilterDropdownBtn" onclick="toggleCatFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="catFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="catFilterDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:160px;"><div id="catFilterContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div></div></div></div>
                         <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Despesas</label><div style="position:relative;"><button type="button" id="userFilterDropdownBtn" onclick="toggleUserFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="userFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="userFilterDropdown" class="hidden absolute top-full right-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:100%;width:max-content;"><div id="userFilterContainer" class="p-2" style="white-space:nowrap;"><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" checked onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" checked onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label></div></div></div></div>
                     </div>
@@ -2371,9 +2405,14 @@
                 const currentMonth=new Date().toISOString().slice(0,7);
                 const homeSelect=document.getElementById('homeMonthFilter');
                 const expenseSelect=document.getElementById('expenseMonthFilter');
-                const options=months.map(m=>`<option value="${m.value}" ${m.value===currentMonth?'selected':''}>${m.label}</option>`).join('');
+                const prevHome=homeSelect.value;
+                const prevExpense=expenseSelect.value;
+                const options=months.map(m=>`<option value="${m.value}">${m.label}</option>`).join('');
                 homeSelect.innerHTML=options;expenseSelect.innerHTML=options;
-                if(!months.find(m=>m.value===currentMonth)&&months.length>0){homeSelect.value=months[months.length-1].value;expenseSelect.value=months[months.length-1].value;}
+                const homeTarget=prevHome&&months.find(m=>m.value===prevHome)?prevHome:currentMonth;
+                const expenseTarget=prevExpense&&months.find(m=>m.value===prevExpense)?prevExpense:currentMonth;
+                homeSelect.value=homeTarget||(months.length>0?months[months.length-1].value:'');
+                expenseSelect.value=expenseTarget||(months.length>0?months[months.length-1].value:'');
                 
                 // ✅ Atualizar filtros dependentes do mês
                 await updateExpenseFilters();
@@ -2387,17 +2426,88 @@
 
         function stepMonth(id,dir){const s=document.getElementById(id);if(!s)return;const n=s.selectedIndex+dir;if(n>=0&&n<s.options.length){s.selectedIndex=n;s.dispatchEvent(new Event('change'));}}
 
-        let activePmFilter=null;
+        let activePmFilter=[]; // [] = all selected
+        let activeDailyPmFilter=[]; // [] = all selected
+        let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
+        let dailyTargetInitialized=false;
+
+        function toggleDailyCatFilterDropdown(){
+            const dd=document.getElementById('dailyCatFilterDropdown');
+            dd.classList.toggle('hidden');
+        }
+        function updateDailyCatFilterText(){
+            const total=document.querySelectorAll('.daily-cat-filter').length;
+            const sel=selectedDailyCatIds===null?total:(selectedDailyCatIds.length);
+            document.getElementById('dailyCatFilterText').textContent=sel>=total?'Todas':sel===0?'Nenhuma':sel+' sel.';
+        }
+        function toggleDailyCatFilter(catId){
+            if(selectedDailyCatIds===null) selectedDailyCatIds=Array.from(document.querySelectorAll('.daily-cat-filter')).map(cb=>parseInt(cb.value));
+            const idx=selectedDailyCatIds.indexOf(catId);
+            if(idx>-1) selectedDailyCatIds.splice(idx,1); else selectedDailyCatIds.push(catId);
+            const allCb=document.getElementById('dailyCatFilterAll');
+            if(allCb) allCb.checked=selectedDailyCatIds.length===document.querySelectorAll('.daily-cat-filter').length;
+            updateDailyCatFilterText();
+            updateDailyChart();
+        }
+        function toggleAllDailyCategories(checked){
+            selectedDailyCatIds=checked?Array.from(document.querySelectorAll('.daily-cat-filter')).map(cb=>parseInt(cb.value)):[];
+            document.querySelectorAll('.daily-cat-filter').forEach(cb=>{ cb.checked=checked; });
+            updateDailyCatFilterText();
+            updateDailyChart();
+        }
+        // Fechar dropdown ao clicar fora
+        document.addEventListener('click', e=>{
+            const dd=document.getElementById('dailyCatFilterDropdown');
+            const btn=document.getElementById('dailyCatFilterBtn');
+            if(dd&&btn&&!dd.contains(e.target)&&!btn.contains(e.target)) dd.classList.add('hidden');
+        });
+
+        function toggleDailyPmFilter(method){
+            const idx=activeDailyPmFilter.indexOf(method);
+            if(idx>-1) activeDailyPmFilter.splice(idx,1); else activeDailyPmFilter.push(method);
+            if(activeDailyPmFilter.length===3) activeDailyPmFilter=[];
+            applyDailyPmFilterStyles();
+            updateDailyChart();
+        }
+        function applyDailyPmFilterStyles(){
+            const isDark=document.body.classList.contains('dark-mode');
+            const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
+            ['pix','cartao','vale'].forEach(m=>{
+                const btn=document.getElementById('dailyPmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
+                if(!btn)return;
+                const on=activeDailyPmFilter.length>0&&activeDailyPmFilter.includes(m);
+                btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
+            });
+        }
+        function onDailyTargetChange(){
+            const sel=document.getElementById('dailyTargetSelect');
+            const tgtId=sel?parseInt(sel.value):NaN;
+            const tgt=!isNaN(tgtId)&&tgtId?(targets||[]).find(t=>t.id===tgtId):null;
+            if(tgt&&tgt.payment_methods&&tgt.payment_methods.length>0){
+                activeDailyPmFilter=[...tgt.payment_methods];
+            } else {
+                activeDailyPmFilter=[];
+            }
+            applyDailyPmFilterStyles();
+            updateDailyChart();
+        }
         function togglePmFilter(method){
-            activePmFilter=activePmFilter===method?null:method;
+            const idx=activePmFilter.indexOf(method);
+            if(idx>-1) activePmFilter.splice(idx,1); else activePmFilter.push(method);
+            // deselect all = select all
+            if(activePmFilter.length===3) activePmFilter=[];
+            applyPmFilterStyles();
+            loadDashboardData();
+        }
+        function applyPmFilterStyles(){
             const isDark=document.body.classList.contains('dark-mode');
             const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
             ['pix','cartao','vale'].forEach(m=>{
                 const btn=document.getElementById('pmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
-                if(!btn)return;const on=activePmFilter===m;
+                if(!btn)return;
+                const on=activePmFilter.length>0&&activePmFilter.includes(m);
                 btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
             });
-            loadDashboardData();
         }
 
         async function loadDashboardData() {
@@ -2439,10 +2549,10 @@
                     ? (e.payment_method || 'pix')
                     : 'pix';
 
-                if(activePmFilter){
+                if(activePmFilter.length>0){
                     let ft=0;
                     for(const e of expenses){
-                        if(effectivePm(e)!==activePmFilter)continue;
+                        if(!activePmFilter.includes(effectivePm(e)))continue;
                         for(const s of e.splits){
                             if(s.user_id!==user.id)continue;
                             const d=new Date(s.due_date+'T00:00:00');
@@ -2459,8 +2569,8 @@
                     );
                     return usersThisMonth.size > 1 || (usersThisMonth.size === 1 && !usersThisMonth.has(user.id));
                 };
-                const sharedExpenses = expenses.filter(e => isSharedExpense(e) && (!activePmFilter || effectivePm(e) === activePmFilter));
-                const personalExpenses = expenses.filter(e => !isSharedExpense(e) && (!activePmFilter || effectivePm(e) === activePmFilter));
+                const sharedExpenses = expenses.filter(e => isSharedExpense(e) && (!activePmFilter.length || activePmFilter.includes(effectivePm(e))));
+                const personalExpenses = expenses.filter(e => !isSharedExpense(e) && (!activePmFilter.length || activePmFilter.includes(effectivePm(e))));
 
                 // Ordenar usuário logado no topo
                 const sortedBalances = [...balances].sort((a, b) => {
@@ -2939,6 +3049,7 @@
                 const profile = profiles.find(p => p.id === e.split_profile_id);
                 const profileName = profile?.name || 'Perfil desconhecido';
                 
+                const pmIcon = `<img src="/${{'cartao':'cartao-48.png','vale':'vale-48.png','pix':'pix-48.png'}[e.payment_method||'pix']||'pix-48.png'}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">`;
                 return `
                 <div class="bg-white rounded-lg shadow p-4 mb-4">
                     <div class="flex justify-between items-start">
@@ -2950,7 +3061,7 @@
                             ${e.notes ? `<p class="text-sm text-gray-500 mt-2">${e.notes}</p>` : ''}
                         </div>
                         <div class="text-right ml-4">
-                            <p class="text-2xl font-bold text-blue-600">R$ ${formatBRL(e.total_amount)}</p>
+                            <p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIcon}</p>
                             <p class="text-sm text-gray-600">${e.installments}x</p>
                             <div class="flex gap-2 mt-2 justify-end">
                                 <button onclick="editExpense(${e.id})" class="text-blue-600 text-sm">✏️</button>
@@ -3655,23 +3766,11 @@
                             console.error('❌ sendExpenseNotification não definida!');
                         }
                         
-                        // Auto-filtrar para o mês da despesa criada
-                        const [year, month] = expenseDate.split('-');
-                        const targetMonth = `${year}-${month}`;
-                        
                         closeModal();
-                        
-                        // ✅ Atualizar lista de meses disponíveis
+
+                        // ✅ Atualizar lista de meses disponíveis (preserva seleção atual)
                         await loadMonths();
-                        
-                        // Atualizar filtros para o mês da despesa
-                        if (document.getElementById('homeMonthFilter')) {
-                            document.getElementById('homeMonthFilter').value = targetMonth;
-                        }
-                        if (document.getElementById('expenseMonthFilter')) {
-                            document.getElementById('expenseMonthFilter').value = targetMonth;
-                        }
-                        
+
                         loadExpenses();
                         loadDashboardData();
                     } catch (err) {
@@ -4672,9 +4771,95 @@
         // ============================================================================
         
         let categoryPieChart = null;
+        let dailyLineChart = null;
         let chartsNeedReload = true; // Flag para controlar reload dos gráficos
         let lastChartsMonth = ''; // Último mês carregado
         let monthlyBarChart = null;
+
+        // Plugin: faixas de semana no gráfico diário (bandas alternadas Seg→Dom, rótulos no topo)
+        const weekBandsPlugin = {
+            id: 'weekBands',
+            // Calcula semanas: Seg→Dom. Semana 1 começa na primeira segunda do mês.
+            // Dias antes da primeira segunda pertencem à semana do mês anterior (num: null = sem rótulo).
+            _getWeeks(yr, mn, N) {
+                let firstMon = null;
+                for (let d = 1; d <= N; d++) {
+                    if (new Date(yr, mn - 1, d).getDay() === 1) { firstMon = d; break; }
+                }
+                if (firstMon === null) return [];
+                const weeks = [];
+                // Semana parcial do mês anterior (sem rótulo)
+                if (firstMon > 1) weeks.push({ num: null, start: 1, end: firstMon - 1 });
+                let weekNum = 1;
+                let start = firstMon;
+                for (let d = start + 1; d <= N + 1; d++) {
+                    const isNewWeek = d <= N && new Date(yr, mn - 1, d).getDay() === 1;
+                    if (isNewWeek || d === N + 1) {
+                        weeks.push({ num: weekNum, start, end: d - 1 });
+                        weekNum++;
+                        start = d;
+                    }
+                }
+                return weeks;
+            },
+            beforeDraw(chart) {
+                if (chart.canvas.id !== 'dailyLineChart') return;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const monthStr = document.getElementById('pieChartMonths')?.value;
+                if (!monthStr) return;
+                const [yr, mn] = monthStr.split('-').map(Number);
+                const N = chart.data.labels.length;
+                if (N < 2) return;
+                const isDark = document.body.classList.contains('dark-mode');
+                const bandColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.07)';
+                // Usa posição real dos pontos do dataset (funciona com qualquer offset/scale do Chart.js)
+                const meta = chart.getDatasetMeta(0);
+                if (!meta.data.length) return;
+                // Banda começa exatamente no tick da segunda-feira (w.start) e termina no tick da próxima segunda (w.end+1)
+                const px = d => d <= N ? (meta.data[d - 1]?.x ?? chartArea.left) : chartArea.right;
+                const weeks = this._getWeeks(yr, mn, N);
+                ctx.save();
+                weeks.forEach((w, i) => {
+                    if (i % 2 === 1) {
+                        const x1 = px(w.start);
+                        const x2 = px(w.end + 1);
+                        ctx.fillStyle = bandColor;
+                        ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+                    }
+                });
+                ctx.restore();
+            },
+            afterDraw(chart) {
+                if (chart.canvas.id !== 'dailyLineChart') return;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const monthStr = document.getElementById('pieChartMonths')?.value;
+                if (!monthStr) return;
+                const [yr, mn] = monthStr.split('-').map(Number);
+                const N = chart.data.labels.length;
+                if (N < 2) return;
+                const isDark = document.body.classList.contains('dark-mode');
+                const labelColor = isDark ? '#9aa0a6' : '#80868b';
+                const meta = chart.getDatasetMeta(0);
+                if (!meta.data.length) return;
+                const px = d => d <= N ? (meta.data[d - 1]?.x ?? chartArea.left) : chartArea.right;
+                const weeks = this._getWeeks(yr, mn, N);
+                ctx.save();
+                ctx.font = '10px sans-serif';
+                ctx.fillStyle = labelColor;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                weeks.forEach(w => {
+                    if (w.num === null) return; // semana parcial do mês anterior — sem rótulo
+                    const x1 = px(w.start);
+                    const x2 = px(w.end + 1);
+                    const cx = (x1 + x2) / 2;
+                    ctx.fillText(`Sem ${w.num}`, cx, chartArea.top - 2);
+                });
+                ctx.restore();
+            }
+        };
         let myInflationChart = null;
         let adjustedBarChart = null;
         let adjustedDonutChart = null;
@@ -4698,6 +4883,7 @@
 
         // Filtro de categorias no gráfico de barras
         let selectedCatIds = [];
+        let barExpTypeFilter = ['individual', 'compartilhada']; // persiste ao mudar mês
         
         function toggleCatFilterDropdown() {
             const dd = document.getElementById('catFilterDropdown');
@@ -4770,10 +4956,30 @@
         function updateBarChartSelectedText() {
             const checkboxes = document.querySelectorAll('.bar-chart-month:checked');
             const count = checkboxes.length;
-            const text = count === 0 ? 'Nenhum' : 
-                         count === 1 ? '1 mês' : 
+            const text = count === 0 ? 'Nenhum' :
+                         count === 1 ? '1 mês' :
                          `${count} meses`;
             document.getElementById('barChartSelectedText').textContent = text;
+        }
+
+        function toggleBarYearCollapse(year) {
+            const div = document.getElementById(`bar-yr-months-${year}`);
+            const arrow = document.getElementById(`bar-yr-arrow-${year}`);
+            if (!div) return;
+            const hidden = div.style.display === 'none';
+            div.style.display = hidden ? '' : 'none';
+            if (arrow) arrow.textContent = hidden ? '▼' : '▶';
+        }
+        function toggleBarYear(year, checked) {
+            document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`).forEach(cb => { cb.checked = checked; });
+            updateBarChartSelectedText();
+            updateBarChartFilters();
+        }
+        function syncBarYearCheckbox(year) {
+            const all = document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`);
+            const checked = document.querySelectorAll(`.bar-chart-month[data-year="${year}"]:checked`);
+            const yearCb = document.querySelector(`.bar-year-cb[data-year="${year}"]`);
+            if (yearCb) yearCb.checked = all.length > 0 && all.length === checked.length;
         }
 
         function updateUserFilterSelectedText() {
@@ -4849,7 +5055,15 @@
             const all = document.querySelectorAll(`.infl-month-cb[data-year="${year}"]`);
             const checked = document.querySelectorAll(`.infl-month-cb[data-year="${year}"]:checked`);
             const yearCb = document.querySelector(`.infl-year-cb[data-year="${year}"]`);
-            if (yearCb) yearCb.checked = all.length === checked.length;
+            if (yearCb) yearCb.checked = all.length > 0 && all.length === checked.length;
+        }
+        function toggleInflYearCollapse(year) {
+            const div = document.getElementById(`infl-yr-months-${year}`);
+            const arrow = document.getElementById(`infl-yr-arrow-${year}`);
+            if (!div) return;
+            const hidden = div.style.display === 'none';
+            div.style.display = hidden ? '' : 'none';
+            if (arrow) arrow.textContent = hidden ? '▼' : '▶';
         }
         function updateInflCatText() {
             const total = document.querySelectorAll('.infl-cat-cb').length;
@@ -4954,8 +5168,6 @@
                 const ipcaMonthsResp = await api(`${API}/inflation/months`).catch(() => ({months:[], latest: null}));
                 const allIpcaMonths = ipcaMonthsResp.months; // ["2026-03","2026-02",...]
                 window._allIpcaMonths = allIpcaMonths; // persist for fallback in loadInflation
-                const latestYear = ipcaMonthsResp.latest ? ipcaMonthsResp.latest.slice(0,4) : null;
-
                 // Group months by year
                 const byYear = {};
                 allIpcaMonths.forEach(m => {
@@ -4964,24 +5176,34 @@
                     byYear[y].push(m);
                 });
 
+                const currentYearStr = String(new Date().getFullYear());
+                const latestYear = byYear[currentYearStr]
+                    ? currentYearStr
+                    : (ipcaMonthsResp.latest ? ipcaMonthsResp.latest.slice(0,4) : null);
+
                 let monthHtml = '';
-                Object.keys(byYear).sort((a,b) => b-a).forEach(yr => {
+                Object.keys(byYear).sort((a,b) => a-b).forEach(yr => {
                     const isLatest = yr === latestYear;
                     monthHtml += `
                         <div style="border-bottom:1px solid #f1f3f4; margin-bottom:4px; padding-bottom:4px;">
-                            <label class="flex items-center gap-2 py-1 cursor-pointer px-2 rounded font-semibold hover:bg-blue-50">
-                                <input type="checkbox" class="infl-year-cb" data-year="${yr}"
-                                    ${isLatest ? 'checked' : ''}
-                                    onchange="toggleInflYear('${yr}', this.checked)">
-                                <span class="text-sm">${yr}</span>
-                            </label>
-                            ${byYear[yr].map(m => `
-                            <label class="flex items-center gap-2 py-0.5 cursor-pointer px-2 rounded hover:bg-gray-100" style="padding-left:20px;">
-                                <input type="checkbox" class="infl-month-cb" value="${m}" data-year="${yr}"
-                                    ${isLatest ? 'checked' : ''}
-                                    onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflation();">
-                                <span class="text-sm">${m}</span>
-                            </label>`).join('')}
+                            <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
+                                <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
+                                    <input type="checkbox" class="infl-year-cb" data-year="${yr}"
+                                        ${isLatest ? 'checked' : ''}
+                                        onchange="toggleInflYear('${yr}', this.checked)">
+                                    <span class="text-sm">${yr}</span>
+                                </label>
+                                <span id="infl-yr-arrow-${yr}" class="text-xs text-gray-400" style="cursor:pointer;user-select:none;padding:0 4px;" onclick="toggleInflYearCollapse('${yr}')">${isLatest ? '▼' : '▶'}</span>
+                            </div>
+                            <div id="infl-yr-months-${yr}" ${isLatest ? '' : 'style="display:none"'}>
+                                ${byYear[yr].map(m => `
+                                <label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;">
+                                    <input type="checkbox" class="infl-month-cb" value="${m}" data-year="${yr}"
+                                        ${isLatest ? 'checked' : ''}
+                                        onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflation();">
+                                    <span class="text-sm">${m}</span>
+                                </label>`).join('')}
+                            </div>
                         </div>`;
                 });
                 document.getElementById('inflMonthContainer').innerHTML = monthHtml || '<p class="text-xs text-gray-400 p-2">Sem dados</p>';
@@ -5444,8 +5666,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                                     html += `<div><b>Total:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_prev)}</span> ➔ <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_last)}</span></div>`;
                                                 }
                                                 if (d.avg_price_last != null) {
+                                                    const fmtVol = v => v == null ? '—' : (v % 1 === 0 ? String(v) : Number(v).toFixed(1).replace('.', ','));
                                                     html += `<div><b>Ticket:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_prev)}</span> ➔ <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_last)}</span></div>`;
-                                                    html += `<div><b>Qtd:</b> <span style="color:${numColor}">${Math.round(d.vol_prev)}</span> ➔ <span style="color:${numColor}">${d.vol_last}</span></div>`;
+                                                    html += `<div><b>Qtd:</b> <span style="color:${numColor}">${fmtVol(d.vol_prev)}</span> ➔ <span style="color:${numColor}">${fmtVol(d.vol_last)}</span></div>`;
                                                 }
                                                 return html;
                                             });
@@ -5514,18 +5737,28 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const pieSelect=document.getElementById('pieChartMonths');
                 pieSelect.innerHTML=months.map(m=>`<option value="${m}" ${m===selectedMonth?'selected':''}>${m}</option>`).join('');
                 const barContainer=document.getElementById('barChartMonthsContainer');
-                const last12Months=months.slice(-12);
-                barContainer.innerHTML = months.map(m => `
-                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded">
-                        <input type="checkbox" 
-                               class="bar-chart-month" 
-                               value="${m}" 
-                               ${last12Months.includes(m) ? 'checked' : ''}
-                               onchange="updateBarChartFilters();">
-                        <span class="text-sm">${m}</span>
-                    </label>
-                `).join('');
-                
+                // Group by year — years collapsed except the latest
+                const barByYear = {};
+                months.forEach(m => { const y=m.slice(0,4); if(!barByYear[y])barByYear[y]=[]; barByYear[y].push(m); });
+                const currentYear = String(new Date().getFullYear());
+                const barLatestYear = barByYear[currentYear] ? currentYear : Object.keys(barByYear).sort().pop();
+                barContainer.innerHTML = Object.keys(barByYear).sort((a,b)=>b-a).map(yr => {
+                    const isLatest = yr === barLatestYear;
+                    const allChecked = isLatest; // só o ano vigente marcado por default
+                    return `<div style="border-bottom:1px solid #f1f3f4;margin-bottom:4px;padding-bottom:4px;">
+                        <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
+                            <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
+                                <input type="checkbox" class="bar-year-cb" data-year="${yr}" ${allChecked?'checked':''} onchange="toggleBarYear('${yr}', this.checked)">
+                                <span class="text-sm">${yr}</span>
+                            </label>
+                            <span id="bar-yr-arrow-${yr}" class="text-xs text-gray-400" style="cursor:pointer;user-select:none;padding:0 4px;" onclick="toggleBarYearCollapse('${yr}')">${isLatest?'▼':'▶'}</span>
+                        </div>
+                        <div id="bar-yr-months-${yr}" ${isLatest?'':'style="display:none"'}>
+                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${isLatest?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
+                        </div>
+                    </div>`;
+                }).join('');
+
                 // Atualizar texto inicial
                 updateBarChartSelectedText();
                 
@@ -5553,6 +5786,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 }
             }
             await updatePieChart();
+            await updateDailyChart();
         }
 
         // Atualiza filtros de categoria e usuário do stacked usando o cache dos meses selecionados
@@ -5625,10 +5859,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
                     if(hasShared)break;
                 }
-                const prevTypes=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);
                 ufContainer.innerHTML=`
-                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${prevTypes.includes('individual')||!prevTypes.length?'checked':''} onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
-                    ${hasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" ${prevTypes.includes('compartilhada')||!prevTypes.length?'checked':''} onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}
+                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${barExpTypeFilter.includes('individual')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
+                    ${hasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" ${barExpTypeFilter.includes('compartilhada')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}
                 `;
                 updateUserFilterSelectedText();
             }
@@ -5793,6 +6026,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         }
                     }]
                 });
+                await updateDailyChart();
             } catch (err) {
                 console.error('Erro ao atualizar gráfico de pizza:', err);
                 alert('Erro ao carregar dados do gráfico');
@@ -5830,11 +6064,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         .filter(e => { const o=e.original_date||e.expense_date; if(!o) return false; const d=new Date(o+'T00:00:00'); return d.getFullYear()===year&&d.getMonth()+1===mon; })
                         .map(e => e.category_id));
                     const availableCats = categories.filter(c => catIdsInMonth.has(c.id));
-                    // Mês sem categorias: resetar para null para que o próximo mês com dados reinicialize
+                    // null = primeira carga → selecionar tudo; [] = usuário desmarcou tudo → manter vazio
                     if (availableCats.length === 0) {
+                        // Mês sem dados: resetar para null para que o próximo mês com dados reinicialize
                         selectedDailyCatIds = null;
                     } else if (selectedDailyCatIds === null) {
-                        // Primeira carga ou reset de mês vazio → selecionar tudo
                         selectedDailyCatIds = availableCats.map(c => c.id);
                     } else if (selectedDailyCatIds.length > 0) {
                         // Preservar apenas os que ainda existem no mês atual
@@ -5842,8 +6076,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         selectedDailyCatIds = availableCats.map(c => c.id).filter(id => prev.has(id));
                         if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c => c.id);
                     }
-                    // [] = usuário desmarcou tudo explicitamente → manter vazio (não toca)
-                    const allSel = selectedDailyCatIds.length >= availableCats.length;
+                    const allSel = availableCats.length > 0 && (selectedDailyCatIds === null || selectedDailyCatIds.length >= availableCats.length);
                     dailyCatContainer.innerHTML = `
                         <label class="flex items-center gap-2 py-1 hover:bg-blue-50 cursor-pointer px-2 rounded font-medium border-b mb-1 pb-2">
                             <input type="checkbox" id="dailyCatFilterAll" ${allSel?'checked':''} onchange="toggleAllDailyCategories(this.checked)">
@@ -7019,7 +7252,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const chartsTabEl = document.getElementById('chartsTab');
             const inflTabEl = document.getElementById('inflationTab');
             if (chartsTabEl && !chartsTabEl.classList.contains('hidden')) {
-                updatePieChart?.(); updateBarChart?.(); updatePmBarChart?.();
+                updatePieChart?.(); updateDailyChart?.(); updateBarChart?.(); updatePmBarChart?.();
             }
             if (inflTabEl && !inflTabEl.classList.contains('hidden')) {
                 inflLoaded = false; loadInflation?.();
@@ -7329,6 +7562,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         // Inicializar Firebase
         async function initializeFirebase() {
             try {
+                // Service Workers requerem HTTPS ou localhost
+                if (!('serviceWorker' in navigator)) {
+                    console.warn('⚠️ Service Worker não disponível (requer HTTPS). Notificações push desabilitadas.');
+                    return;
+                }
+
                 // Registrar Service Worker PRIMEIRO
                 console.log('📋 Registrando Service Worker...');
                 const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
