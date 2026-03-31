@@ -1800,7 +1800,7 @@
                         <!-- Meta diária -->
                         <div style="flex:1;min-width:0;">
                             <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Target</label>
-                            <select id="dailyTargetSelect" onchange="updateDailyChart()" class="filter-h w-full px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;cursor:pointer;">
+                            <select id="dailyTargetSelect" onchange="onDailyTargetChange()" class="filter-h w-full px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;cursor:pointer;">
                                 <option value="">Sem meta</option>
                             </select>
                         </div>
@@ -2426,9 +2426,10 @@
 
         function stepMonth(id,dir){const s=document.getElementById(id);if(!s)return;const n=s.selectedIndex+dir;if(n>=0&&n<s.options.length){s.selectedIndex=n;s.dispatchEvent(new Event('change'));}}
 
-        let activePmFilter=null;
-        let activeDailyPmFilter=null;
+        let activePmFilter=[]; // [] = all selected
+        let activeDailyPmFilter=[]; // [] = all selected
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
+        let dailyTargetInitialized=false;
 
         function toggleDailyCatFilterDropdown(){
             const dd=document.getElementById('dailyCatFilterDropdown');
@@ -2462,28 +2463,51 @@
         });
 
         function toggleDailyPmFilter(method){
-            activeDailyPmFilter = activeDailyPmFilter === method ? null : method;
-            const isDark = document.body.classList.contains('dark-mode');
-            const sb='#1a73e8', sg=isDark?'#1e3a5f':'#e8f0fe', db=isDark?'#3c4043':'#f1f3f4';
-            ['pix','cartao','vale'].forEach(m => {
-                const btn = document.getElementById('dailyPmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
-                if (!btn) return;
-                const on = activeDailyPmFilter === m;
-                btn.style.borderColor = on ? sb : 'transparent';
-                btn.style.background = on ? sg : db;
+            const idx=activeDailyPmFilter.indexOf(method);
+            if(idx>-1) activeDailyPmFilter.splice(idx,1); else activeDailyPmFilter.push(method);
+            if(activeDailyPmFilter.length===3) activeDailyPmFilter=[];
+            applyDailyPmFilterStyles();
+            updateDailyChart();
+        }
+        function applyDailyPmFilterStyles(){
+            const isDark=document.body.classList.contains('dark-mode');
+            const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
+            ['pix','cartao','vale'].forEach(m=>{
+                const btn=document.getElementById('dailyPmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
+                if(!btn)return;
+                const on=activeDailyPmFilter.length>0&&activeDailyPmFilter.includes(m);
+                btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
             });
+        }
+        function onDailyTargetChange(){
+            const sel=document.getElementById('dailyTargetSelect');
+            const tgtId=sel?parseInt(sel.value):NaN;
+            const tgt=!isNaN(tgtId)&&tgtId?(targets||[]).find(t=>t.id===tgtId):null;
+            if(tgt&&tgt.payment_methods&&tgt.payment_methods.length>0){
+                activeDailyPmFilter=[...tgt.payment_methods];
+            } else {
+                activeDailyPmFilter=[];
+            }
+            applyDailyPmFilterStyles();
             updateDailyChart();
         }
         function togglePmFilter(method){
-            activePmFilter=activePmFilter===method?null:method;
+            const idx=activePmFilter.indexOf(method);
+            if(idx>-1) activePmFilter.splice(idx,1); else activePmFilter.push(method);
+            // deselect all = select all
+            if(activePmFilter.length===3) activePmFilter=[];
+            applyPmFilterStyles();
+            loadDashboardData();
+        }
+        function applyPmFilterStyles(){
             const isDark=document.body.classList.contains('dark-mode');
             const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
             ['pix','cartao','vale'].forEach(m=>{
                 const btn=document.getElementById('pmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
-                if(!btn)return;const on=activePmFilter===m;
+                if(!btn)return;
+                const on=activePmFilter.length>0&&activePmFilter.includes(m);
                 btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
             });
-            loadDashboardData();
         }
 
         async function loadDashboardData() {
@@ -2525,10 +2549,10 @@
                     ? (e.payment_method || 'pix')
                     : 'pix';
 
-                if(activePmFilter){
+                if(activePmFilter.length>0){
                     let ft=0;
                     for(const e of expenses){
-                        if(effectivePm(e)!==activePmFilter)continue;
+                        if(!activePmFilter.includes(effectivePm(e)))continue;
                         for(const s of e.splits){
                             if(s.user_id!==user.id)continue;
                             const d=new Date(s.due_date+'T00:00:00');
@@ -2545,8 +2569,8 @@
                     );
                     return usersThisMonth.size > 1 || (usersThisMonth.size === 1 && !usersThisMonth.has(user.id));
                 };
-                const sharedExpenses = expenses.filter(e => isSharedExpense(e) && (!activePmFilter || effectivePm(e) === activePmFilter));
-                const personalExpenses = expenses.filter(e => !isSharedExpense(e) && (!activePmFilter || effectivePm(e) === activePmFilter));
+                const sharedExpenses = expenses.filter(e => isSharedExpense(e) && (!activePmFilter.length || activePmFilter.includes(effectivePm(e))));
+                const personalExpenses = expenses.filter(e => !isSharedExpense(e) && (!activePmFilter.length || activePmFilter.includes(effectivePm(e))));
 
                 // Ordenar usuário logado no topo
                 const sortedBalances = [...balances].sort((a, b) => {
@@ -4859,6 +4883,7 @@
 
         // Filtro de categorias no gráfico de barras
         let selectedCatIds = [];
+        let barExpTypeFilter = ['individual', 'compartilhada']; // persiste ao mudar mês
         
         function toggleCatFilterDropdown() {
             const dd = document.getElementById('catFilterDropdown');
@@ -5834,10 +5859,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
                     if(hasShared)break;
                 }
-                const prevTypes=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);
                 ufContainer.innerHTML=`
-                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${prevTypes.includes('individual')||!prevTypes.length?'checked':''} onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
-                    ${hasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" ${prevTypes.includes('compartilhada')||!prevTypes.length?'checked':''} onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}
+                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${barExpTypeFilter.includes('individual')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
+                    ${hasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" ${barExpTypeFilter.includes('compartilhada')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}
                 `;
                 updateUserFilterSelectedText();
             }
@@ -6079,7 +6103,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (isShared && !showShared) continue;
                     if (!isShared && !showIndividual) continue;
                     // Filtro de forma de pagamento
-                    if (activeDailyPmFilter && expense.payment_method !== activeDailyPmFilter) continue;
+                    if (activeDailyPmFilter.length > 0 && !activeDailyPmFilter.includes(expense.payment_method)) continue;
                     // Filtro de categorias
                     if (selectedDailyCatIds !== null && !selectedDailyCatIds.includes(expense.category_id)) continue;
                     const day = origDate.getDate();
@@ -6109,10 +6133,20 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (targetSel) {
                     const dailyTargets = (targets || []).filter(t => t.display_mode === 'daily' && t.is_active !== false);
                     const currentVal = targetSel.value;
-                    // Auto-selecionar o primeiro target elegível se não houver seleção prévia
-                    const defaultVal = currentVal || (dailyTargets.length ? String(dailyTargets[0].id) : '');
+                    // Auto-selecionar o primeiro target elegível apenas na primeira carga
+                    const defaultVal = dailyTargetInitialized ? currentVal : (dailyTargets.length ? String(dailyTargets[0].id) : '');
                     targetSel.innerHTML = '<option value="">Sem meta</option>' +
                         dailyTargets.map(t => `<option value="${t.id}" ${String(t.id)===defaultVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
+                    if (!dailyTargetInitialized) {
+                        if (defaultVal) {
+                            const autoTgt=(targets||[]).find(t=>String(t.id)===defaultVal);
+                            if(autoTgt&&autoTgt.payment_methods&&autoTgt.payment_methods.length>0){
+                                activeDailyPmFilter=[...autoTgt.payment_methods];
+                                applyDailyPmFilterStyles();
+                            }
+                        }
+                        dailyTargetInitialized=true;
+                    }
                 }
 
                 // Target selecionado → linha tracejada (adaptativa ou fixa)
