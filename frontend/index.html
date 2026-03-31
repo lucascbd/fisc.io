@@ -5091,8 +5091,6 @@
                 const ipcaMonthsResp = await api(`${API}/inflation/months`).catch(() => ({months:[], latest: null}));
                 const allIpcaMonths = ipcaMonthsResp.months; // ["2026-03","2026-02",...]
                 window._allIpcaMonths = allIpcaMonths; // persist for fallback in loadInflation
-                const latestYear = ipcaMonthsResp.latest ? ipcaMonthsResp.latest.slice(0,4) : null;
-
                 // Group months by year
                 const byYear = {};
                 allIpcaMonths.forEach(m => {
@@ -5100,6 +5098,11 @@
                     if (!byYear[y]) byYear[y] = [];
                     byYear[y].push(m);
                 });
+
+                const currentYearStr = String(new Date().getFullYear());
+                const latestYear = byYear[currentYearStr]
+                    ? currentYearStr
+                    : (ipcaMonthsResp.latest ? ipcaMonthsResp.latest.slice(0,4) : null);
 
                 let monthHtml = '';
                 Object.keys(byYear).sort((a,b) => b-a).forEach(yr => {
@@ -5660,7 +5663,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Group by year — years collapsed except the latest
                 const barByYear = {};
                 months.forEach(m => { const y=m.slice(0,4); if(!barByYear[y])barByYear[y]=[]; barByYear[y].push(m); });
-                const barLatestYear = Object.keys(barByYear).sort().pop();
+                const currentYear = String(new Date().getFullYear());
+                const barLatestYear = barByYear[currentYear] ? currentYear : Object.keys(barByYear).sort().pop();
                 barContainer.innerHTML = Object.keys(barByYear).sort((a,b)=>b-a).map(yr => {
                     const isLatest = yr === barLatestYear;
                     const allChecked = isLatest; // só o ano vigente marcado por default
