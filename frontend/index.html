@@ -5657,14 +5657,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const pieSelect=document.getElementById('pieChartMonths');
                 pieSelect.innerHTML=months.map(m=>`<option value="${m}" ${m===selectedMonth?'selected':''}>${m}</option>`).join('');
                 const barContainer=document.getElementById('barChartMonthsContainer');
-                const last12Months=months.slice(-12);
                 // Group by year — years collapsed except the latest
                 const barByYear = {};
                 months.forEach(m => { const y=m.slice(0,4); if(!barByYear[y])barByYear[y]=[]; barByYear[y].push(m); });
                 const barLatestYear = Object.keys(barByYear).sort().pop();
                 barContainer.innerHTML = Object.keys(barByYear).sort((a,b)=>b-a).map(yr => {
                     const isLatest = yr === barLatestYear;
-                    const allChecked = barByYear[yr].every(m => last12Months.includes(m));
+                    const allChecked = isLatest; // só o ano vigente marcado por default
                     return `<div style="border-bottom:1px solid #f1f3f4;margin-bottom:4px;padding-bottom:4px;">
                         <div class="flex items-center gap-1 py-1 px-2 rounded hover:bg-blue-50">
                             <label class="flex items-center gap-2 cursor-pointer flex-1 font-semibold">
@@ -5674,7 +5673,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <span id="bar-yr-arrow-${yr}" class="text-xs text-gray-400" style="cursor:pointer;user-select:none;padding:0 4px;" onclick="toggleBarYearCollapse('${yr}')">${isLatest?'▼':'▶'}</span>
                         </div>
                         <div id="bar-yr-months-${yr}" ${isLatest?'':'style="display:none"'}>
-                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${last12Months.includes(m)?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
+                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${isLatest?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
                         </div>
                     </div>`;
                 }).join('');
