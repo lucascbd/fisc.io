@@ -5964,33 +5964,43 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const showIndividual = pieExpTypes.includes('individual');
             const showShared = pieExpTypes.includes('compartilhada');
             try {
-                const { expenses } = await fetchExpensesWithCache(selectedMonth);
+                // Busca mês atual + mês seguinte para capturar despesas com original_date
+                // no mês atual mas due_date no próximo (fechamento de cartão)
+                const nextMon = mon === 12 ? `${year + 1}-01` : `${year}-${String(mon + 1).padStart(2, '0')}`;
+                const [{ expenses: curExp }, { expenses: nextExp }] = await Promise.all([
+                    fetchExpensesWithCache(selectedMonth),
+                    fetchExpensesWithCache(nextMon)
+                ]);
+                // Combina e deduplica por id
+                const seenIds = new Set();
+                const expenses = [...curExp, ...nextExp].filter(e => {
+                    if (seenIds.has(e.id)) return false;
+                    seenIds.add(e.id);
+                    return true;
+                });
                 // dailyData[d] = { total, cats: { name: {total, color, emoji} } }
                 const dailyData = {};
                 for (let d = 1; d <= daysInMonth; d++) dailyData[d] = { total: 0, cats: {} };
                 for (const expense of expenses) {
-                    const splitsInMonth = expense.splits.filter(s => {
-                        const sd = new Date(s.due_date + 'T00:00:00');
-                        return sd.getFullYear() === year && sd.getMonth() + 1 === mon;
-                    });
-                    if (!splitsInMonth.length) continue;
-                    const uids = new Set(splitsInMonth.map(s => s.user_id));
-                    const isShared = uids.size > 1 || (uids.size === 1 && !uids.has(user.id));
-                    if (isShared && !showShared) continue;
-                    if (!isShared && !showIndividual) continue;
-                    // Filtro de forma de pagamento
-                    if (activeDailyPmFilter && expense.payment_method !== activeDailyPmFilter) continue;
-                    // Bucket by original_date day (must be within selected month)
+                    // Filtra pelo original_date no mês selecionado (independente do due_date do split)
                     const origStr = expense.original_date || expense.expense_date;
                     if (!origStr) continue;
                     const origDate = new Date(origStr + 'T00:00:00');
                     if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
+                    // Shared/individual baseado em todos os splits da despesa
+                    const allUids = new Set(expense.splits.map(s => s.user_id));
+                    const isShared = allUids.size > 1 || (allUids.size === 1 && !allUids.has(user.id));
+                    if (isShared && !showShared) continue;
+                    if (!isShared && !showIndividual) continue;
+                    // Filtro de forma de pagamento
+                    if (activeDailyPmFilter && expense.payment_method !== activeDailyPmFilter) continue;
                     const day = origDate.getDate();
                     const cat = categories.find(c => c.id === expense.category_id);
                     const catName = expense.category_name;
                     const emoji = cat?.icon || '📁';
                     const color = cat?.color || '#999';
-                    for (const split of splitsInMonth) {
+                    // Usa todos os splits do usuário (independente do mês do due_date)
+                    for (const split of expense.splits) {
                         if (split.user_id !== user.id) continue;
                         const amt = parseFloat(split.user_amount);
                         if (amt <= 0) continue;
