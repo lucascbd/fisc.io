@@ -6189,8 +6189,25 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
                     const todayDay = isCurrentMonth ? now.getDate() : daysInMonth;
 
-                    // gastos[i] = gasto real se dia <= todayDay, null se dia futuro
-                    const gastos = days.map((d, idx) => d <= todayDay ? dueDateTotals[idx] : null);
+                    // Filtrar gastos igual à aba Início: por category_ids e payment_methods do target
+                    const tgtCatIds = selTarget.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
+                    const tgtPmIds = selTarget.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
+                    const tgtDueDateDayTotals = {};
+                    for (let d = 1; d <= daysInMonth; d++) tgtDueDateDayTotals[d] = 0;
+                    for (const expense of curExp) {
+                        if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
+                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        for (const split of expense.splits) {
+                            if (split.user_id !== user.id) continue;
+                            const dd = new Date(split.due_date + 'T00:00:00');
+                            if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
+                            tgtDueDateDayTotals[dd.getDate()] += parseFloat(split.user_amount);
+                        }
+                    }
+                    const tgtDueDateTotals = days.map(d => tgtDueDateDayTotals[d]);
+
+                    // gastos[i] = gasto real (filtrado pelo target) se dia <= todayDay, null se futuro
+                    const gastos = days.map((d, idx) => d <= todayDay ? tgtDueDateTotals[idx] : null);
                     const orcamento = selTarget.monthly_amount;
                     let ultimo_teto = orcamento / daysInMonth;
                     targetLineData = gastos.map((gasto, i) => {
@@ -6255,12 +6272,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 filter: item => item.datasetIndex === 1 ? true : item.raw > 0,
                                 callbacks: {
                                     title: items => `Dia ${items[0].label}`,
-                                    label: item => item.datasetIndex === 1
-                                        ? `${selTarget.emoji || '🎯'} Teto: R$ ${formatBRL(item.raw)}`
-                                        : null,
-                                    labelColor: item => item.datasetIndex === 1
-                                        ? { borderColor: 'transparent', backgroundColor: 'transparent', borderWidth: 0 }
-                                        : undefined,
+                                    label: () => null,
+                                    beforeBody: items => {
+                                        const tetoItem = targetLineData ? items.find(i => i.datasetIndex === 1) : null;
+                                        return tetoItem ? [`${selTarget.emoji || '🎯'} Teto: R$ ${formatBRL(tetoItem.raw)}`] : [];
+                                    },
                                     afterBody: items => {
                                         const spendItem = items.find(i => i.datasetIndex === 0);
                                         if (!spendItem || !spendItem.raw) return [];
