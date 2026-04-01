@@ -6129,7 +6129,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     for (const split of expense.splits) {
                         if (split.user_id !== user.id) continue;
                         const amt = parseFloat(split.user_amount);
-                        if (amt <= 0) continue;
+                        if (amt === 0) continue;
                         dailyData[day].total += amt;
                         if (!dailyData[day].cats[catName]) dailyData[day].cats[catName] = { total: 0, color, emoji };
                         dailyData[day].cats[catName].total += amt;
@@ -6151,7 +6151,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const dueDateTotals = days.map(d => dueDateDayTotals[d]);
 
                 if (dailyLineChart) { dailyLineChart.destroy(); dailyLineChart = null; }
-                if (!totals.some(v => v > 0)) return;
+                if (!totals.some(v => v !== 0)) return;
                 const isDark = document.body.classList.contains('dark-mode');
                 const textColor = isDark ? '#e8eaed' : '#202124';
                 const gridColor = isDark ? '#3c4043' : '#e0e0e0';
@@ -6159,12 +6159,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Popular seletor de targets R$/dia; auto-seleciona o primeiro se ainda não há seleção
                 const targetSel = document.getElementById('dailyTargetSelect');
                 if (targetSel) {
-                    const dailyTargets = (targets || []).filter(t => t.display_mode === 'daily' && t.is_active !== false);
+                    const allTargets = (targets || []);
                     const currentVal = targetSel.value;
                     // Auto-selecionar o primeiro target elegível apenas na primeira carga
-                    const defaultVal = dailyTargetInitialized ? currentVal : (dailyTargets.length ? String(dailyTargets[0].id) : '');
+                    const defaultVal = dailyTargetInitialized ? currentVal : (allTargets.length ? String(allTargets[0].id) : '');
                     targetSel.innerHTML = '<option value="">Sem meta</option>' +
-                        dailyTargets.map(t => `<option value="${t.id}" ${String(t.id)===defaultVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
+                        allTargets.map(t => `<option value="${t.id}" ${String(t.id)===defaultVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
                     if (!dailyTargetInitialized) {
                         if (defaultVal) {
                             const autoTgt=(targets||[]).find(t=>String(t.id)===defaultVal);
@@ -6182,6 +6182,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const selTarget = !isNaN(selTargetId) && selTargetId ? (targets||[]).find(t=>t.id===selTargetId) : null;
                 const fixedDailyLimit = selTarget ? selTarget.monthly_amount / daysInMonth : null;
 
+                let tgtDisplayTotals = null;
                 let targetLineData = null;
                 let labelLimit = fixedDailyLimit; // valor exibido no label do gráfico
                 if (selTarget) {
@@ -6189,63 +6190,93 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
                     const todayDay = isCurrentMonth ? now.getDate() : daysInMonth;
 
-                    // Filtrar gastos igual à aba Início: por category_ids e payment_methods do target
                     const tgtCatIds = selTarget.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
                     const tgtPmIds = selTarget.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
-                    const tgtDueDateDayTotals = {};
-                    for (let d = 1; d <= daysInMonth; d++) tgtDueDateDayTotals[d] = 0;
+
+                    // Linha azul filtrada pelo target (original_date, inclui negativos/refunds)
+                    const tgtDisplayDayTotals = {};
+                    for (let d = 1; d <= daysInMonth; d++) tgtDisplayDayTotals[d] = 0;
+                    for (const expense of expenses) {
+                        if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
+                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        const origStr = expense.original_date || expense.expense_date;
+                        if (!origStr) continue;
+                        const origDate = new Date(origStr + 'T00:00:00');
+                        if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
+                        const day = origDate.getDate();
+                        for (const split of expense.splits) {
+                            if (split.user_id !== user.id) continue;
+                            tgtDisplayDayTotals[day] += parseFloat(split.user_amount);
+                        }
+                    }
+                    tgtDisplayTotals = days.map(d => tgtDisplayDayTotals[d]);
+
+                    // Teto: separar parcelas (outros meses, due_date neste mês) de gastos (este mês)
+                    let parcelas = 0;
+                    const gastosDueDayTotals = {};
+                    for (let d = 1; d <= daysInMonth; d++) gastosDueDayTotals[d] = 0;
                     for (const expense of curExp) {
                         if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
                         if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        const origStr = expense.original_date || expense.expense_date;
+                        if (!origStr) continue;
+                        const origDate = new Date(origStr + 'T00:00:00');
+                        const isCurrentMonthExp = origDate.getFullYear() === year && origDate.getMonth() + 1 === mon;
                         for (const split of expense.splits) {
                             if (split.user_id !== user.id) continue;
                             const dd = new Date(split.due_date + 'T00:00:00');
                             if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
-                            tgtDueDateDayTotals[dd.getDate()] += parseFloat(split.user_amount);
+                            const amt = parseFloat(split.user_amount);
+                            if (isCurrentMonthExp) {
+                                gastosDueDayTotals[dd.getDate()] += amt; // gasto do mês
+                            } else {
+                                parcelas += amt; // pré-comprometido de outro mês
+                            }
                         }
                     }
-                    const tgtDueDateTotals = days.map(d => tgtDueDateDayTotals[d]);
-                    const totalMonthSpent = tgtDueDateTotals.reduce((s, v) => s + v, 0);
+                    const gastosDayArray = days.map(d => gastosDueDayTotals[d]);
+                    const saldoInicial = selTarget.monthly_amount - parcelas;
 
-                    // gastos[i]: cumulativo simples para mostrar variação no mês vigente
-                    // - dias com gasto (passado ou futuro comprometido): valor real
-                    // - dias passados/hoje sem gasto: 0 (dias_restantes diminui)
-                    // - dias futuros sem gasto: null (congela no último teto)
+                    // gastos para o algoritmo (inclui negativos = refunds aumentam o teto)
                     const gastos = days.map((d, idx) => {
-                        const s = tgtDueDateTotals[idx];
-                        if (s > 0) return s;
+                        const s = gastosDayArray[idx];
+                        if (s !== 0) return s;
                         if (d <= todayDay) return 0;
                         return null;
                     });
-                    const orcamento = selTarget.monthly_amount;
-                    let ultimo_teto = orcamento / daysInMonth;
+                    let ultimo_teto = saldoInicial / daysInMonth;
+                    let runningAcumulado = 0;
                     targetLineData = gastos.map((gasto, i) => {
                         if (gasto === null) return ultimo_teto;
-                        const acumulado = gastos.slice(0, i + 1).reduce((s, g) => s + (g ?? 0), 0);
+                        runningAcumulado += gasto;
                         const dias_restantes = daysInMonth - i;
-                        const novo_teto = dias_restantes > 0 ? Math.max((orcamento - acumulado) / dias_restantes, 0) : 0;
+                        const novo_teto = dias_restantes > 0 ? Math.max((saldoInicial - runningAcumulado) / dias_restantes, 0) : 0;
                         ultimo_teto = novo_teto;
                         return novo_teto;
                     });
-                    // labelLimit: fórmula do Início (total comprometido do mês / dias restantes)
+                    // labelLimit: saldoInicial menos todos os gastos do mês
+                    const sumAllGastos = gastosDayArray.reduce((s, v) => s + v, 0);
                     const daysLeft = daysInMonth - todayDay + 1;
-                    labelLimit = daysLeft > 0 ? Math.max((orcamento - totalMonthSpent) / daysLeft, 0) : 0;
+                    labelLimit = daysLeft > 0 ? Math.max((saldoInicial - sumAllGastos) / daysLeft, 0) : 0;
                 }
 
+                // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
+                const activeTotals = tgtDisplayTotals ?? totals;
+
                 // Cores dos pontos: vermelho se acima do target do dia, azul normal
-                const ptColor = totals.map((v, idx) =>
+                const ptColor = activeTotals.map((v, idx) =>
                     targetLineData !== null && v > 0 && v > targetLineData[idx] ? '#ef4444' : '#1a73e8'
                 );
 
                 const datasets = [{
-                    data: totals,
+                    data: activeTotals,
                     borderColor: '#1a73e8',
                     backgroundColor: isDark ? 'rgba(26,115,232,0.15)' : 'rgba(26,115,232,0.08)',
                     fill: true,
                     tension: 0.35,
                     borderWidth: 2,
-                    pointRadius: totals.map(v => v > 0 ? 3 : 0),
-                    pointHoverRadius: totals.map(v => v > 0 ? 6 : 0),
+                    pointRadius: activeTotals.map(v => v !== 0 ? 3 : 0),
+                    pointHoverRadius: activeTotals.map(v => v !== 0 ? 6 : 0),
                     pointBackgroundColor: ptColor,
                     pointBorderColor: ptColor,
                     spanGaps: true
@@ -6285,7 +6316,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         plugins: {
                             legend: { display: false },
                             tooltip: {
-                                filter: item => item.datasetIndex === 1 ? true : item.raw > 0,
+                                filter: item => item.datasetIndex === 1 ? true : item.raw !== 0,
                                 callbacks: {
                                     title: items => `Dia ${items[0].label}`,
                                     label: () => null,
