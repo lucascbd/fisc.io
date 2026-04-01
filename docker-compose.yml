@@ -58,8 +58,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SECRET_KEY: ${SECRET_KEY}
       TZ: America/Sao_Paulo
-      RECURRING_SCHEDULE: ${RECURRING_SCHEDULE:-* * * * *}
-      REMINDERS_SCHEDULE: ${REMINDERS_SCHEDULE:-* * * * *}
+      RECURRING_SCHEDULE: ${RECURRING_SCHEDULE:-0 0 * * *}
+      REMINDERS_SCHEDULE: ${REMINDERS_SCHEDULE:-* * 1 * *}
       IPCA_SCHEDULE: ${IPCA_SCHEDULE:-0 0 * * *}
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
