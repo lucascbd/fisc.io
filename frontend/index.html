@@ -4869,7 +4869,7 @@
                         if (tx != null) {
                             const sz = 4;
                             const axisBottom = chart.scales.x?.bottom ?? (chartArea.bottom + 24);
-                            const ty = axisBottom - sz * 2 - 1;
+                            const ty = axisBottom + 2;
                             ctx.save();
                             ctx.fillStyle = '#ef4444';
                             ctx.beginPath();
@@ -6330,7 +6330,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 18 } },
+                        layout: { padding: { top: 18, bottom: 12 } },
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: false },
