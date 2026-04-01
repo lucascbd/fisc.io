@@ -6074,7 +6074,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         const tSelEl = document.getElementById('dailyTargetSelect');
                         const tId = dailyTargetInitialized ? parseInt(tSelEl?.value) : ((targets||[]).filter(t=>t.display_mode==='daily'&&t.is_active!==false)[0]?.id);
                         const tgt = tId ? (targets||[]).find(t=>t.id===tId) : null;
-                        const tgtCats = tgt?.categories?.length ? tgt.categories : null;
+                        const tgtCats = tgt?.category_ids?.length ? tgt.category_ids : null;
                         if (tgtCats) {
                             selectedDailyCatIds = availableCats.map(c=>c.id).filter(id=>tgtCats.includes(id));
                             if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c=>c.id);
@@ -6203,9 +6203,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             cumulative += dueDateTotals[idx];
                             return limit;
                         });
-                        // Label mostra o teto de hoje (último dia com dado ou hoje)
-                        const todayIdx = Math.min(now.getDate() - 1, daysInMonth - 1);
-                        labelLimit = targetLineData[todayIdx];
+                        // Label: orçamento restante ÷ dias restantes após hoje
+                        const totalSpentSoFar = dueDateTotals.slice(0, now.getDate()).reduce((a, b) => a + b, 0);
+                        const remainingBudget = selTarget.monthly_amount - totalSpentSoFar;
+                        const daysAfterToday = daysInMonth - now.getDate();
+                        labelLimit = daysAfterToday > 0 && remainingBudget > 0
+                            ? remainingBudget / daysAfterToday
+                            : fixedDailyLimit;
                     }
                 }
 
