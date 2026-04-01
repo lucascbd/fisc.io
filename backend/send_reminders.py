@@ -35,8 +35,8 @@ def is_first_day_of_month():
 
 
 def get_current_hour_str():
-    """Retorna hora atual no formato HH:00"""
-    return datetime.now().strftime('%H:00')
+    """Retorna hora e minuto atual no formato HH:MM"""
+    return datetime.now().strftime('%H:%M')
 
 
 def calculate_user_balances(db, month=None):
@@ -127,28 +127,27 @@ def send_reminders(db, force=False, test=False):
         print(f"ℹ️ Hoje não é o primeiro dia do mês. Use --force para ignorar.")
         return
     
-    current_hour = get_current_hour_str()
-    print(f"🕐 Hora atual: {current_hour}")
-    
+    current_time = get_current_hour_str()
+    print(f"🕐 Hora atual: {current_time}")
+
     # Buscar usuários com lembretes ativos
     prefs = db.query(NotificationPreferences).filter(
         NotificationPreferences.notify_reminders == True
     ).all()
-    
+
     if not prefs:
         print("ℹ️ Nenhum usuário com lembretes ativados")
         return
-    
-    # Filtrar por horário (formato HH:00 ou HH:MM)
+
+    # Filtrar por horário exato HH:MM
     users_to_notify = []
     for p in prefs:
-        # Normalizar horário para HH:00
-        user_hour = p.reminder_time[:2] + ":00" if p.reminder_time else "09:00"
-        if user_hour == current_hour or force:
+        user_time = p.reminder_time or "09:00"
+        if user_time == current_time or force:
             users_to_notify.append(p.user_id)
             print(f"  ✓ Usuário {p.user_id} - horário {p.reminder_time} -> enviar")
         else:
-            print(f"  ✗ Usuário {p.user_id} - horário {p.reminder_time} (atual: {current_hour}) -> pular")
+            print(f"  ✗ Usuário {p.user_id} - horário {p.reminder_time} (atual: {current_time}) -> pular")
     
     if not users_to_notify:
         print("ℹ️ Nenhum usuário para notificar neste horário")

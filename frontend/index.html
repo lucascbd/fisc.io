@@ -6195,14 +6195,23 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         targetLineData = days.map(() => fixedDailyLimit);
                         labelLimit = fixedDailyLimit;
                     } else {
-                        // Mês em curso: linha flat = saldo remanescente ÷ dias restantes
-                        const totalSpentSoFar = dueDateTotals.reduce((a, b) => a + b, 0);
-                        const remainingBudget = selTarget.monthly_amount - totalSpentSoFar;
-                        const daysRemaining = daysInMonth - now.getDate() + 1; // inclui hoje
-                        labelLimit = daysRemaining > 0 && remainingBudget > 0
-                            ? remainingBudget / daysRemaining
-                            : fixedDailyLimit;
-                        targetLineData = days.map(() => labelLimit);
+                        // Mês em curso: linha adaptativa por dia, congela nos dias futuros
+                        const todayDay = now.getDate();
+                        let cumulative = 0;
+                        let frozenTeto = fixedDailyLimit;
+                        targetLineData = days.map((d, idx) => {
+                            const remaining = selTarget.monthly_amount - cumulative;
+                            const remainingDays = daysInMonth - idx;
+                            const teto = remainingDays > 0 && remaining > 0
+                                ? remaining / remainingDays
+                                : fixedDailyLimit;
+                            if (d <= todayDay) {
+                                cumulative += dueDateTotals[idx];
+                                frozenTeto = teto;
+                            }
+                            return d <= todayDay ? teto : frozenTeto;
+                        });
+                        labelLimit = targetLineData[todayDay - 1]; // teto de hoje
                     }
                 }
 
@@ -6212,7 +6221,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 );
 
                 const datasets = [{
-                    data: totals,
+                    data: totals.map(v => v > 0 ? v : null),
                     borderColor: '#1a73e8',
                     backgroundColor: isDark ? 'rgba(26,115,232,0.15)' : 'rgba(26,115,232,0.08)',
                     fill: true,
@@ -6231,7 +6240,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         borderWidth: 2,
                         borderDash: [6, 4],
                         pointRadius: 0,
-                        pointHoverRadius: 0,
+                        pointHoverRadius: 4,
+                        pointBackgroundColor: '#f59e0b',
                         fill: false,
                         tension: 0,
                         spanGaps: true
@@ -6253,13 +6263,16 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         plugins: {
                             legend: { display: false },
                             tooltip: {
-                                filter: item => item.datasetIndex === 0 && item.raw > 0,
+                                filter: item => item.datasetIndex === 1 ? true : (item.raw !== null && item.raw > 0),
                                 callbacks: {
                                     title: items => `Dia ${items[0].label}`,
-                                    label: () => null,
+                                    label: item => item.datasetIndex === 1
+                                        ? `  Teto: R$ ${formatBRL(item.raw)}`
+                                        : null,
                                     afterBody: items => {
-                                        if (!items.length) return [];
-                                        const d = parseInt(items[0].label);
+                                        const spendItem = items.find(i => i.datasetIndex === 0);
+                                        if (!spendItem || !spendItem.raw) return [];
+                                        const d = parseInt(spendItem.label);
                                         const cats = dailyData[d]?.cats || {};
                                         const sorted = Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
                                         const lines = sorted.map(([name, c]) => `  ${c.emoji} ${name}: R$ ${formatBRL(c.total)}`);
