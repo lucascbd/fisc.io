@@ -6195,25 +6195,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         targetLineData = days.map(() => fixedDailyLimit);
                         labelLimit = fixedDailyLimit;
                     } else {
-                        // Mês em curso: linha adaptativa — recalcula teto usando gastos por due_date
-                        // (igual ao valor de fechamento da aba Início)
-                        let cumulative = 0;
-                        targetLineData = days.map((d, idx) => {
-                            const remaining = selTarget.monthly_amount - cumulative;
-                            const remainingDays = daysInMonth - idx;
-                            const limit = remainingDays > 0 && remaining > 0
-                                ? remaining / remainingDays
-                                : fixedDailyLimit;
-                            cumulative += dueDateTotals[idx];
-                            return limit;
-                        });
-                        // Label: orçamento restante ÷ dias restantes após hoje
-                        const totalSpentSoFar = dueDateTotals.slice(0, now.getDate()).reduce((a, b) => a + b, 0);
+                        // Mês em curso: linha flat = saldo remanescente ÷ dias restantes
+                        const totalSpentSoFar = dueDateTotals.reduce((a, b) => a + b, 0);
                         const remainingBudget = selTarget.monthly_amount - totalSpentSoFar;
-                        const daysAfterToday = daysInMonth - now.getDate();
-                        labelLimit = daysAfterToday > 0 && remainingBudget > 0
-                            ? remainingBudget / daysAfterToday
+                        const daysRemaining = daysInMonth - now.getDate() + 1; // inclui hoje
+                        labelLimit = daysRemaining > 0 && remainingBudget > 0
+                            ? remainingBudget / daysRemaining
                             : fixedDailyLimit;
+                        targetLineData = days.map(() => labelLimit);
                     }
                 }
 
