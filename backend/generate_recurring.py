@@ -18,8 +18,8 @@ import argparse
 from datetime import datetime, date
 from decimal import Decimal
 
-sys.path.insert(0, '/opt/budget-system/backend')
-os.chdir('/opt/budget-system/backend')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
