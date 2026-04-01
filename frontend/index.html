@@ -2430,6 +2430,7 @@
         let activeDailyPmFilter=[]; // [] = all selected
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
+        let dailyCatMonth='';
 
         function toggleDailyCatFilterDropdown(){
             const dd=document.getElementById('dailyCatFilterDropdown');
@@ -6064,18 +6065,24 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         .filter(e => { const o=e.original_date||e.expense_date; if(!o) return false; const d=new Date(o+'T00:00:00'); return d.getFullYear()===year&&d.getMonth()+1===mon; })
                         .map(e => e.category_id));
                     const availableCats = categories.filter(c => catIdsInMonth.has(c.id));
-                    // null = primeira carga → selecionar tudo; [] = usuário desmarcou tudo → manter vazio
+                    const monthChanged = selectedMonth !== dailyCatMonth;
+                    dailyCatMonth = selectedMonth;
                     if (availableCats.length === 0) {
-                        // Mês sem dados: resetar para null para que o próximo mês com dados reinicialize
                         selectedDailyCatIds = null;
-                    } else if (selectedDailyCatIds === null) {
-                        selectedDailyCatIds = availableCats.map(c => c.id);
-                    } else if (selectedDailyCatIds.length > 0) {
-                        // Preservar apenas os que ainda existem no mês atual
-                        const prev = new Set(selectedDailyCatIds);
-                        selectedDailyCatIds = availableCats.map(c => c.id).filter(id => prev.has(id));
-                        if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c => c.id);
+                    } else if (monthChanged || selectedDailyCatIds === null) {
+                        // Mês trocou ou primeira carga: aplicar categorias do target (ou todas)
+                        const tSelEl = document.getElementById('dailyTargetSelect');
+                        const tId = dailyTargetInitialized ? parseInt(tSelEl?.value) : ((targets||[]).filter(t=>t.display_mode==='daily'&&t.is_active!==false)[0]?.id);
+                        const tgt = tId ? (targets||[]).find(t=>t.id===tId) : null;
+                        const tgtCats = tgt?.categories?.length ? tgt.categories : null;
+                        if (tgtCats) {
+                            selectedDailyCatIds = availableCats.map(c=>c.id).filter(id=>tgtCats.includes(id));
+                            if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c=>c.id);
+                        } else {
+                            selectedDailyCatIds = availableCats.map(c=>c.id);
+                        }
                     }
+                    // [] = usuário desmarcou tudo dentro do mesmo mês → manter vazio
                     const allSel = availableCats.length > 0 && (selectedDailyCatIds === null || selectedDailyCatIds.length >= availableCats.length);
                     dailyCatContainer.innerHTML = `
                         <label class="flex items-center gap-2 py-1 hover:bg-blue-50 cursor-pointer px-2 rounded font-medium border-b mb-1 pb-2">
@@ -6125,6 +6132,20 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
                 }
                 const totals = days.map(d => dailyData[d].total);
+
+                // Totais por due_date para cálculo de orçamento (igual ao valor de fechamento da aba Início)
+                const dueDateDayTotals = {};
+                for (let d = 1; d <= daysInMonth; d++) dueDateDayTotals[d] = 0;
+                for (const expense of curExp) {
+                    for (const split of expense.splits) {
+                        if (split.user_id !== user.id) continue;
+                        const dd = new Date(split.due_date + 'T00:00:00');
+                        if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
+                        dueDateDayTotals[dd.getDate()] += parseFloat(split.user_amount);
+                    }
+                }
+                const dueDateTotals = days.map(d => dueDateDayTotals[d]);
+
                 if (dailyLineChart) { dailyLineChart.destroy(); dailyLineChart = null; }
                 if (!totals.some(v => v > 0)) return;
                 const isDark = document.body.classList.contains('dark-mode');
@@ -6162,7 +6183,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (selTarget) {
                     const now = new Date();
                     const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
-                    const totalSpent = totals.reduce((a, b) => a + b, 0);
+                    const totalSpent = dueDateTotals.reduce((a, b) => a + b, 0);
                     const budgetExceeded = totalSpent >= selTarget.monthly_amount;
 
                     if (!isCurrentMonth || budgetExceeded) {
@@ -6170,8 +6191,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         targetLineData = days.map(() => fixedDailyLimit);
                         labelLimit = fixedDailyLimit;
                     } else {
-                        // Mês em curso: linha adaptativa — recalcula teto a cada dia
-                        // limit_d = (monthly - gasto(1..d-1)) / (daysInMonth - (d-1))
+                        // Mês em curso: linha adaptativa — recalcula teto usando gastos por due_date
+                        // (igual ao valor de fechamento da aba Início)
                         let cumulative = 0;
                         targetLineData = days.map((d, idx) => {
                             const remaining = selTarget.monthly_amount - cumulative;
@@ -6179,7 +6200,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             const limit = remainingDays > 0 && remaining > 0
                                 ? remaining / remainingDays
                                 : fixedDailyLimit;
-                            cumulative += totals[idx];
+                            cumulative += dueDateTotals[idx];
                             return limit;
                         });
                         // Label mostra o teto de hoje (último dia com dado ou hoje)
