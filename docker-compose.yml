@@ -57,7 +57,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SECRET_KEY: ${SECRET_KEY}
-      RECURRING_SCHEDULE: ${RECURRING_SCHEDULE:-0 0 * * *}
+      RECURRING_SCHEDULE: ${RECURRING_SCHEDULE:-* * * * *}
       REMINDERS_SCHEDULE: ${REMINDERS_SCHEDULE:-0 * * * *}
       IPCA_SCHEDULE: ${IPCA_SCHEDULE:-0 0 * * *}
     volumes:
