@@ -62,7 +62,7 @@ services:
     command: >
       sh -c "
         printenv | sed 's/^\([^=]*\)=\(.*\)$$/export \1=\"\2\"/' > /app/cron.env &&
-        echo '0 0 * * * root . /app/cron.env && python /app/generate_recurring.py >> /var/log/fiscio-recurring.log 2>&1' > /etc/cron.d/fiscio &&
+        echo '* * * * * root . /app/cron.env && python /app/generate_recurring.py >> /var/log/fiscio-recurring.log 2>&1' > /etc/cron.d/fiscio &&
         echo '0 * * * * root . /app/cron.env && python /app/send_reminders.py >> /var/log/fiscio-reminders.log 2>&1' >> /etc/cron.d/fiscio &&
         echo '0 0 * * * root . /app/cron.env && python /app/ipca_ingest.py >> /var/log/fiscio-ipca.log 2>&1' >> /etc/cron.d/fiscio &&
         chmod 0644 /etc/cron.d/fiscio &&
