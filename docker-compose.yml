@@ -57,17 +57,13 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       SECRET_KEY: ${SECRET_KEY}
+      TZ: America/Sao_Paulo
+      RECURRING_SCHEDULE: ${RECURRING_SCHEDULE:-0 0 * * *}
+      REMINDERS_SCHEDULE: ${REMINDERS_SCHEDULE:-* * 1 * *}
+      IPCA_SCHEDULE: ${IPCA_SCHEDULE:-0 0 * * *}
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
-    command: >
-      sh -c "
-        echo '0 0 * * * python /app/generate_recurring.py >> /var/log/fiscio-recurring.log 2>&1' > /etc/cron.d/fiscio &&
-        echo '0 * * * * python /app/send_reminders.py >> /var/log/fiscio-reminders.log 2>&1' >> /etc/cron.d/fiscio &&
-        echo '0 0 * * * python /app/ipca_ingest.py >> /var/log/fiscio-ipca.log 2>&1' >> /etc/cron.d/fiscio &&
-        chmod 0644 /etc/cron.d/fiscio &&
-        crontab /etc/cron.d/fiscio &&
-        cron -f
-      "
+    command: ["/app/cron_entrypoint.sh"]
 
 volumes:
   postgres_data:

@@ -19,8 +19,8 @@ from calendar import monthrange
 import argparse
 
 # Adicionar path do backend e mudar para o diretório (para encontrar .env)
-sys.path.insert(0, '/opt/budget-system/backend')
-os.chdir('/opt/budget-system/backend')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import create_engine, func, extract
 from sqlalchemy.orm import sessionmaker
@@ -29,19 +29,14 @@ from models import User, ExpenseSplit, NotificationPreferences, DeviceToken
 from firebase_service import FirebaseService
 
 
-def is_first_monday_of_month():
-    """Verifica se hoje é a primeira segunda-feira do mês"""
-    today = date.today()
-    # Segunda-feira = 0
-    if today.weekday() != 0:
-        return False
-    # Primeira segunda-feira está entre dia 1 e 7
-    return today.day <= 7
+def is_first_day_of_month():
+    """Verifica se hoje é o primeiro dia do mês"""
+    return date.today().day == 1
 
 
 def get_current_hour_str():
-    """Retorna hora atual no formato HH:00"""
-    return datetime.now().strftime('%H:00')
+    """Retorna hora e minuto atual no formato HH:MM"""
+    return datetime.now().strftime('%H:%M')
 
 
 def calculate_user_balances(db, month=None):
@@ -128,32 +123,31 @@ def send_reminders(db, force=False, test=False):
         test: Modo teste (não envia, só mostra)
     """
     # Verificar se é primeira segunda-feira (a menos que force=True)
-    if not force and not is_first_monday_of_month():
-        print(f"ℹ️ Hoje não é a primeira segunda-feira do mês. Use --force para ignorar.")
+    if not force and not is_first_day_of_month():
+        print(f"ℹ️ Hoje não é o primeiro dia do mês. Use --force para ignorar.")
         return
     
-    current_hour = get_current_hour_str()
-    print(f"🕐 Hora atual: {current_hour}")
-    
+    current_time = get_current_hour_str()
+    print(f"🕐 Hora atual: {current_time}")
+
     # Buscar usuários com lembretes ativos
     prefs = db.query(NotificationPreferences).filter(
         NotificationPreferences.notify_reminders == True
     ).all()
-    
+
     if not prefs:
         print("ℹ️ Nenhum usuário com lembretes ativados")
         return
-    
-    # Filtrar por horário (formato HH:00 ou HH:MM)
+
+    # Filtrar por horário exato HH:MM
     users_to_notify = []
     for p in prefs:
-        # Normalizar horário para HH:00
-        user_hour = p.reminder_time[:2] + ":00" if p.reminder_time else "09:00"
-        if user_hour == current_hour or force:
+        user_time = p.reminder_time or "09:00"
+        if user_time == current_time or force:
             users_to_notify.append(p.user_id)
             print(f"  ✓ Usuário {p.user_id} - horário {p.reminder_time} -> enviar")
         else:
-            print(f"  ✗ Usuário {p.user_id} - horário {p.reminder_time} (atual: {current_hour}) -> pular")
+            print(f"  ✗ Usuário {p.user_id} - horário {p.reminder_time} (atual: {current_time}) -> pular")
     
     if not users_to_notify:
         print("ℹ️ Nenhum usuário para notificar neste horário")
@@ -222,7 +216,7 @@ def main():
     
     # Inicializar Firebase
     try:
-        FirebaseService.initialize('/opt/budget-system/backend/firebase-credentials.json')
+        FirebaseService.initialize(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'firebase-credentials.json'))
         print("✅ Firebase inicializado")
     except Exception as e:
         print(f"⚠️ Firebase já inicializado ou erro: {e}")

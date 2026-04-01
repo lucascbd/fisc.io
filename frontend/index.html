@@ -1467,7 +1467,7 @@
         <nav class="bg-blue-600 shadow-sm sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
                 <div class="flex items-center gap-3">
-                    <img src="/icon-192.png" style="width:40px;height:40px;object-fit:contain;border-radius:8px;">
+                    <img src="/icon-192.png" style="width:34px;height:34px;object-fit:contain;border-radius:7px;">
                     <h1 class="text-xl font-bold text-white">fisc.io</h1>
                 </div>
                 <div class="flex items-center gap-3">
@@ -2430,6 +2430,7 @@
         let activeDailyPmFilter=[]; // [] = all selected
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
+        let dailyCatMonth='';
 
         function toggleDailyCatFilterDropdown(){
             const dd=document.getElementById('dailyCatFilterDropdown');
@@ -2488,6 +2489,7 @@
             } else {
                 activeDailyPmFilter=[];
             }
+            selectedDailyCatIds=null; // força re-init de categorias baseado no novo target
             applyDailyPmFilterStyles();
             updateDailyChart();
         }
@@ -4858,6 +4860,28 @@
                     ctx.fillText(`Sem ${w.num}`, cx, chartArea.top - 2);
                 });
                 ctx.restore();
+                // Triângulo ▲ vermelho abaixo do dia vigente
+                const now = new Date();
+                if (now.getFullYear() === yr && now.getMonth() + 1 === mn) {
+                    const today = now.getDate();
+                    if (today >= 1 && today <= N) {
+                        const tx = meta.data[today - 1]?.x;
+                        if (tx != null) {
+                            const sz = 4;
+                            const axisBottom = chart.scales.x?.bottom ?? (chartArea.bottom + 24);
+                            const ty = axisBottom + 2;
+                            ctx.save();
+                            ctx.fillStyle = '#ef4444';
+                            ctx.beginPath();
+                            ctx.moveTo(tx, ty);
+                            ctx.lineTo(tx - sz, ty + sz * 2);
+                            ctx.lineTo(tx + sz, ty + sz * 2);
+                            ctx.closePath();
+                            ctx.fill();
+                            ctx.restore();
+                        }
+                    }
+                }
             }
         };
         let myInflationChart = null;
@@ -5175,6 +5199,7 @@
                     if (!byYear[y]) byYear[y] = [];
                     byYear[y].push(m);
                 });
+                Object.keys(byYear).forEach(y => byYear[y].sort());
 
                 const currentYearStr = String(new Date().getFullYear());
                 const latestYear = byYear[currentYearStr]
@@ -5182,7 +5207,7 @@
                     : (ipcaMonthsResp.latest ? ipcaMonthsResp.latest.slice(0,4) : null);
 
                 let monthHtml = '';
-                Object.keys(byYear).sort((a,b) => b-a).forEach(yr => {
+                Object.keys(byYear).sort((a,b) => a-b).forEach(yr => {
                     const isLatest = yr === latestYear;
                     monthHtml += `
                         <div style="border-bottom:1px solid #f1f3f4; margin-bottom:4px; padding-bottom:4px;">
@@ -5464,12 +5489,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             const lastMeta = ci.getDatasetMeta(ci.data.datasets.length - 1);
                             lastMeta.data.forEach((bar, i) => {
                                 ci.ctx.fillStyle = isDark ? '#e8eaed' : '#5f6368';
-                                ci.ctx.font = 'bold 11px Arial'; ci.ctx.textAlign = 'center';
+                                ci.ctx.font = 'bold 10px Arial'; ci.ctx.textAlign = 'center';
                                 ci.ctx.fillText(Math.round(adjTotals[i]).toLocaleString('pt-BR'), bar.x, bar.y - 8);
                             });
                         }},
                         scales: {
-                            x: { stacked: true, ticks: { color: textColor }, grid: { color: gridColor } },
+                            x: { stacked: true, ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor, drawOnChartArea: false } },
                             y: { display: false, stacked: true, beginAtZero: true, suggestedMax: Math.max(...adjTotals, 1)*1.15 }
                         }
                     },
@@ -5781,8 +5806,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 for(const ex of pExps){const us=new Set(ex.splits.filter(s=>{const d=new Date(s.due_date+'T00:00:00');return d.getFullYear()===pyr&&d.getMonth()+1===pmn;}).map(s=>s.user_id));if(us.size>1||(us.size===1&&!us.has(user.id))){pHasShared=true;break;}}
                 const pDrop=document.getElementById('pieExpDropdown')?.querySelector('.p-2');
                 if(pDrop){
-                    const prevPie=Array.from(document.querySelectorAll('.pie-exp-type:checked')).map(cb=>cb.value);
-                    pDrop.innerHTML=`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="individual" ${prevPie.includes('individual')||!prevPie.length?'checked':''} onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Individuais</span></label>${pHasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="compartilhada" ${prevPie.includes('compartilhada')||!prevPie.length?'checked':''} onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}`;updatePieExpText();
+                    pDrop.innerHTML=`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="individual" checked onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Individuais</span></label>${pHasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="pie-exp-type" value="compartilhada" checked onchange="updatePieExpText();updatePieChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}`;updatePieExpText();
                 }
             }
             await updatePieChart();
@@ -6064,16 +6088,29 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         .filter(e => { const o=e.original_date||e.expense_date; if(!o) return false; const d=new Date(o+'T00:00:00'); return d.getFullYear()===year&&d.getMonth()+1===mon; })
                         .map(e => e.category_id));
                     const availableCats = categories.filter(c => catIdsInMonth.has(c.id));
-                    // null = primeira carga → selecionar tudo; [] = usuário desmarcou tudo → manter vazio
-                    if (selectedDailyCatIds === null) {
-                        selectedDailyCatIds = availableCats.map(c => c.id);
-                    } else if (selectedDailyCatIds.length > 0) {
-                        // Preservar apenas os que ainda existem no mês atual
-                        const prev = new Set(selectedDailyCatIds);
-                        selectedDailyCatIds = availableCats.map(c => c.id).filter(id => prev.has(id));
-                        if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c => c.id);
+                    const monthChanged = selectedMonth !== dailyCatMonth;
+                    dailyCatMonth = selectedMonth;
+                    if (availableCats.length === 0) {
+                        selectedDailyCatIds = null;
+                    } else if (monthChanged || selectedDailyCatIds === null) {
+                        // Mês trocou ou primeira carga: aplicar categorias e PM do target (ou todas/nenhum)
+                        const tSelEl = document.getElementById('dailyTargetSelect');
+                        const tId = dailyTargetInitialized ? parseInt(tSelEl?.value) : ((targets||[]).filter(t=>t.display_mode==='daily'&&t.is_active!==false)[0]?.id);
+                        const tgt = tId ? (targets||[]).find(t=>t.id===tId) : null;
+                        // Categorias: normalizar para Number para comparação segura
+                        const tgtCats = tgt?.category_ids?.length ? tgt.category_ids.map(Number) : null;
+                        if (tgtCats) {
+                            selectedDailyCatIds = availableCats.map(c=>c.id).filter(id=>tgtCats.includes(id));
+                            if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c=>c.id);
+                        } else {
+                            selectedDailyCatIds = availableCats.map(c=>c.id);
+                        }
+                        // Métodos de pagamento: resetar para os do target
+                        activeDailyPmFilter = tgt?.payment_methods?.length ? [...tgt.payment_methods] : [];
+                        applyDailyPmFilterStyles();
                     }
-                    const allSel = selectedDailyCatIds.length >= availableCats.length;
+                    // [] = usuário desmarcou tudo dentro do mesmo mês → manter vazio
+                    const allSel = availableCats.length > 0 && (selectedDailyCatIds === null || selectedDailyCatIds.length >= availableCats.length);
                     dailyCatContainer.innerHTML = `
                         <label class="flex items-center gap-2 py-1 hover:bg-blue-50 cursor-pointer px-2 rounded font-medium border-b mb-1 pb-2">
                             <input type="checkbox" id="dailyCatFilterAll" ${allSel?'checked':''} onchange="toggleAllDailyCategories(this.checked)">
@@ -6115,15 +6152,29 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     for (const split of expense.splits) {
                         if (split.user_id !== user.id) continue;
                         const amt = parseFloat(split.user_amount);
-                        if (amt <= 0) continue;
+                        if (amt === 0) continue;
                         dailyData[day].total += amt;
                         if (!dailyData[day].cats[catName]) dailyData[day].cats[catName] = { total: 0, color, emoji };
                         dailyData[day].cats[catName].total += amt;
                     }
                 }
                 const totals = days.map(d => dailyData[d].total);
+
+                // Totais por due_date para cálculo de orçamento (igual ao valor de fechamento da aba Início)
+                const dueDateDayTotals = {};
+                for (let d = 1; d <= daysInMonth; d++) dueDateDayTotals[d] = 0;
+                for (const expense of curExp) {
+                    for (const split of expense.splits) {
+                        if (split.user_id !== user.id) continue;
+                        const dd = new Date(split.due_date + 'T00:00:00');
+                        if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
+                        dueDateDayTotals[dd.getDate()] += parseFloat(split.user_amount);
+                    }
+                }
+                const dueDateTotals = days.map(d => dueDateDayTotals[d]);
+
                 if (dailyLineChart) { dailyLineChart.destroy(); dailyLineChart = null; }
-                if (!totals.some(v => v > 0)) return;
+                if (!totals.some(v => v !== 0)) return;
                 const isDark = document.body.classList.contains('dark-mode');
                 const textColor = isDark ? '#e8eaed' : '#202124';
                 const gridColor = isDark ? '#3c4043' : '#e0e0e0';
@@ -6131,12 +6182,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Popular seletor de targets R$/dia; auto-seleciona o primeiro se ainda não há seleção
                 const targetSel = document.getElementById('dailyTargetSelect');
                 if (targetSel) {
-                    const dailyTargets = (targets || []).filter(t => t.display_mode === 'daily' && t.is_active !== false);
+                    const allTargets = (targets || []);
                     const currentVal = targetSel.value;
                     // Auto-selecionar o primeiro target elegível apenas na primeira carga
-                    const defaultVal = dailyTargetInitialized ? currentVal : (dailyTargets.length ? String(dailyTargets[0].id) : '');
+                    const defaultVal = dailyTargetInitialized ? currentVal : (allTargets.length ? String(allTargets[0].id) : '');
                     targetSel.innerHTML = '<option value="">Sem meta</option>' +
-                        dailyTargets.map(t => `<option value="${t.id}" ${String(t.id)===defaultVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
+                        allTargets.map(t => `<option value="${t.id}" ${String(t.id)===defaultVal?'selected':''}>${t.emoji} ${t.name}</option>`).join('');
                     if (!dailyTargetInitialized) {
                         if (defaultVal) {
                             const autoTgt=(targets||[]).find(t=>String(t.id)===defaultVal);
@@ -6154,66 +6205,118 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const selTarget = !isNaN(selTargetId) && selTargetId ? (targets||[]).find(t=>t.id===selTargetId) : null;
                 const fixedDailyLimit = selTarget ? selTarget.monthly_amount / daysInMonth : null;
 
+                let tgtDisplayTotals = null;
                 let targetLineData = null;
                 let labelLimit = fixedDailyLimit; // valor exibido no label do gráfico
                 if (selTarget) {
                     const now = new Date();
                     const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
-                    const totalSpent = totals.reduce((a, b) => a + b, 0);
-                    const budgetExceeded = totalSpent >= selTarget.monthly_amount;
+                    const todayDay = isCurrentMonth ? now.getDate() : daysInMonth;
 
-                    if (!isCurrentMonth || budgetExceeded) {
-                        // Mês encerrado ou budget estourado: linha fixa
-                        targetLineData = days.map(() => fixedDailyLimit);
-                        labelLimit = fixedDailyLimit;
-                    } else {
-                        // Mês em curso: linha adaptativa — recalcula teto a cada dia
-                        // limit_d = (monthly - gasto(1..d-1)) / (daysInMonth - (d-1))
-                        let cumulative = 0;
-                        targetLineData = days.map((d, idx) => {
-                            const remaining = selTarget.monthly_amount - cumulative;
-                            const remainingDays = daysInMonth - idx;
-                            const limit = remainingDays > 0 && remaining > 0
-                                ? remaining / remainingDays
-                                : fixedDailyLimit;
-                            cumulative += totals[idx];
-                            return limit;
-                        });
-                        // Label mostra o teto de hoje (último dia com dado ou hoje)
-                        const todayIdx = Math.min(now.getDate() - 1, daysInMonth - 1);
-                        labelLimit = targetLineData[todayIdx];
+                    const tgtCatIds = selTarget.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
+                    const tgtPmIds = selTarget.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
+
+                    // Linha azul filtrada pelo target (original_date, inclui negativos/refunds)
+                    const tgtDisplayDayTotals = {};
+                    for (let d = 1; d <= daysInMonth; d++) tgtDisplayDayTotals[d] = 0;
+                    for (const expense of expenses) {
+                        if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
+                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        const origStr = expense.original_date || expense.expense_date;
+                        if (!origStr) continue;
+                        const origDate = new Date(origStr + 'T00:00:00');
+                        if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
+                        const day = origDate.getDate();
+                        for (const split of expense.splits) {
+                            if (split.user_id !== user.id) continue;
+                            tgtDisplayDayTotals[day] += parseFloat(split.user_amount);
+                        }
                     }
+                    tgtDisplayTotals = days.map(d => tgtDisplayDayTotals[d]);
+
+                    // Teto: separar parcelas (outros meses, due_date neste mês) de gastos (este mês)
+                    let parcelas = 0;
+                    const gastosDueDayTotals = {};
+                    for (let d = 1; d <= daysInMonth; d++) gastosDueDayTotals[d] = 0;
+                    for (const expense of curExp) {
+                        if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
+                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        const origStr = expense.original_date || expense.expense_date;
+                        if (!origStr) continue;
+                        const origDate = new Date(origStr + 'T00:00:00');
+                        const isCurrentMonthExp = origDate.getFullYear() === year && origDate.getMonth() + 1 === mon;
+                        for (const split of expense.splits) {
+                            if (split.user_id !== user.id) continue;
+                            const dd = new Date(split.due_date + 'T00:00:00');
+                            if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
+                            const amt = parseFloat(split.user_amount);
+                            if (isCurrentMonthExp) {
+                                gastosDueDayTotals[dd.getDate()] += amt; // gasto do mês
+                            } else {
+                                parcelas += amt; // pré-comprometido de outro mês
+                            }
+                        }
+                    }
+                    const gastosDayArray = days.map(d => gastosDueDayTotals[d]);
+                    const saldoInicial = selTarget.monthly_amount - parcelas;
+
+                    // gastos para o algoritmo (inclui negativos = refunds aumentam o teto)
+                    const gastos = days.map((d, idx) => {
+                        const s = gastosDayArray[idx];
+                        if (s !== 0) return s;
+                        if (d <= todayDay) return 0;
+                        return null;
+                    });
+                    let runningAcumulado = 0;
+                    targetLineData = gastos.map((gasto, i) => {
+                        runningAcumulado += gasto ?? 0;
+                        const dias_restantes = daysInMonth - i;
+                        return dias_restantes > 0 ? Math.max((saldoInicial - runningAcumulado) / dias_restantes, 0) : 0;
+                    });
+                    // labelLimit: saldoInicial menos todos os gastos do mês
+                    const sumAllGastos = gastosDayArray.reduce((s, v) => s + v, 0);
+                    const daysLeft = daysInMonth - todayDay + 1;
+                    labelLimit = daysLeft > 0 ? Math.max((saldoInicial - sumAllGastos) / daysLeft, 0) : 0;
                 }
 
+                // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
+                const activeTotals = tgtDisplayTotals ?? totals;
+
                 // Cores dos pontos: vermelho se acima do target do dia, azul normal
-                const ptColor = totals.map((v, idx) =>
+                const ptColor = activeTotals.map((v, idx) =>
                     targetLineData !== null && v > 0 && v > targetLineData[idx] ? '#ef4444' : '#1a73e8'
                 );
 
                 const datasets = [{
-                    data: totals,
+                    data: activeTotals,
                     borderColor: '#1a73e8',
                     backgroundColor: isDark ? 'rgba(26,115,232,0.15)' : 'rgba(26,115,232,0.08)',
                     fill: true,
                     tension: 0.35,
                     borderWidth: 2,
-                    pointRadius: totals.map(v => v > 0 ? 3 : 0),
-                    pointHoverRadius: totals.map(v => v > 0 ? 6 : 0),
+                    pointRadius: activeTotals.map(v => v !== 0 ? 3 : 0),
+                    pointHoverRadius: activeTotals.map(v => v !== 0 ? 6 : 0),
                     pointBackgroundColor: ptColor,
                     pointBorderColor: ptColor,
-                    spanGaps: false
+                    spanGaps: true
                 }];
                 if (targetLineData !== null) {
+                    const tetoColors = targetLineData.map(v => v <= 0 ? '#ef4444' : '#f59e0b');
                     datasets.push({
                         data: targetLineData,
                         borderColor: '#f59e0b',
                         borderWidth: 2,
                         borderDash: [6, 4],
                         pointRadius: 0,
-                        pointHoverRadius: 0,
+                        pointHoverRadius: 4,
+                        pointBackgroundColor: tetoColors,
+                        pointBorderColor: tetoColors,
                         fill: false,
                         tension: 0,
-                        spanGaps: true
+                        spanGaps: true,
+                        segment: {
+                            borderColor: ctx => targetLineData[ctx.p1DataIndex] <= 0 ? '#ef4444' : '#f59e0b'
+                        }
                     });
                 }
 
@@ -6227,24 +6330,33 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        layout: { padding: { top: 18 } },
+                        layout: { padding: { top: 18, bottom: 12 } },
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: false },
                             tooltip: {
-                                filter: item => item.datasetIndex === 0 && item.raw > 0,
+                                filter: item => item.datasetIndex === 1 ? true : item.raw !== 0,
                                 callbacks: {
                                     title: items => `Dia ${items[0].label}`,
                                     label: () => null,
+                                    beforeBody: items => {
+                                        const tetoItem = targetLineData ? items.find(i => i.datasetIndex === 1) : null;
+                                        if (!tetoItem) return [];
+                                        const spendItem = items.find(i => i.datasetIndex === 0 && i.raw > 0);
+                                        const lines = [`${selTarget.emoji || '🎯'} Target: R$ ${formatBRL(tetoItem.raw)}`];
+                                        if (spendItem) lines.push('──────────────');
+                                        return lines;
+                                    },
                                     afterBody: items => {
-                                        if (!items.length) return [];
-                                        const d = parseInt(items[0].label);
+                                        const spendItem = items.find(i => i.datasetIndex === 0);
+                                        if (!spendItem || !spendItem.raw) return [];
+                                        const d = parseInt(spendItem.label);
                                         const cats = dailyData[d]?.cats || {};
                                         const sorted = Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
-                                        const lines = sorted.map(([name, c]) => `  ${c.emoji} ${name}: R$ ${formatBRL(c.total)}`);
+                                        const lines = sorted.map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`);
                                         if (sorted.length > 1) {
-                                            lines.push('  ──────────────');
-                                            lines.push(`  Total: R$ ${formatBRL(dailyData[d].total)}`);
+                                            lines.push('──────────────');
+                                            lines.push(`Total: R$ ${formatBRL(dailyData[d].total)}`);
                                         }
                                         return lines;
                                     }
@@ -6268,24 +6380,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             }
                         }
                     },
-                    plugins: [weekBandsPlugin, ...(targetLineData !== null ? [{
-                        id: 'targetLabel',
-                        afterDraw(chart) {
-                            const { ctx, chartArea, scales } = chart;
-                            if (!chartArea || !scales.y) return;
-                            const y = scales.y.getPixelForValue(labelLimit);
-                            if (y < chartArea.top || y > chartArea.bottom) return;
-                            const isDark = document.body.classList.contains('dark-mode');
-                            const txt = `R$ ${formatBRL(labelLimit)}`;
-                            ctx.save();
-                            ctx.font = 'bold 11px sans-serif';
-                            ctx.textBaseline = 'bottom';
-                            ctx.textAlign = 'right';
-                            ctx.fillStyle = '#f59e0b';
-                            ctx.fillText(txt, chartArea.right, y - 3);
-                            ctx.restore();
-                        }
-                    }] : [])]
+                    plugins: [weekBandsPlugin]
                 });
             } catch (err) {
                 console.error('Erro ao atualizar gráfico diário:', err);
@@ -6295,7 +6390,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         async function updateBarChart() {
             const checkboxes = document.querySelectorAll('.bar-chart-month:checked');
             const selectedMonths = Array.from(checkboxes).map(cb => cb.value);
-            const expTypeChecked = Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb => cb.value);
+            const expTypeChecked = barExpTypeFilter.length ? barExpTypeFilter : ['individual', 'compartilhada'];
             const showIndividual = expTypeChecked.includes('individual');
             const showShared = expTypeChecked.includes('compartilhada');
 
@@ -6351,13 +6446,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             const lastMeta = ci.getDatasetMeta(ci.data.datasets.length - 1);
                             lastMeta.data.forEach((bar, i) => {
                                 ci.ctx.fillStyle = isDark ? '#e8eaed' : '#5f6368';
-                                ci.ctx.font = 'bold 11px Arial'; ci.ctx.textAlign = 'center';
+                                ci.ctx.font = 'bold 10px Arial'; ci.ctx.textAlign = 'center';
                                 ci.ctx.fillText(Math.round(monthTotals[i]).toLocaleString('pt-BR'), bar.x, bar.y - 8);
                             });
                         }},
                         scales: {
                             y: { display: false, stacked: true, beginAtZero: true, suggestedMax: Math.max(...monthTotals, 1)*1.15 },
-                            x: { stacked: true, ticks: { color: textColor }, grid: { color: gridColor } }
+                            x: { stacked: true, ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor, drawOnChartArea: false } }
                         }
                     }
                 });
@@ -6374,7 +6469,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         async function updatePmBarChart(){
             const selectedMonths=Array.from(document.querySelectorAll('.bar-chart-month:checked')).map(cb=>cb.value);
             if(!selectedMonths.length)return;
-            const expTypeChecked=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);
+            const expTypeChecked=barExpTypeFilter.length?barExpTypeFilter:['individual','compartilhada'];
             const showIndividual=expTypeChecked.includes('individual');
             const showShared=expTypeChecked.includes('compartilhada');
             const isDark=document.body.classList.contains('dark-mode');
@@ -6415,8 +6510,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options:{responsive:true,maintainAspectRatio:false,
                         plugins:{legend:{display:datasets.length>1,position:'top',labels:{color:textColor,font:{size:14}}},
                             tooltip:{callbacks:{label:ctx=>{const t=monthTotals[ctx.dataIndex]||1;return `${ctx.dataset.label}: R$ ${formatBRL(ctx.parsed.y)} (${t>0?((ctx.parsed.y/t)*100).toFixed(1):0}%)`;}}}},
-                        animation:{onComplete:function(){const ci=this;if(!ci.data.datasets.length)return;const last=ci.getDatasetMeta(ci.data.datasets.length-1);last.data.forEach((bar,i)=>{ci.ctx.fillStyle=isDark?'#e8eaed':'#5f6368';ci.ctx.font='bold 11px Arial';ci.ctx.textAlign='center';ci.ctx.fillText(Math.round(monthTotals[i]).toLocaleString('pt-BR'),bar.x,bar.y-8);});}},
-                        scales:{y:{display:false,stacked:true,beginAtZero:true,suggestedMax:Math.max(...monthTotals,1)*1.15},x:{stacked:true,ticks:{color:textColor},grid:{color:gridColor}}}
+                        animation:{onComplete:function(){const ci=this;if(!ci.data.datasets.length)return;const last=ci.getDatasetMeta(ci.data.datasets.length-1);last.data.forEach((bar,i)=>{ci.ctx.fillStyle=isDark?'#e8eaed':'#5f6368';ci.ctx.font='bold 10px Arial';ci.ctx.textAlign='center';ci.ctx.fillText(Math.round(monthTotals[i]).toLocaleString('pt-BR'),bar.x,bar.y-8);});}},
+                        scales:{y:{display:false,stacked:true,beginAtZero:true,suggestedMax:Math.max(...monthTotals,1)*1.15},x:{stacked:true,ticks:{color:textColor,font:{size:11}},grid:{color:gridColor,drawOnChartArea:false}}}
                     }
                 });
             }catch(err){console.error('pmBarChart:',err);}
