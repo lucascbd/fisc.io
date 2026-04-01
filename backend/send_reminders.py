@@ -29,14 +29,9 @@ from models import User, ExpenseSplit, NotificationPreferences, DeviceToken
 from firebase_service import FirebaseService
 
 
-def is_first_monday_of_month():
-    """Verifica se hoje é a primeira segunda-feira do mês"""
-    today = date.today()
-    # Segunda-feira = 0
-    if today.weekday() != 0:
-        return False
-    # Primeira segunda-feira está entre dia 1 e 7
-    return today.day <= 7
+def is_first_day_of_month():
+    """Verifica se hoje é o primeiro dia do mês"""
+    return date.today().day == 1
 
 
 def get_current_hour_str():
@@ -128,8 +123,8 @@ def send_reminders(db, force=False, test=False):
         test: Modo teste (não envia, só mostra)
     """
     # Verificar se é primeira segunda-feira (a menos que force=True)
-    if not force and not is_first_monday_of_month():
-        print(f"ℹ️ Hoje não é a primeira segunda-feira do mês. Use --force para ignorar.")
+    if not force and not is_first_day_of_month():
+        print(f"ℹ️ Hoje não é o primeiro dia do mês. Use --force para ignorar.")
         return
     
     current_hour = get_current_hour_str()
