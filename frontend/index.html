@@ -4867,7 +4867,7 @@
                     if (today >= 1 && today <= N) {
                         const tx = meta.data[today - 1]?.x;
                         if (tx != null) {
-                            const ty = chartArea.bottom + 3;
+                            const ty = (chart.scales.x?.bottom ?? chartArea.bottom + 20) + 3;
                             const sz = 4;
                             ctx.save();
                             ctx.fillStyle = '#ef4444';
@@ -6342,7 +6342,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const tetoItem = targetLineData ? items.find(i => i.datasetIndex === 1) : null;
                                         if (!tetoItem) return [];
                                         const spendItem = items.find(i => i.datasetIndex === 0 && i.raw > 0);
-                                        const lines = [`${selTarget.emoji || '🎯'} Teto: R$ ${formatBRL(tetoItem.raw)}`];
+                                        const lines = [`${selTarget.emoji || '🎯'} Target: R$ ${formatBRL(tetoItem.raw)}`];
                                         if (spendItem) lines.push('──────────────');
                                         return lines;
                                     },
