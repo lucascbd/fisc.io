@@ -6070,17 +6070,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (availableCats.length === 0) {
                         selectedDailyCatIds = null;
                     } else if (monthChanged || selectedDailyCatIds === null) {
-                        // Mês trocou ou primeira carga: aplicar categorias do target (ou todas)
+                        // Mês trocou ou primeira carga: aplicar categorias e PM do target (ou todas/nenhum)
                         const tSelEl = document.getElementById('dailyTargetSelect');
                         const tId = dailyTargetInitialized ? parseInt(tSelEl?.value) : ((targets||[]).filter(t=>t.display_mode==='daily'&&t.is_active!==false)[0]?.id);
                         const tgt = tId ? (targets||[]).find(t=>t.id===tId) : null;
-                        const tgtCats = tgt?.category_ids?.length ? tgt.category_ids : null;
+                        // Categorias: normalizar para Number para comparação segura
+                        const tgtCats = tgt?.category_ids?.length ? tgt.category_ids.map(Number) : null;
                         if (tgtCats) {
                             selectedDailyCatIds = availableCats.map(c=>c.id).filter(id=>tgtCats.includes(id));
                             if (selectedDailyCatIds.length === 0) selectedDailyCatIds = availableCats.map(c=>c.id);
                         } else {
                             selectedDailyCatIds = availableCats.map(c=>c.id);
                         }
+                        // Métodos de pagamento: resetar para os do target
+                        activeDailyPmFilter = tgt?.payment_methods?.length ? [...tgt.payment_methods] : [];
+                        applyDailyPmFilterStyles();
                     }
                     // [] = usuário desmarcou tudo dentro do mesmo mês → manter vazio
                     const allSel = availableCats.length > 0 && (selectedDailyCatIds === null || selectedDailyCatIds.length >= availableCats.length);
