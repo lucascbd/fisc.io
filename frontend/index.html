@@ -6187,28 +6187,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (selTarget) {
                     const now = new Date();
                     const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
+                    const todayDay = isCurrentMonth ? now.getDate() : daysInMonth;
 
-                    if (!isCurrentMonth) {
-                        // Mês encerrado: linha fixa
-                        targetLineData = days.map(() => fixedDailyLimit);
-                        labelLimit = fixedDailyLimit;
-                    } else {
-                        // Mês em curso: linha adaptativa
-                        // gastos[i] = gasto real se dia <= hoje, null se dia futuro
-                        const todayDay = now.getDate();
-                        const gastos = days.map((d, idx) => d <= todayDay ? dueDateTotals[idx] : null);
-                        const orcamento = selTarget.monthly_amount;
-                        let ultimo_teto = orcamento / daysInMonth;
-                        targetLineData = gastos.map((gasto, i) => {
-                            if (gasto === null) return ultimo_teto; // congela
-                            const acumulado = gastos.slice(0, i + 1).reduce((s, g) => s + (g ?? 0), 0);
-                            const dias_restantes = daysInMonth - i;
-                            const novo_teto = dias_restantes > 0 ? Math.max((orcamento - acumulado) / dias_restantes, 0) : 0;
-                            ultimo_teto = novo_teto;
-                            return novo_teto;
-                        });
-                        labelLimit = targetLineData[todayDay - 1]; // teto de hoje
-                    }
+                    // gastos[i] = gasto real se dia <= todayDay, null se dia futuro
+                    const gastos = days.map((d, idx) => d <= todayDay ? dueDateTotals[idx] : null);
+                    const orcamento = selTarget.monthly_amount;
+                    let ultimo_teto = orcamento / daysInMonth;
+                    targetLineData = gastos.map((gasto, i) => {
+                        if (gasto === null) return ultimo_teto; // congela (só dias futuros)
+                        const acumulado = gastos.slice(0, i + 1).reduce((s, g) => s + (g ?? 0), 0);
+                        const dias_restantes = daysInMonth - i;
+                        const novo_teto = dias_restantes > 0 ? Math.max((orcamento - acumulado) / dias_restantes, 0) : 0;
+                        ultimo_teto = novo_teto;
+                        return novo_teto;
+                    });
+                    labelLimit = targetLineData[todayDay - 1]; // teto do último dia com dado
                 }
 
                 // Cores dos pontos: vermelho se acima do target do dia, azul normal
