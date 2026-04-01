@@ -6206,8 +6206,19 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
                     const tgtDueDateTotals = days.map(d => tgtDueDateDayTotals[d]);
 
-                    // gastos[i] = gasto real (filtrado pelo target) se dia <= todayDay, null se futuro
-                    const gastos = days.map((d, idx) => d <= todayDay ? tgtDueDateTotals[idx] : null);
+                    // gastos[i]: para dias passados usa o gasto real do dia
+                    // para hoje: absorve todo o futuro comprometido (= fórmula do Início)
+                    // para dias futuros sem gasto: null (congela)
+                    const totalMonthSpent = tgtDueDateTotals.reduce((s, v) => s + v, 0);
+                    const gastos = days.map((d, idx) => {
+                        if (d < todayDay) return tgtDueDateTotals[idx]; // passado: real
+                        if (d === todayDay) {
+                            // hoje: gasto de hoje + todos os futuros já comprometidos
+                            const prevCumulative = tgtDueDateTotals.slice(0, idx).reduce((s, v) => s + v, 0);
+                            return totalMonthSpent - prevCumulative;
+                        }
+                        return null; // futuro sem dado → congela
+                    });
                     const orcamento = selTarget.monthly_amount;
                     let ultimo_teto = orcamento / daysInMonth;
                     targetLineData = gastos.map((gasto, i) => {
