@@ -6205,31 +6205,31 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         }
                     }
                     const tgtDueDateTotals = days.map(d => tgtDueDateDayTotals[d]);
-
-                    // gastos[i]: para dias passados usa o gasto real do dia
-                    // para hoje: absorve todo o futuro comprometido (= fórmula do Início)
-                    // para dias futuros sem gasto: null (congela)
                     const totalMonthSpent = tgtDueDateTotals.reduce((s, v) => s + v, 0);
+
+                    // gastos[i]: cumulativo simples para mostrar variação no mês vigente
+                    // - dias com gasto (passado ou futuro comprometido): valor real
+                    // - dias passados/hoje sem gasto: 0 (dias_restantes diminui)
+                    // - dias futuros sem gasto: null (congela no último teto)
                     const gastos = days.map((d, idx) => {
-                        if (d < todayDay) return tgtDueDateTotals[idx]; // passado: real
-                        if (d === todayDay) {
-                            // hoje: gasto de hoje + todos os futuros já comprometidos
-                            const prevCumulative = tgtDueDateTotals.slice(0, idx).reduce((s, v) => s + v, 0);
-                            return totalMonthSpent - prevCumulative;
-                        }
-                        return null; // futuro sem dado → congela
+                        const s = tgtDueDateTotals[idx];
+                        if (s > 0) return s;
+                        if (d <= todayDay) return 0;
+                        return null;
                     });
                     const orcamento = selTarget.monthly_amount;
                     let ultimo_teto = orcamento / daysInMonth;
                     targetLineData = gastos.map((gasto, i) => {
-                        if (gasto === null) return ultimo_teto; // congela (só dias futuros)
+                        if (gasto === null) return ultimo_teto;
                         const acumulado = gastos.slice(0, i + 1).reduce((s, g) => s + (g ?? 0), 0);
                         const dias_restantes = daysInMonth - i;
                         const novo_teto = dias_restantes > 0 ? Math.max((orcamento - acumulado) / dias_restantes, 0) : 0;
                         ultimo_teto = novo_teto;
                         return novo_teto;
                     });
-                    labelLimit = targetLineData[todayDay - 1]; // teto do último dia com dado
+                    // labelLimit: fórmula do Início (total comprometido do mês / dias restantes)
+                    const daysLeft = daysInMonth - todayDay + 1;
+                    labelLimit = daysLeft > 0 ? Math.max((orcamento - totalMonthSpent) / daysLeft, 0) : 0;
                 }
 
                 // Cores dos pontos: vermelho se acima do target do dia, azul normal
@@ -6251,6 +6251,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     spanGaps: true
                 }];
                 if (targetLineData !== null) {
+                    const tetoColors = targetLineData.map(v => v <= 0 ? '#ef4444' : '#f59e0b');
                     datasets.push({
                         data: targetLineData,
                         borderColor: '#f59e0b',
@@ -6258,10 +6259,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         borderDash: [6, 4],
                         pointRadius: 0,
                         pointHoverRadius: 4,
-                        pointBackgroundColor: '#f59e0b',
+                        pointBackgroundColor: tetoColors,
+                        pointBorderColor: tetoColors,
                         fill: false,
                         tension: 0,
-                        spanGaps: true
+                        spanGaps: true,
+                        segment: {
+                            borderColor: ctx => targetLineData[ctx.p1DataIndex] <= 0 ? '#ef4444' : '#f59e0b'
+                        }
                     });
                 }
 
@@ -6286,7 +6291,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     label: () => null,
                                     beforeBody: items => {
                                         const tetoItem = targetLineData ? items.find(i => i.datasetIndex === 1) : null;
-                                        return tetoItem ? [`${selTarget.emoji || '🎯'} Teto: R$ ${formatBRL(tetoItem.raw)}`] : [];
+                                        if (!tetoItem) return [];
+                                        const spendItem = items.find(i => i.datasetIndex === 0 && i.raw > 0);
+                                        const lines = [`${selTarget.emoji || '🎯'} Teto: R$ ${formatBRL(tetoItem.raw)}`];
+                                        if (spendItem) lines.push('──────────────');
+                                        return lines;
                                     },
                                     afterBody: items => {
                                         const spendItem = items.find(i => i.datasetIndex === 0);
@@ -6294,10 +6303,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const d = parseInt(spendItem.label);
                                         const cats = dailyData[d]?.cats || {};
                                         const sorted = Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
-                                        const lines = sorted.map(([name, c]) => `  ${c.emoji} ${name}: R$ ${formatBRL(c.total)}`);
+                                        const lines = sorted.map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`);
                                         if (sorted.length > 1) {
-                                            lines.push('  ──────────────');
-                                            lines.push(`  Total: R$ ${formatBRL(dailyData[d].total)}`);
+                                            lines.push('──────────────');
+                                            lines.push(`Total: R$ ${formatBRL(dailyData[d].total)}`);
                                         }
                                         return lines;
                                     }
