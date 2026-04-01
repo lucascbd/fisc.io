@@ -4867,8 +4867,9 @@
                     if (today >= 1 && today <= N) {
                         const tx = meta.data[today - 1]?.x;
                         if (tx != null) {
-                            const ty = (chart.scales.x?.bottom ?? chartArea.bottom + 20) + 3;
                             const sz = 4;
+                            const axisBottom = chart.scales.x?.bottom ?? (chartArea.bottom + 24);
+                            const ty = axisBottom - sz * 2 - 1;
                             ctx.save();
                             ctx.fillStyle = '#ef4444';
                             ctx.beginPath();
