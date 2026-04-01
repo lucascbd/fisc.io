@@ -8,6 +8,7 @@ SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 DATABASE_URL=${DATABASE_URL}
 SECRET_KEY=${SECRET_KEY}
+TZ=${TZ:-America/Sao_Paulo}
 
 ${RECURRING_SCHEDULE:-0 0 * * *} root python /app/generate_recurring.py >> /var/log/fiscio-recurring.log 2>&1
 ${REMINDERS_SCHEDULE:-0 * * * *} root python /app/send_reminders.py >> /var/log/fiscio-reminders.log 2>&1
