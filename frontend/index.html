@@ -5494,7 +5494,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             });
                         }},
                         scales: {
-                            x: { stacked: true, ticks: { color: textColor }, grid: { color: gridColor, drawOnChartArea: false } },
+                            x: { stacked: true, ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor, drawOnChartArea: false } },
                             y: { display: false, stacked: true, beginAtZero: true, suggestedMax: Math.max(...adjTotals, 1)*1.15 }
                         }
                     },
@@ -6452,7 +6452,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         }},
                         scales: {
                             y: { display: false, stacked: true, beginAtZero: true, suggestedMax: Math.max(...monthTotals, 1)*1.15 },
-                            x: { stacked: true, ticks: { color: textColor }, grid: { color: gridColor, drawOnChartArea: false } }
+                            x: { stacked: true, ticks: { color: textColor, font: { size: 11 } }, grid: { color: gridColor, drawOnChartArea: false } }
                         }
                     }
                 });
@@ -6511,7 +6511,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         plugins:{legend:{display:datasets.length>1,position:'top',labels:{color:textColor,font:{size:14}}},
                             tooltip:{callbacks:{label:ctx=>{const t=monthTotals[ctx.dataIndex]||1;return `${ctx.dataset.label}: R$ ${formatBRL(ctx.parsed.y)} (${t>0?((ctx.parsed.y/t)*100).toFixed(1):0}%)`;}}}},
                         animation:{onComplete:function(){const ci=this;if(!ci.data.datasets.length)return;const last=ci.getDatasetMeta(ci.data.datasets.length-1);last.data.forEach((bar,i)=>{ci.ctx.fillStyle=isDark?'#e8eaed':'#5f6368';ci.ctx.font='bold 11px Arial';ci.ctx.textAlign='center';ci.ctx.fillText(Math.round(monthTotals[i]).toLocaleString('pt-BR'),bar.x,bar.y-8);});}},
-                        scales:{y:{display:false,stacked:true,beginAtZero:true,suggestedMax:Math.max(...monthTotals,1)*1.15},x:{stacked:true,ticks:{color:textColor},grid:{color:gridColor,drawOnChartArea:false}}}
+                        scales:{y:{display:false,stacked:true,beginAtZero:true,suggestedMax:Math.max(...monthTotals,1)*1.15},x:{stacked:true,ticks:{color:textColor,font:{size:11}},grid:{color:gridColor,drawOnChartArea:false}}}
                     }
                 });
             }catch(err){console.error('pmBarChart:',err);}
