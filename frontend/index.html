@@ -2063,24 +2063,24 @@
         </div>
         
         <!-- Footer -->
-        <div class="p-6 flex gap-3" style="border-top: 1px solid #dadce0;">
-            <button 
-                onclick="closeNotificationSettings()"
-                class="flex-1 py-3 transition"
-                style="background: #f1f3f4; color: #1a73e8; font-weight: 500; border-radius: 20px; border: none;"
-                onmouseover="this.style.background='#e8eaed'"
-                onmouseout="this.style.background='#f1f3f4'"
-            >
-                Cancelar
-            </button>
-            <button 
+        <div class="px-4 py-4 flex flex-col gap-2" style="border-top: 1px solid #dadce0;">
+            <button
                 onclick="saveNotificationSettings()"
-                class="flex-1 py-3 transition"
+                class="w-full py-3 transition"
                 style="background: #1a73e8; color: white; font-weight: 500; border-radius: 20px; border: none;"
                 onmouseover="this.style.background='#1967d2'"
                 onmouseout="this.style.background='#1a73e8'"
             >
                 Salvar
+            </button>
+            <button
+                onclick="closeNotificationSettings()"
+                class="w-full py-3 transition"
+                style="background: #f1f3f4; color: #1a73e8; font-weight: 500; border-radius: 20px; border: none;"
+                onmouseover="this.style.background='#e8eaed'"
+                onmouseout="this.style.background='#f1f3f4'"
+            >
+                Cancelar
             </button>
         </div>
     </div>
