@@ -6222,7 +6222,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (selTarget) {
                     const now = new Date();
                     const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
-                    const todayDay = isCurrentMonth ? now.getDate() : daysInMonth;
+                    const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && mon < now.getMonth() + 1);
+                    const todayDay = isCurrentMonth ? now.getDate() : (isPastMonth ? daysInMonth : 0);
 
                     const tgtCatIds = selTarget.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
                     const tgtPmIds = selTarget.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
@@ -6280,7 +6281,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     });
                     let runningAcumulado = 0;
                     let saldoHoje = saldoInicial;
-                    const denominadorFuturo = daysInMonth - todayDay + 1;
+                    const denominadorFuturo = todayDay > 0 ? daysInMonth - todayDay + 1 : daysInMonth;
                     let futureCumulative = 0;
                     targetLineData = gastos.map((gasto, i) => {
                         const d = days[i];
