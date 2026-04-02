@@ -7029,12 +7029,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 </div>
                 
                 <!-- Botões -->
-                <div style="display: flex; gap: 12px;">
-                    <button onclick="backToSidebarMenu()" style="flex: 1; padding: 12px; background: #f1f3f4; color: #1a73e8; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">
-                        Cancelar
-                    </button>
-                    <button onclick="saveSidebarNotifications()" style="flex: 1; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button onclick="saveSidebarNotifications()" style="width: 100%; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">
                         Salvar
+                    </button>
+                    <button onclick="backToSidebarMenu()" style="width: 100%; padding: 12px; background: #f1f3f4; color: #1a73e8; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                        Cancelar
                     </button>
                 </div>
             `;
