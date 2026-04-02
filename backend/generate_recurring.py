@@ -34,7 +34,6 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
     Idempotente: pula templates cujo last_generated_month já é YYYY-MM do target_date.
     """
     current_month_str = target_date.strftime("%Y-%m")
-    expense_date = target_date.replace(day=1)
 
     items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).all()
 
@@ -54,6 +53,8 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
         print(f"  {'[DRY-RUN] ' if dry_run else ''}✓  {r.description} — R$ {float(r.total_amount):.2f}")
 
         if not dry_run:
+            insert_day = max(1, min(28, r.insert_day or 1))
+            expense_date = target_date.replace(day=insert_day)
             ExpenseService.create_expense(
                 db=db,
                 description=r.description,

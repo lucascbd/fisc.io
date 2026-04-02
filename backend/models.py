@@ -184,7 +184,7 @@ class Target(Base):
 
 
 class RecurringExpense(Base):
-    """Despesas recorrentes — geradas no dia 1 de cada mês"""
+    """Despesas recorrentes — geradas no dia configurado de cada mês"""
     __tablename__ = "recurring_expenses"
 
     id              = Column(Integer, primary_key=True, index=True)
@@ -195,6 +195,7 @@ class RecurringExpense(Base):
     paid_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     payment_method  = Column(String(10), default='pix')
     notes           = Column(String, nullable=True)
+    insert_day      = Column(Integer, nullable=True, default=1)   # dia do mês para gerar a despesa
     is_active       = Column(Boolean, nullable=False, default=True)
     last_generated_month = Column(String(7), nullable=True)   # "YYYY-MM" do último mês gerado
     created_by_user_id   = Column(Integer, ForeignKey("users.id"), nullable=True)

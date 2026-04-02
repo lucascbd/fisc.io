@@ -32,6 +32,7 @@ Base.metadata.create_all(bind=engine)
 #   ALTER TABLE users ADD COLUMN IF NOT EXISTS hidden_category_ids TEXT DEFAULT '[]';
 #   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'pix';
 #   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS original_date DATE;
+#   ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS insert_day INTEGER DEFAULT 1;
 
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
@@ -168,6 +169,7 @@ class RecurringExpenseCreate(BaseModel):
     paid_by_user_id: int
     payment_method: Optional[str] = "pix"
     notes: Optional[str] = None
+    insert_day: Optional[int] = 1
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -591,6 +593,7 @@ def _recurring_dict(r: RecurringExpense) -> dict:
         "paid_by_name": r.paid_by.name if r.paid_by else None,
         "payment_method": r.payment_method,
         "notes": r.notes,
+        "insert_day": r.insert_day or 1,
         "is_active": r.is_active,
         "last_generated_month": r.last_generated_month,
         "created_by_user_id": r.created_by_user_id,
@@ -613,6 +616,7 @@ async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(g
         paid_by_user_id=data.paid_by_user_id,
         payment_method=data.payment_method,
         notes=data.notes,
+        insert_day=max(1, min(28, data.insert_day or 1)),
         created_by_user_id=current_user.id,
     )
     db.add(r); db.commit(); db.refresh(r)
@@ -631,6 +635,7 @@ async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: 
     r.paid_by_user_id = data.paid_by_user_id
     r.payment_method = data.payment_method
     r.notes = data.notes
+    r.insert_day = max(1, min(28, data.insert_day or 1))
     db.commit()
     return _recurring_dict(r)
 
@@ -653,7 +658,6 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
     """
     today = datetime.utcnow().date()
     current_month_str = today.strftime("%Y-%m")
-    expense_date = today.replace(day=1)   # always day 1 of current month
 
     items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).all()
     created_ids = []
@@ -663,6 +667,8 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
         if r.last_generated_month == current_month_str:
             skipped += 1
             continue
+        insert_day = max(1, min(28, r.insert_day or 1))
+        expense_date = today.replace(day=insert_day)
         # Reuse ExpenseService to get correct split calculation
         expense = ExpenseService.create_expense(
             db=db,
@@ -2357,7 +2363,7 @@ async def delete_target(target_id: int, db: Session = Depends(get_db), current_u
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")
-    target.is_active = False
+    db.delete(target)
     db.commit()
     return {"message": "Target deleted"}
 

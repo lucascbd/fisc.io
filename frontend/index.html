@@ -3990,6 +3990,13 @@
                     if (modalScrollContainer) {
                         modalScrollContainer.scrollTop = modalScrollContainer.scrollHeight;
                     }
+                    // Scroll para a opção selecionada, se houver
+                    const selectedCode = document.getElementById('cat_ipca_code')?.value;
+                    if (selectedCode) {
+                        const list = document.getElementById('ipcaOptionsList');
+                        const sel = list?.querySelector(`.ipca-opt[data-code="${selectedCode}"]`);
+                        if (sel) sel.scrollIntoView({ block: 'nearest' });
+                    }
                 }, 50);
             } else {
                 dd.classList.add('hidden');
@@ -6880,6 +6887,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     <select id="rec_paid_by" class="w-full px-4 py-2 border rounded-lg" style="border-color:#dadce0;">${userOptions}</select>
                                 </div>
                                 <div>
+                                    <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Dia de inserção (1–28)</label>
+                                    <input type="number" id="rec_insert_day" min="1" max="28" value="${rec?.insert_day || 1}" class="w-full px-4 py-2 border rounded-lg" style="border-color:#dadce0;">
+                                    <p class="text-xs mt-1" style="color:#5f6368;">Dia do mês em que a despesa será lançada</p>
+                                </div>
+                                <div>
                                     <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Método de pagamento</label>
                                     <div class="flex gap-3 justify-center">${pmRow}</div>
                                 </div>
@@ -6907,6 +6919,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     split_profile_id: parseInt(document.getElementById('rec_profile').value),
                     paid_by_user_id: parseInt(document.getElementById('rec_paid_by').value),
                     payment_method: document.querySelector('input[name=rec_pm]:checked')?.value || 'pix',
+                    insert_day: parseInt(document.getElementById('rec_insert_day').value) || 1,
                 };
                 try {
                     if (rec) {
