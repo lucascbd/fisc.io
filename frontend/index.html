@@ -6268,10 +6268,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         return null;
                     });
                     let runningAcumulado = 0;
+                    let tetoHoje = saldoInicial / daysInMonth;
                     targetLineData = gastos.map((gasto, i) => {
+                        const d = days[i];
+                        if (d > todayDay) return tetoHoje; // dias futuros: fixo no valor de hoje
                         runningAcumulado += gasto ?? 0;
                         const dias_restantes = daysInMonth - i;
-                        return dias_restantes > 0 ? Math.max((saldoInicial - runningAcumulado) / dias_restantes, 0) : 0;
+                        const teto = dias_restantes > 0 ? Math.max((saldoInicial - runningAcumulado) / dias_restantes, 0) : 0;
+                        if (d === todayDay) tetoHoje = teto;
+                        return teto;
                     });
                     // labelLimit: saldoInicial menos todos os gastos do mês
                     const sumAllGastos = gastosDayArray.reduce((s, v) => s + v, 0);
