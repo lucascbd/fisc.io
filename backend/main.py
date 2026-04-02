@@ -9,6 +9,7 @@ from jose import JWTError, jwt
 from typing import List, Optional
 import json
 import os
+import calendar
 from pydantic import BaseModel
 import bcrypt
 from decimal import Decimal
@@ -616,7 +617,7 @@ async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(g
         paid_by_user_id=data.paid_by_user_id,
         payment_method=data.payment_method,
         notes=data.notes,
-        insert_day=max(1, min(28, data.insert_day or 1)),
+        insert_day=max(1, min(31, data.insert_day or 1)),
         created_by_user_id=current_user.id,
     )
     db.add(r); db.commit(); db.refresh(r)
@@ -635,7 +636,7 @@ async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: 
     r.paid_by_user_id = data.paid_by_user_id
     r.payment_method = data.payment_method
     r.notes = data.notes
-    r.insert_day = max(1, min(28, data.insert_day or 1))
+    r.insert_day = max(1, min(31, data.insert_day or 1))
     db.commit()
     return _recurring_dict(r)
 
@@ -667,8 +668,9 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
         if r.last_generated_month == current_month_str:
             skipped += 1
             continue
-        insert_day = max(1, min(28, r.insert_day or 1))
-        expense_date = today.replace(day=insert_day)
+        insert_day = max(1, min(31, r.insert_day or 1))
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        expense_date = today.replace(day=min(insert_day, last_day))
         # Reuse ExpenseService to get correct split calculation
         expense = ExpenseService.create_expense(
             db=db,

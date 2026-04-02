@@ -16,6 +16,7 @@ import sys
 import os
 import argparse
 from datetime import datetime, date
+import calendar
 from decimal import Decimal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -53,8 +54,9 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
         print(f"  {'[DRY-RUN] ' if dry_run else ''}✓  {r.description} — R$ {float(r.total_amount):.2f}")
 
         if not dry_run:
-            insert_day = max(1, min(28, r.insert_day or 1))
-            expense_date = target_date.replace(day=insert_day)
+            insert_day = max(1, min(31, r.insert_day or 1))
+            last_day = calendar.monthrange(target_date.year, target_date.month)[1]
+            expense_date = target_date.replace(day=min(insert_day, last_day))
             ExpenseService.create_expense(
                 db=db,
                 description=r.description,

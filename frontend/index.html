@@ -6887,9 +6887,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     <select id="rec_paid_by" class="w-full px-4 py-2 border rounded-lg" style="border-color:#dadce0;">${userOptions}</select>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Dia de inserção (1–28)</label>
-                                    <input type="number" id="rec_insert_day" min="1" max="28" value="${rec?.insert_day || 1}" class="w-full px-4 py-2 border rounded-lg" style="border-color:#dadce0;">
-                                    <p class="text-xs mt-1" style="color:#5f6368;">Dia do mês em que a despesa será lançada</p>
+                                    <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Dia de inserção (1–31)</label>
+                                    <input type="number" id="rec_insert_day" min="1" max="31" value="${rec?.insert_day || 1}" class="w-full px-4 py-2 border rounded-lg" style="border-color:#dadce0;">
+                                    <p class="text-xs mt-1" style="color:#5f6368;">Se o dia não existir no mês, usa o último dia disponível</p>
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Método de pagamento</label>
