@@ -3499,7 +3499,7 @@
                     class="pm-option flex flex-col items-center justify-center cursor-pointer ${isSel?'selected':''}"
                     style="width:60px;height:55px;gap:5px;flex-shrink:0;border:2px solid ${isSel?optionBorder:'transparent'};background:${isSel?optionSelectedBg:optionBg};border-radius:12px;transition:.15s;">
                     ${imgHtml}
-                    <span style="font-size:9px;color:${isSel&&isDark?'#202124':optionTextColor};max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
+                    <span style="font-size:9px;line-height:1;color:${isSel&&isDark?'#202124':optionTextColor};max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
                 </div>`;
             }).join('');
         }
@@ -7157,7 +7157,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     <input type="hidden" id="pm_icon_path" value="${pm?.icon_path||''}">
                                     <!-- Galeria de ícones -->
                                     <div id="pm_gallery" class="hidden" style="margin-top:10px;border:1px solid ${inputBorder};border-radius:12px;padding:10px;background:${inputBg};">
-                                        <div id="pm_gallery_grid" style="display:grid;grid-template-columns:repeat(5,52px);gap:8px;max-height:296px;overflow-y:auto;">
+                                        <div id="pm_gallery_grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:300px;overflow-y:auto;overflow-x:hidden;">
                                             <span style="font-size:12px;color:${labelColor};">Carregando...</span>
                                         </div>
                                     </div>
@@ -7210,15 +7210,16 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const isDark2 = document.body.classList.contains('dark-mode');
                     const gridBg = isDark2 ? '#3c4043' : '#f8f9fa';
                     const selBorder = isDark2 ? '#8ab4f8' : '#1a73e8';
-                    document.getElementById('pm_gallery_grid').innerHTML = data.icons.map(path => {
+                    const sorted = [...data.icons].sort((a, b) => a.split('/').pop().toLowerCase().localeCompare(b.split('/').pop().toLowerCase()));
+                    document.getElementById('pm_gallery_grid').innerHTML = sorted.map(path => {
                         const isSelected = document.getElementById('pm_icon_path').value === path;
                         const delBtn = user.is_admin
                             ? `<button type="button" onclick="deletePmGalleryIcon(event,'${path}')"
                                 style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:#d93025;color:white;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>`
                             : '';
-                        return `<div style="position:relative;display:inline-flex;">
+                        return `<div style="position:relative;">
                             <div onclick="selectPmGalleryIcon('${path}')" id="gallery_${btoa(path).replace(/[+=\/]/g,'_')}"
-                                style="width:52px;height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;">
+                                style="height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;">
                                 <img src="${path}" style="width:34px;height:34px;object-fit:contain;">
                             </div>
                             ${delBtn}
