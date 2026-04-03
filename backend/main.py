@@ -609,6 +609,8 @@ def _pm_dict(pm: "PaymentMethod | None") -> dict:
         "is_card": pm.is_card,
         "icon_path": pm.icon_path,
         "due_day": pm.due_day,
+        "user_id": pm.user_id,
+        "display_order": pm.display_order,
     }
 
 def _recurring_dict(r: RecurringExpense) -> dict:
@@ -1136,7 +1138,7 @@ async def list_payment_methods(db: Session = Depends(get_db), current_user: User
     methods = db.query(PaymentMethod).filter(
         PaymentMethod.user_id == current_user.id
     ).order_by(PaymentMethod.display_order).all()
-    return [_pm_dict(pm) | {"display_order": pm.display_order} for pm in methods]
+    return [_pm_dict(pm) for pm in methods]
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods")
 async def create_payment_method(
@@ -1181,7 +1183,8 @@ async def update_payment_method(
     pm.icon_path = data.icon_path
     pm.due_day = data.due_day if data.is_card else None
     db.commit()
-    return _pm_dict(pm) | {"display_order": pm.display_order}
+    db.refresh(pm)
+    return _pm_dict(pm)
 
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
 async def delete_payment_method(
@@ -1221,10 +1224,13 @@ async def reorder_payment_methods(
 
 @app.get(f"{settings.API_V1_PREFIX}/payment-methods/icons-library")
 def list_icons_library(current_user: User = Depends(get_current_user)):
-    """List all icons available in the library."""
+    """List all icons: bundled library + user uploads."""
     import glob as _glob
-    files = sorted(_glob.glob("/app/icons/library/*"))
-    return {"icons": [f"/icons/library/{os.path.basename(f)}" for f in files]}
+    lib = sorted(_glob.glob("/app/icons/library/*"))
+    uploads = sorted(_glob.glob("/app/icons/uploads/*"))
+    icons = [f"/icons/library/{os.path.basename(f)}" for f in lib] + \
+            [f"/icons/uploads/{os.path.basename(f)}" for f in uploads]
+    return {"icons": icons}
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/upload-icon")
 async def upload_payment_method_icon(
@@ -1236,11 +1242,12 @@ async def upload_payment_method_icon(
         raise HTTPException(status_code=400, detail="Apenas imagens são permitidas")
     ext = os.path.splitext(file.filename or "icon.png")[1] or ".png"
     filename = f"{uuid.uuid4().hex}{ext}"
-    dest = f"/app/icons/library/{filename}"
+    os.makedirs("/app/icons/uploads", exist_ok=True)
+    dest = f"/app/icons/uploads/{filename}"
     contents = await file.read()
     with open(dest, "wb") as f:
         f.write(contents)
-    return {"icon_path": f"/icons/library/{filename}"}
+    return {"icon_path": f"/icons/uploads/{filename}"}
 
 
 # ============================================================================

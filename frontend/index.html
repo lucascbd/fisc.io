@@ -7134,22 +7134,22 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium mb-2" style="color:${labelColor};">Ícone</label>
-                                    <div style="display:flex;align-items:flex-start;gap:12px;">
-                                        <div id="pm_icon_preview" style="width:52px;height:52px;border-radius:12px;background:${checkboxBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid ${inputBorder};">
-                                            ${pm?.icon_path ? `<img src="${pm.icon_path}" style="width:34px;height:34px;object-fit:contain;">` : '<span style="font-size:1.4rem;">💳</span>'}
+                                    <div style="display:flex;align-items:center;gap:12px;">
+                                        <div id="pm_icon_preview" style="width:44px;height:44px;border-radius:12px;background:${checkboxBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid ${inputBorder};">
+                                            ${pm?.icon_path ? `<img src="${pm.icon_path}" style="width:30px;height:30px;object-fit:contain;">` : '<span style="font-size:1.3rem;">💳</span>'}
                                         </div>
-                                        <div style="flex:1;">
-                                            <div style="display:flex;gap:8px;margin-bottom:6px;">
+                                        <div style="flex:1;display:flex;flex-direction:column;gap:5px;">
+                                            <div style="display:flex;gap:8px;">
                                                 <button type="button" onclick="document.getElementById('pm_icon_file').click()"
-                                                    style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid ${inputBorder};background:${checkboxBg};color:${textColor};font-size:13px;cursor:pointer;">
-                                                    📁 Escolher arquivo
+                                                    style="flex:1;height:36px;border-radius:10px;border:1px solid ${inputBorder};background:${checkboxBg};color:${textColor};font-size:13px;cursor:pointer;">
+                                                    📁 Arquivo
                                                 </button>
                                                 <button type="button" id="pm_gallery_btn" onclick="togglePmGallery()"
-                                                    style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid ${inputBorder};background:${checkboxBg};color:${textColor};font-size:13px;cursor:pointer;">
+                                                    style="flex:1;height:36px;border-radius:10px;border:1px solid ${inputBorder};background:${checkboxBg};color:${textColor};font-size:13px;cursor:pointer;">
                                                     🖼️ Galeria
                                                 </button>
                                             </div>
-                                            <p id="pm_file_name" style="font-size:12px;color:${labelColor};margin:0;">Nenhum arquivo escolhido</p>
+                                            <p id="pm_file_name" class="hidden" style="font-size:12px;color:${labelColor};margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
                                         </div>
                                     </div>
                                     <input type="file" id="pm_icon_file" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="sr-only">
@@ -7188,11 +7188,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             document.getElementById('pm_icon_file').onchange = function() {
                 const file = this.files[0];
                 if (!file) return;
-                document.getElementById('pm_file_name').textContent = file.name;
-                document.getElementById('pm_icon_path').value = ''; // clear gallery selection
+                const nameEl = document.getElementById('pm_file_name');
+                nameEl.textContent = file.name;
+                nameEl.classList.remove('hidden');
+                document.getElementById('pm_icon_path').value = '';
                 const reader = new FileReader();
                 reader.onload = e => {
-                    document.getElementById('pm_icon_preview').innerHTML = `<img src="${e.target.result}" style="width:34px;height:34px;object-fit:contain;">`;
+                    document.getElementById('pm_icon_preview').innerHTML = `<img src="${e.target.result}" style="width:30px;height:30px;object-fit:contain;">`;
                 };
                 reader.readAsDataURL(file);
             };
@@ -7220,9 +7222,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
             window.selectPmGalleryIcon = function(path) {
                 document.getElementById('pm_icon_path').value = path;
-                document.getElementById('pm_icon_file').value = ''; // clear file input
-                document.getElementById('pm_file_name').textContent = 'Nenhum arquivo escolhido';
-                document.getElementById('pm_icon_preview').innerHTML = `<img src="${path}" style="width:34px;height:34px;object-fit:contain;">`;
+                document.getElementById('pm_icon_file').value = '';
+                const nameEl = document.getElementById('pm_file_name');
+                nameEl.textContent = ''; nameEl.classList.add('hidden');
+                document.getElementById('pm_icon_preview').innerHTML = `<img src="${path}" style="width:30px;height:30px;object-fit:contain;">`;
                 // highlight selected
                 const isDark2 = document.body.classList.contains('dark-mode');
                 document.querySelectorAll('#pm_gallery_grid > div').forEach(el => {
@@ -7259,13 +7262,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         icon_path: iconPath || null,
                     };
                     if (pm) {
-                        const updated = await api(`${API}/payment-methods/${pm.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-                        const idx = paymentMethods.findIndex(p => p.id === pm.id);
-                        if (idx >= 0) paymentMethods[idx] = updated;
+                        await api(`${API}/payment-methods/${pm.id}`, { method: 'PUT', body: JSON.stringify(payload) });
                     } else {
-                        const created = await api(`${API}/payment-methods`, { method: 'POST', body: JSON.stringify(payload) });
-                        paymentMethods.push(created);
+                        await api(`${API}/payment-methods`, { method: 'POST', body: JSON.stringify(payload) });
                     }
+                    // Refresh PM list from server to ensure local state is in sync
+                    const freshPms = await api(`${API}/payment-methods`);
+                    paymentMethods = [...paymentMethods.filter(p => p.user_id !== user.id), ...freshPms];
                     closeModal();
                     loadSidebarPaymentMethods();
                     renderPmFilterButtons();

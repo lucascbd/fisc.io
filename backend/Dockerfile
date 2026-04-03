@@ -25,7 +25,7 @@ RUN chmod +x /app/cron_entrypoint.sh
 COPY seeds/ ./seeds/
 
 # Criar diretório de ícones e copiar os ícones iniciais (library + system)
-RUN mkdir -p /app/icons/library /app/icons/system
+RUN mkdir -p /app/icons/library /app/icons/system /app/icons/uploads
 COPY icons/library/ /app/icons/library/
 COPY icons/system/  /app/icons/system/
 
