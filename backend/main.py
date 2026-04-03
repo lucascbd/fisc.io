@@ -1245,9 +1245,6 @@ async def delete_library_icon(filename: str, current_user: User = Depends(get_cu
             os.remove(path)
             return {"message": "Deleted"}
     raise HTTPException(status_code=404, detail="Icon not found")
-        raise HTTPException(status_code=404, detail="Icon not found")
-    os.remove(path)
-    return {"message": "Deleted"}
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/upload-icon")
 async def upload_payment_method_icon(
