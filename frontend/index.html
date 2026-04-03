@@ -4485,24 +4485,16 @@
                                         <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Método de saldo / reembolso</label>
                                         <input type="hidden" id="usr_balance_method" value="${prefBalanceId || ''}">
                                         <div class="flex gap-2 flex-wrap">
-                                            <label class="flex flex-col items-center gap-1 cursor-pointer" onclick="event.stopPropagation()">
-                                                <div class="usr-bal-btn ${!prefBalanceId?'selected':''}" data-pm-id=""
-                                                     style="width:44px;height:44px;border-radius:12px;border:2px solid ${!prefBalanceId?optBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${!prefBalanceId?optSelBg:optBg};transition:.15s;"
-                                                     onclick="selectUserBalance(null)">
-                                                    <span style="font-size:18px;color:#9aa0a6;">—</span>
-                                                </div>
-                                                <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${labelColor};">Nenhum</span>
-                                            </label>
                                             ${userPms(usr?.id || user.id).map(pm => {
                                                 const on = pm.id === prefBalanceId;
-                                                const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="font-size:1.3rem;">💳</span>`;
-                                                return `<label class="flex flex-col items-center gap-1 cursor-pointer" onclick="event.stopPropagation()">
-                                                    <div class="usr-bal-btn ${on?'selected':''}" data-pm-id="${pm.id}"
+                                                const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
+                                                return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()">
+                                                    <div class="pm-option usr-bal-btn ${on?'selected':''}" data-pm-id="${pm.id}"
                                                          style="width:44px;height:44px;border-radius:12px;border:2px solid ${on?optBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${on?optSelBg:optBg};transition:.15s;"
                                                          onclick="selectUserBalance(${pm.id})">
                                                         ${imgHtml}
                                                     </div>
-                                                    <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${labelColor};">${pm.description}</span>
+                                                    <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
                                                 </label>`;
                                             }).join('')}
                                         </div>
