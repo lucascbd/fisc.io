@@ -3497,9 +3497,9 @@
                     : `<span style="font-size:18px;">💳</span>`;
                 return `<div onclick="selectPaymentMethod(${pm.id})" id="pm_opt_${pm.id}"
                     class="pm-option flex flex-col items-center justify-center cursor-pointer ${isSel?'selected':''}"
-                    style="width:60px;height:55px;flex-shrink:0;border:2px solid ${isSel?optionBorder:'transparent'};background:${isSel?optionSelectedBg:optionBg};border-radius:12px;transition:.15s;">
+                    style="width:60px;height:55px;padding-top:4px;flex-shrink:0;border:2px solid ${isSel?optionBorder:'transparent'};background:${isSel?optionSelectedBg:optionBg};border-radius:12px;transition:.15s;">
                     ${imgHtml}
-                    <span style="font-size:9px;color:${isSel&&isDark?'#202124':optionTextColor};margin-top:6px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
+                    <span style="font-size:9px;color:${isSel&&isDark?'#202124':optionTextColor};margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
                 </div>`;
             }).join('');
         }
