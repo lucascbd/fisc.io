@@ -1219,6 +1219,13 @@ async def reorder_payment_methods(
     db.commit()
     return {"message": "Reordered"}
 
+@app.get(f"{settings.API_V1_PREFIX}/payment-methods/icons-library")
+def list_icons_library(current_user: User = Depends(get_current_user)):
+    """List all icons available in the library."""
+    import glob as _glob
+    files = sorted(_glob.glob("/app/icons/library/*"))
+    return {"icons": [f"/icons/library/{os.path.basename(f)}" for f in files]}
+
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/upload-icon")
 async def upload_payment_method_icon(
     file: UploadFile = File(...),
