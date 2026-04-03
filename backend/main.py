@@ -1232,6 +1232,18 @@ def list_icons_library(current_user: User = Depends(get_current_user)):
             [f"/icons/uploads/{os.path.basename(f)}" for f in uploads]
     return {"icons": icons}
 
+@app.delete(f"{settings.API_V1_PREFIX}/payment-methods/icons-library/{{filename}}")
+async def delete_library_icon(filename: str, current_user: User = Depends(get_current_user)):
+    """Delete a user-uploaded icon. Admin only. Bundled library icons cannot be deleted via API."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+    safe_name = os.path.basename(filename)
+    path = f"/app/icons/uploads/{safe_name}"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Icon not found")
+    os.remove(path)
+    return {"message": "Deleted"}
+
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/upload-icon")
 async def upload_payment_method_icon(
     file: UploadFile = File(...),

@@ -7066,7 +7066,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const imgHtml = pm.icon_path
                     ? `<img src="${pm.icon_path}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;">`
                     : `<span style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:14px;flex-shrink:0;">💳</span>`;
-                const badge = pm.is_card ? `<span class="admin-badge" style="font-size:10px;background:#e8f0fe;color:#1a73e8;border-radius:8px;padding:1px 6px;margin-left:4px;">Cartão</span>` : '';
+                const badge = pm.is_card ? `<span class="admin-badge" style="font-size:10px;background: #e8f0fe;color:#1a73e8;border-radius:10px;padding:2px 6px;margin-left:4px;">Cartão</span>` : '';
                 const dueInfo = pm.is_card && pm.due_day ? `<p style="font-size:12px;color:#5f6368;margin:2px 0 0 0;">Venc. dia ${pm.due_day}</p>` : '';
                 return `<div class="pm-item" data-id="${pm.id}" style="background:#f1f3f4;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);">
                     <div style="display:flex;align-items:center;gap:10px;flex:1;">
@@ -7093,7 +7093,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     handle: 'span[style*="cursor:grab"]',
                     onEnd: async function() {
                         const ids = Array.from(list.querySelectorAll('.pm-item')).map(el => parseInt(el.dataset.id)).filter(Boolean);
-                        try { await api(`${API}/payment-methods/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }); }
+                        try { await api(`${API}/payment-methods/reorder`, { method: 'PUT', body: JSON.stringify({ payment_method_ids: ids }) }); }
                         catch(e) { console.error('reorder pm:', e); }
                     }
                 });
@@ -7149,7 +7149,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                                     🖼️ Galeria
                                                 </button>
                                             </div>
-                                            <p id="pm_file_name" class="hidden" style="font-size:12px;color:${labelColor};margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
                                         </div>
                                     </div>
                                     <input type="file" id="pm_icon_file" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="sr-only">
@@ -7188,9 +7187,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             document.getElementById('pm_icon_file').onchange = function() {
                 const file = this.files[0];
                 if (!file) return;
-                const nameEl = document.getElementById('pm_file_name');
-                nameEl.textContent = file.name;
-                nameEl.classList.remove('hidden');
                 document.getElementById('pm_icon_path').value = '';
                 const reader = new FileReader();
                 reader.onload = e => {
@@ -7205,6 +7201,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const isHidden = gallery.classList.contains('hidden');
                 gallery.classList.toggle('hidden', !isHidden);
                 if (!isHidden) return;
+                await loadPmGalleryGrid();
+            };
+            window.loadPmGalleryGrid = async function() {
                 try {
                     const data = await api(`${API}/payment-methods/icons-library`);
                     const isDark2 = document.body.classList.contains('dark-mode');
@@ -7212,24 +7211,43 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const selBorder = isDark2 ? '#8ab4f8' : '#1a73e8';
                     document.getElementById('pm_gallery_grid').innerHTML = data.icons.map(path => {
                         const isSelected = document.getElementById('pm_icon_path').value === path;
-                        return `<div onclick="selectPmGalleryIcon('${path}')" id="gallery_${btoa(path).replace(/=/g,'')}"
-                            style="width:52px;height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;">
-                            <img src="${path}" style="width:34px;height:34px;object-fit:contain;">
+                        const isUpload = path.includes('/uploads/');
+                        const delBtn = (user.is_admin && isUpload)
+                            ? `<button type="button" onclick="deletePmGalleryIcon(event,'${path}')"
+                                style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:#d93025;color:white;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>`
+                            : '';
+                        return `<div style="position:relative;display:inline-flex;">
+                            <div onclick="selectPmGalleryIcon('${path}')" id="gallery_${btoa(path).replace(/[+=\/]/g,'_')}"
+                                style="width:52px;height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;">
+                                <img src="${path}" style="width:34px;height:34px;object-fit:contain;">
+                            </div>
+                            ${delBtn}
                         </div>`;
                     }).join('');
                 } catch(e) { document.getElementById('pm_gallery_grid').innerHTML = '<span style="font-size:12px;color:#d93025;">Erro ao carregar</span>'; }
+            };
+            window.deletePmGalleryIcon = async function(evt, path) {
+                evt.stopPropagation();
+                if (!confirm('Remover este ícone da galeria?')) return;
+                const filename = path.split('/').pop();
+                try {
+                    await api(`${API}/payment-methods/icons-library/${filename}`, { method: 'DELETE' });
+                    if (document.getElementById('pm_icon_path').value === path) {
+                        document.getElementById('pm_icon_path').value = '';
+                        document.getElementById('pm_icon_preview').innerHTML = '<span style="font-size:1.3rem;">💳</span>';
+                    }
+                    await loadPmGalleryGrid();
+                } catch(e) { alert(e.message); }
             };
 
             window.selectPmGalleryIcon = function(path) {
                 document.getElementById('pm_icon_path').value = path;
                 document.getElementById('pm_icon_file').value = '';
-                const nameEl = document.getElementById('pm_file_name');
-                nameEl.textContent = ''; nameEl.classList.add('hidden');
                 document.getElementById('pm_icon_preview').innerHTML = `<img src="${path}" style="width:30px;height:30px;object-fit:contain;">`;
                 // highlight selected
                 const isDark2 = document.body.classList.contains('dark-mode');
-                document.querySelectorAll('#pm_gallery_grid > div').forEach(el => {
-                    const active = el.id === `gallery_${btoa(path).replace(/=/g,'')}`;
+                document.querySelectorAll('#pm_gallery_grid [id^="gallery_"]').forEach(el => {
+                    const active = el.id === `gallery_${btoa(path).replace(/[+=\/]/g,'_')}`;
                     el.style.border = `2px solid ${active ? (isDark2?'#8ab4f8':'#1a73e8') : 'transparent'}`;
                 });
             };
