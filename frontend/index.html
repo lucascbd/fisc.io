@@ -3522,6 +3522,24 @@
             });
         }
 
+        function selectUserBalance(pmId) {
+            pmId = pmId ? parseInt(pmId) : null;
+            const inp = document.getElementById('usr_balance_method');
+            if (inp) inp.value = pmId || '';
+            const isDark = document.body.classList.contains('dark-mode');
+            const selBg     = isDark ? '#8ab4f8' : '#e8f0fe';
+            const selBorder = isDark ? '#8ab4f8' : '#1a73e8';
+            const defBg     = isDark ? '#3c4043' : '#f8f9fa';
+            document.querySelectorAll('.usr-bal-btn').forEach(el => {
+                const btnPmId = el.dataset.pmId ? parseInt(el.dataset.pmId) : null;
+                const active = btnPmId === pmId;
+                el.classList.toggle('selected', active);
+                el.style.background  = active ? selBg : defBg;
+                el.style.border      = `2px solid ${active ? selBorder : 'transparent'}`;
+                el.style.boxShadow   = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
+            });
+        }
+
         // Função para selecionar método de pagamento no modal de despesas
         function selectPaymentMethod(pmId) {
             pmId = parseInt(pmId);
@@ -4465,10 +4483,29 @@
                                     <!-- Método de saldo preferencial -->
                                     <div class="mb-4">
                                         <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Método de saldo / reembolso</label>
-                                        <select id="usr_balance_method" class="w-full px-4 py-2 border rounded-lg" style="background: ${inputBg}; color: ${textColor}; border-color: ${inputBorder};">
-                                            <option value="">Nenhum</option>
-                                            ${userPms(usr?.id || user.id).map(pm => `<option value="${pm.id}" ${pm.id === prefBalanceId ? 'selected' : ''}>${pm.description}</option>`).join('')}
-                                        </select>
+                                        <input type="hidden" id="usr_balance_method" value="${prefBalanceId || ''}">
+                                        <div class="flex gap-2 flex-wrap">
+                                            <label class="flex flex-col items-center gap-1 cursor-pointer" onclick="event.stopPropagation()">
+                                                <div class="usr-bal-btn ${!prefBalanceId?'selected':''}" data-pm-id=""
+                                                     style="width:44px;height:44px;border-radius:12px;border:2px solid ${!prefBalanceId?optBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${!prefBalanceId?optSelBg:optBg};transition:.15s;"
+                                                     onclick="selectUserBalance(null)">
+                                                    <span style="font-size:18px;color:#9aa0a6;">—</span>
+                                                </div>
+                                                <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${labelColor};">Nenhum</span>
+                                            </label>
+                                            ${userPms(usr?.id || user.id).map(pm => {
+                                                const on = pm.id === prefBalanceId;
+                                                const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="font-size:1.3rem;">💳</span>`;
+                                                return `<label class="flex flex-col items-center gap-1 cursor-pointer" onclick="event.stopPropagation()">
+                                                    <div class="usr-bal-btn ${on?'selected':''}" data-pm-id="${pm.id}"
+                                                         style="width:44px;height:44px;border-radius:12px;border:2px solid ${on?optBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${on?optSelBg:optBg};transition:.15s;"
+                                                         onclick="selectUserBalance(${pm.id})">
+                                                        ${imgHtml}
+                                                    </div>
+                                                    <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${labelColor};">${pm.description}</span>
+                                                </label>`;
+                                            }).join('')}
+                                        </div>
                                     </div>
 
                                     <!-- Perfil de divisão preferencial -->
@@ -6976,7 +7013,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Método de pagamento</label>
-                                    <div class="flex gap-3 justify-center">${pmRow}</div>
+                                    <div class="flex gap-3 justify-start">${pmRow}</div>
                                 </div>
                                 <div id="recError" class="hidden text-red-600 text-sm"></div>
                             </div>
