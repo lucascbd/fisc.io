@@ -7211,8 +7211,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const selBorder = isDark2 ? '#8ab4f8' : '#1a73e8';
                     document.getElementById('pm_gallery_grid').innerHTML = data.icons.map(path => {
                         const isSelected = document.getElementById('pm_icon_path').value === path;
-                        const isUpload = path.includes('/uploads/');
-                        const delBtn = (user.is_admin && isUpload)
+                        const delBtn = user.is_admin
                             ? `<button type="button" onclick="deletePmGalleryIcon(event,'${path}')"
                                 style="position:absolute;top:-4px;right:-4px;width:18px;height:18px;border-radius:50%;background:#d93025;color:white;border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>`
                             : '';

@@ -1162,7 +1162,24 @@ async def create_payment_method(
     db.add(pm)
     db.commit()
     db.refresh(pm)
-    return _pm_dict(pm) | {"display_order": pm.display_order}
+    return _pm_dict(pm)
+
+@app.put(f"{settings.API_V1_PREFIX}/payment-methods/reorder")
+async def reorder_payment_methods(
+    data: PaymentMethodReorder,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reorder payment methods by updating display_order."""
+    methods = {pm.id: pm for pm in db.query(PaymentMethod).filter(
+        PaymentMethod.id.in_(data.payment_method_ids),
+        PaymentMethod.user_id == current_user.id
+    ).all()}
+    for index, pm_id in enumerate(data.payment_method_ids):
+        if pm_id in methods:
+            methods[pm_id].display_order = index
+    db.commit()
+    return {"message": "Reordered"}
 
 @app.put(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
 async def update_payment_method(
@@ -1205,23 +1222,6 @@ async def delete_payment_method(
     db.commit()
     return {"message": "Payment method deleted"}
 
-@app.put(f"{settings.API_V1_PREFIX}/payment-methods/reorder")
-async def reorder_payment_methods(
-    data: PaymentMethodReorder,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Reorder payment methods by updating display_order."""
-    methods = {pm.id: pm for pm in db.query(PaymentMethod).filter(
-        PaymentMethod.id.in_(data.payment_method_ids),
-        PaymentMethod.user_id == current_user.id
-    ).all()}
-    for index, pm_id in enumerate(data.payment_method_ids):
-        if pm_id in methods:
-            methods[pm_id].display_order = index
-    db.commit()
-    return {"message": "Reordered"}
-
 @app.get(f"{settings.API_V1_PREFIX}/payment-methods/icons-library")
 def list_icons_library(current_user: User = Depends(get_current_user)):
     """List all icons: bundled library + user uploads."""
@@ -1234,12 +1234,17 @@ def list_icons_library(current_user: User = Depends(get_current_user)):
 
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/icons-library/{{filename}}")
 async def delete_library_icon(filename: str, current_user: User = Depends(get_current_user)):
-    """Delete a user-uploaded icon. Admin only. Bundled library icons cannot be deleted via API."""
+    """Delete an icon from the gallery. Admin only."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
     safe_name = os.path.basename(filename)
-    path = f"/app/icons/uploads/{safe_name}"
-    if not os.path.exists(path):
+    # Try uploads first, then bundled library
+    for directory in ("/app/icons/uploads", "/app/icons/library"):
+        path = os.path.join(directory, safe_name)
+        if os.path.exists(path):
+            os.remove(path)
+            return {"message": "Deleted"}
+    raise HTTPException(status_code=404, detail="Icon not found")
         raise HTTPException(status_code=404, detail="Icon not found")
     os.remove(path)
     return {"message": "Deleted"}
