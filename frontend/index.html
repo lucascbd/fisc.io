@@ -3430,7 +3430,7 @@
         }
         
         // Função para selecionar quem pagou
-        function selectPaidBy(userId, dueDay) {
+        function selectPaidBy(userId) {
             document.getElementById('exp_paid').value = userId;
             const isDark = document.body.classList.contains('dark-mode');
             document.querySelectorAll('.paid-option').forEach(el => {
@@ -3448,7 +3448,7 @@
                     el.querySelectorAll('span').forEach(s => s.style.color = '');
                 }
             });
-            renderExpensePmOptions(paidById);
+            renderExpensePmOptions(userId);
             updateCartaoHint();
         }
         
@@ -3486,7 +3486,9 @@
             const curId = parseInt(document.getElementById('exp_payment_method_id')?.value) || null;
             // Se o método atual não pertence ao novo pagador, resetar para o preferido dele
             const curPm = pms.find(p => p.id === curId);
-            const selId = curPm ? curId : (pms.find(p => p.id === (paidById === user.id ? user.preferred_payment_method : null))?.id || pms[0]?.id || null);
+            const paidByUser = (users || []).find(u => u.id === paidById) || user;
+            const prefPmId = paidByUser?.preferred_payment_method || null;
+            const selId = curPm ? curId : (pms.find(p => p.id === prefPmId)?.id || pms[0]?.id || null);
             if (document.getElementById('exp_payment_method_id')) document.getElementById('exp_payment_method_id').value = selId || '';
             container.innerHTML = pms.map(pm => {
                 const isSel = pm.id === selId;
@@ -3497,7 +3499,7 @@
                     class="pm-option flex flex-col items-center justify-center cursor-pointer ${isSel?'selected':''}"
                     style="width:60px;height:55px;flex-shrink:0;border:2px solid ${isSel?optionBorder:'transparent'};background:${isSel?optionSelectedBg:optionBg};border-radius:12px;transition:.15s;">
                     ${imgHtml}
-                    <span style="font-size:9px;color:${isSel&&isDark?'#202124':optionTextColor};margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
+                    <span style="font-size:9px;color:${isSel&&isDark?'#202124':optionTextColor};margin-top:4px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
                 </div>`;
             }).join('');
         }
