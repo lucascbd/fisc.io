@@ -23,11 +23,11 @@ class ExpenseService:
         installments: int = 1,
         notes: Optional[str] = None,
         created_by_user_id: Optional[int] = None,
-        payment_method: Optional[str] = 'pix',
+        payment_method_id: Optional[int] = None,
         original_date: Optional[date] = None
     ) -> Expense:
         """Create expense with automatic splitting"""
-        
+
         # Create expense
         expense = Expense(
             description=description,
@@ -38,7 +38,7 @@ class ExpenseService:
             category_id=category_id,
             split_profile_id=split_profile_id,
             notes=notes,
-            payment_method=payment_method or 'pix',
+            payment_method_id=payment_method_id,
             original_date=original_date or expense_date,
             created_by_user_id=created_by_user_id or paid_by_user_id
         )
@@ -140,7 +140,7 @@ class ExpenseService:
         installments: int = 1,
         notes: Optional[str] = None,
         updated_by_user_id: Optional[int] = None,
-        payment_method: Optional[str] = 'pix',
+        payment_method_id: Optional[int] = None,
         original_date: Optional[date] = None
     ) -> Expense:
         """
@@ -168,7 +168,7 @@ class ExpenseService:
         expense.category_id = category_id
         expense.split_profile_id = split_profile_id
         expense.notes = notes
-        expense.payment_method = payment_method or 'pix'
+        expense.payment_method_id = payment_method_id
         expense.original_date = original_date or expense_date
         
         if needs_splits_recalc:

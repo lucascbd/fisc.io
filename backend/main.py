@@ -1,7 +1,8 @@
 """Budget System - FastAPI Main Application - UPDATED"""
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, extract, or_
 from datetime import datetime, timedelta, date
@@ -9,6 +10,7 @@ from jose import JWTError, jwt
 from typing import List, Optional
 import json
 import os
+import uuid
 import calendar
 from pydantic import BaseModel
 import bcrypt
@@ -16,24 +18,14 @@ from decimal import Decimal
 
 from config import settings
 from database import Base, engine, get_db
-from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense
+from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod
 from expense_service import ExpenseService
 from firebase_service import FirebaseService
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-# NOTA: As colunas abaixo precisam ser adicionadas manualmente no banco se ainda não existirem:
-#   ALTER TABLE categories ADD COLUMN IF NOT EXISTS ipca_category_code INTEGER;
-#   ALTER TABLE categories ADD COLUMN IF NOT EXISTS ipca_category_name TEXT;
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_payment_method TEXT DEFAULT 'pix';
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS invoice_due_day INTEGER DEFAULT 1;
-#   -- Se já tinha invoice_closing_day: ALTER TABLE users RENAME COLUMN invoice_closing_day TO invoice_due_day;
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_ipca_location INTEGER DEFAULT 1;
-#   ALTER TABLE users ADD COLUMN IF NOT EXISTS hidden_category_ids TEXT DEFAULT '[]';
-#   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'pix';
-#   ALTER TABLE expenses ADD COLUMN IF NOT EXISTS original_date DATE;
-#   ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS insert_day INTEGER DEFAULT 1;
+# NOTA: Schema gerenciado via migrações manuais. Ver README para histórico de migrações.
 
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
@@ -117,6 +109,12 @@ except Exception as e:
 # Initialize app
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
+# Servir ícones como arquivos estáticos
+_ICONS_DIR = "/app/icons"
+os.makedirs(f"{_ICONS_DIR}/library", exist_ok=True)
+os.makedirs(f"{_ICONS_DIR}/system", exist_ok=True)
+app.mount("/icons", StaticFiles(directory=_ICONS_DIR), name="icons")
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -151,6 +149,16 @@ class ProfileCreate(BaseModel):
     users: List[ProfileUserCreate]
     from_month: Optional[str] = None  # YYYY-MM: se informado, recalcula splits a partir deste mês
 
+class PaymentMethodCreate(BaseModel):
+    description: str
+    color: Optional[str] = None
+    is_card: bool = False
+    icon_path: Optional[str] = None
+    due_day: Optional[int] = None
+
+class PaymentMethodReorder(BaseModel):
+    payment_method_ids: List[int]
+
 class ExpenseCreate(BaseModel):
     description: str
     total_amount: float
@@ -160,7 +168,7 @@ class ExpenseCreate(BaseModel):
     expense_date: str
     installments: int = 1
     notes: Optional[str] = None
-    payment_method: Optional[str] = "pix"
+    payment_method_id: Optional[int] = None
 
 class RecurringExpenseCreate(BaseModel):
     description: str
@@ -168,7 +176,7 @@ class RecurringExpenseCreate(BaseModel):
     category_id: int
     split_profile_id: int
     paid_by_user_id: int
-    payment_method: Optional[str] = "pix"
+    payment_method_id: Optional[int] = None
     notes: Optional[str] = None
     insert_day: Optional[int] = 1
 
@@ -179,8 +187,8 @@ class UserUpdate(BaseModel):
     color: Optional[str] = None
     is_admin: Optional[bool] = None
     emoji: Optional[str] = None
-    preferred_payment_method: Optional[str] = None
-    invoice_due_day: Optional[int] = None
+    preferred_payment_method: Optional[int] = None
+    preferred_balance_method: Optional[int] = None
     preferred_ipca_location: Optional[int] = None
     preferred_split_profile_id: Optional[int] = None
     hidden_category_ids: Optional[List[int]] = None
@@ -204,7 +212,7 @@ class TargetCreate(BaseModel):
     emoji: str = "🎯"
     monthly_amount: float
     category_ids: List[int] = []
-    payment_methods: List[str] = []  # [] = todos os métodos
+    payment_methods: List[int] = []  # [] = todos os métodos; lista de IDs de payment_methods
     display_mode: str = "daily"   # 'daily' | 'ticket'
     ticket_months: int = 6
 
@@ -259,6 +267,17 @@ def visible_expense_ids_subquery(db: Session, current_user: User):
     ).subquery()
 
 
+def _expense_pm_fields(e: "Expense") -> dict:
+    pm = e.payment_method_rel
+    return {
+        "payment_method_id": e.payment_method_id,
+        "payment_method_description": pm.description if pm else None,
+        "payment_method_icon": pm.icon_path if pm else None,
+        "payment_method_color": pm.color if pm else None,
+        "payment_method_is_card": pm.is_card if pm else False,
+    }
+
+
 def _month_date_range(year: int, mon: int):
     """Retorna (start_date, end_date) para um mês, compatível com índice B-tree em due_date."""
     start = date(year, mon, 1)
@@ -303,8 +322,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             "name": user.name,
             "email": user.email,
             "is_admin": user.is_admin,
-            "preferred_payment_method": user.preferred_payment_method or 'pix',
-            "invoice_due_day": user.invoice_due_day or 1,
+            "preferred_payment_method": user.preferred_payment_method,
+            "preferred_balance_method": user.preferred_balance_method,
             "preferred_ipca_location": user.preferred_ipca_location or 1,
             "preferred_split_profile_id": user.preferred_split_profile_id,
             "hidden_category_ids": json.loads(user.hidden_category_ids or '[]')
@@ -320,8 +339,8 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "is_admin": current_user.is_admin,
         "is_active": current_user.is_active,
-        "preferred_payment_method": current_user.preferred_payment_method or 'pix',
-        "invoice_due_day": current_user.invoice_due_day or 1,
+        "preferred_payment_method": current_user.preferred_payment_method,
+        "preferred_balance_method": current_user.preferred_balance_method,
         "preferred_ipca_location": current_user.preferred_ipca_location or 1,
         "preferred_split_profile_id": current_user.preferred_split_profile_id,
         "hidden_category_ids": json.loads(current_user.hidden_category_ids or '[]')
@@ -380,8 +399,8 @@ async def list_users(db: Session = Depends(get_db), _: User = Depends(get_curren
         "id": u.id, "name": u.name, "email": u.email,
         "color": u.color or '#3B82F6', "emoji": u.emoji or '👤',
         "display_order": u.display_order or 0, "is_admin": u.is_admin,
-        "preferred_payment_method": u.preferred_payment_method or 'pix',
-        "invoice_due_day": u.invoice_due_day or 1,
+        "preferred_payment_method": u.preferred_payment_method,
+        "preferred_balance_method": u.preferred_balance_method,
         "preferred_ipca_location": u.preferred_ipca_location or 1,
         "preferred_split_profile_id": u.preferred_split_profile_id,
         "hidden_category_ids": json.loads(u.hidden_category_ids or '[]')
@@ -447,8 +466,8 @@ async def update_user(
         user.emoji = data.emoji
     if data.preferred_payment_method is not None:
         user.preferred_payment_method = data.preferred_payment_method
-    if data.invoice_due_day is not None:
-        user.invoice_due_day = data.invoice_due_day
+    if data.preferred_balance_method is not None:
+        user.preferred_balance_method = data.preferred_balance_method
     if data.preferred_ipca_location is not None:
         user.preferred_ipca_location = data.preferred_ipca_location
     if data.preferred_split_profile_id is not None:
@@ -580,7 +599,20 @@ async def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(
 # RECURRING EXPENSES
 # ============================================================================
 
+def _pm_dict(pm: "PaymentMethod | None") -> dict:
+    if not pm:
+        return {"id": None, "description": None, "color": None, "is_card": False, "icon_path": None}
+    return {
+        "id": pm.id,
+        "description": pm.description,
+        "color": pm.color,
+        "is_card": pm.is_card,
+        "icon_path": pm.icon_path,
+        "due_day": pm.due_day,
+    }
+
 def _recurring_dict(r: RecurringExpense) -> dict:
+    pm = r.payment_method_rel
     return {
         "id": r.id,
         "description": r.description,
@@ -592,7 +624,8 @@ def _recurring_dict(r: RecurringExpense) -> dict:
         "split_profile_name": r.split_profile.name if r.split_profile else None,
         "paid_by_user_id": r.paid_by_user_id,
         "paid_by_name": r.paid_by.name if r.paid_by else None,
-        "payment_method": r.payment_method,
+        "payment_method_id": r.payment_method_id,
+        "payment_method": _pm_dict(pm),
         "notes": r.notes,
         "insert_day": r.insert_day or 1,
         "is_active": r.is_active,
@@ -615,7 +648,7 @@ async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(g
         category_id=data.category_id,
         split_profile_id=data.split_profile_id,
         paid_by_user_id=data.paid_by_user_id,
-        payment_method=data.payment_method,
+        payment_method_id=data.payment_method_id,
         notes=data.notes,
         insert_day=max(1, min(31, data.insert_day or 1)),
         created_by_user_id=current_user.id,
@@ -634,7 +667,7 @@ async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: 
     r.category_id = data.category_id
     r.split_profile_id = data.split_profile_id
     r.paid_by_user_id = data.paid_by_user_id
-    r.payment_method = data.payment_method
+    r.payment_method_id = data.payment_method_id
     r.notes = data.notes
     r.insert_day = max(1, min(31, data.insert_day or 1))
     db.commit()
@@ -682,7 +715,7 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
             expense_date=expense_date,
             installments=1,
             notes=r.notes,
-            payment_method=r.payment_method,
+            payment_method_id=r.payment_method_id,
             created_by_user_id=current_user.id,
         )
         r.last_generated_month = current_month_str
@@ -1094,6 +1127,116 @@ async def delete_category(category_id: int, db: Session = Depends(get_db), _: Us
         return {"message": "Category deleted", "soft_delete": False}
 
 # ============================================================================
+# PAYMENT METHOD ENDPOINTS
+# ============================================================================
+
+@app.get(f"{settings.API_V1_PREFIX}/payment-methods")
+async def list_payment_methods(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """List payment methods for the current user, ordered by display_order."""
+    methods = db.query(PaymentMethod).filter(
+        PaymentMethod.user_id == current_user.id
+    ).order_by(PaymentMethod.display_order).all()
+    return [_pm_dict(pm) | {"display_order": pm.display_order} for pm in methods]
+
+@app.post(f"{settings.API_V1_PREFIX}/payment-methods")
+async def create_payment_method(
+    data: PaymentMethodCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a payment method for the current user."""
+    max_order = db.query(func.max(PaymentMethod.display_order)).filter(
+        PaymentMethod.user_id == current_user.id
+    ).scalar() or 0
+    pm = PaymentMethod(
+        description=data.description,
+        color=data.color,
+        is_card=data.is_card,
+        icon_path=data.icon_path,
+        user_id=current_user.id,
+        due_day=data.due_day if data.is_card else None,
+        display_order=max_order + 1,
+    )
+    db.add(pm)
+    db.commit()
+    db.refresh(pm)
+    return _pm_dict(pm) | {"display_order": pm.display_order}
+
+@app.put(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
+async def update_payment_method(
+    pm_id: int,
+    data: PaymentMethodCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a payment method (owner only)."""
+    pm = db.query(PaymentMethod).filter(
+        PaymentMethod.id == pm_id, PaymentMethod.user_id == current_user.id
+    ).first()
+    if not pm:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    pm.description = data.description
+    pm.color = data.color
+    pm.is_card = data.is_card
+    pm.icon_path = data.icon_path
+    pm.due_day = data.due_day if data.is_card else None
+    db.commit()
+    return _pm_dict(pm) | {"display_order": pm.display_order}
+
+@app.delete(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
+async def delete_payment_method(
+    pm_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a payment method (owner only). Fails if in use by expenses."""
+    pm = db.query(PaymentMethod).filter(
+        PaymentMethod.id == pm_id, PaymentMethod.user_id == current_user.id
+    ).first()
+    if not pm:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    in_use = db.query(Expense).filter(Expense.payment_method_id == pm_id).first()
+    if in_use:
+        raise HTTPException(status_code=400, detail="Método em uso por despesas. Remova ou reassocie as despesas antes de excluir.")
+    db.delete(pm)
+    db.commit()
+    return {"message": "Payment method deleted"}
+
+@app.put(f"{settings.API_V1_PREFIX}/payment-methods/reorder")
+async def reorder_payment_methods(
+    data: PaymentMethodReorder,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Reorder payment methods by updating display_order."""
+    methods = {pm.id: pm for pm in db.query(PaymentMethod).filter(
+        PaymentMethod.id.in_(data.payment_method_ids),
+        PaymentMethod.user_id == current_user.id
+    ).all()}
+    for index, pm_id in enumerate(data.payment_method_ids):
+        if pm_id in methods:
+            methods[pm_id].display_order = index
+    db.commit()
+    return {"message": "Reordered"}
+
+@app.post(f"{settings.API_V1_PREFIX}/payment-methods/upload-icon")
+async def upload_payment_method_icon(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload a PNG icon for a payment method. Returns the icon_path."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Apenas imagens são permitidas")
+    ext = os.path.splitext(file.filename or "icon.png")[1] or ".png"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    dest = f"/app/icons/library/{filename}"
+    contents = await file.read()
+    with open(dest, "wb") as f:
+        f.write(contents)
+    return {"icon_path": f"/icons/library/{filename}"}
+
+
+# ============================================================================
 # SPLIT PROFILE ENDPOINTS - COM UPDATE
 # ============================================================================
 
@@ -1436,7 +1579,7 @@ async def list_expenses(
         "installments": e.installments,
         "expense_date": str(e.expense_date),
         "original_date": str(e.original_date) if e.original_date else str(e.expense_date),
-        "payment_method": e.payment_method or 'pix',
+        **_expense_pm_fields(e),
         "paid_by_user_id": e.paid_by_user_id,
         "paid_by_name": e.paid_by.name,
         "category_id": e.category_id,
@@ -1510,7 +1653,7 @@ async def list_expenses_with_splits(
             "installments": e.installments,
             "expense_date": str(e.expense_date),
             "original_date": str(e.original_date) if e.original_date else str(e.expense_date),
-            "payment_method": e.payment_method or 'pix',
+            **_expense_pm_fields(e),
             "paid_by_user_id": e.paid_by_user_id,
             "paid_by_name": e.paid_by.name,
             "category_id": e.category_id,
@@ -1545,28 +1688,24 @@ async def create_expense(
     expense_date_obj = date.fromisoformat(data.expense_date)
 
     # Cartão: se data > fechamento (vencimento − 7 dias) → jogar pro próximo mês
-    payment_method = data.payment_method or 'pix'
     original_date = expense_date_obj  # sempre guardar a data real de lançamento
-    if payment_method == 'cartao':
+    pm_record = db.query(PaymentMethod).filter(PaymentMethod.id == data.payment_method_id).first() if data.payment_method_id else None
+    if pm_record and pm_record.is_card and pm_record.due_day:
         import calendar as _cal
         from datetime import timedelta as _td
-        payer = db.query(User).filter(User.id == data.paid_by_user_id).first()
-        due_day = (payer.invoice_due_day or 1) if payer else 1
-        # Calcular próxima data de vencimento (1º do próximo mês + due_day - 1)
+        due_day = pm_record.due_day
         exp = expense_date_obj
         if exp.month == 12:
             next_due = exp.replace(year=exp.year + 1, month=1, day=due_day)
         else:
             max_next = _cal.monthrange(exp.year, exp.month + 1)[1]
             next_due = exp.replace(month=exp.month + 1, day=min(due_day, max_next))
-        # Fechamento = vencimento - 7 dias; lança no próximo mês se data > fechamento
         closing = next_due - _td(days=7)
         if expense_date_obj > closing:
-            # Avançar expense_date para o mês do vencimento (mantém o dia original, clampado)
             max_day = _cal.monthrange(next_due.year, next_due.month)[1]
             next_day = min(expense_date_obj.day, max_day)
             expense_date_obj = expense_date_obj.replace(year=next_due.year, month=next_due.month, day=next_day)
-    
+
     expense = ExpenseService.create_expense(
         db=db,
         paid_by_user_id=data.paid_by_user_id,
@@ -1578,7 +1717,7 @@ async def create_expense(
         installments=data.installments,
         notes=data.notes,
         created_by_user_id=current_user.id,
-        payment_method=payment_method,
+        payment_method_id=data.payment_method_id,
         original_date=original_date
     )
     
@@ -1613,25 +1752,20 @@ async def update_expense(
     """Update expense - mantém o ID original (UPDATE real)"""
     expense_date_obj = date.fromisoformat(data.expense_date)
 
-    # Cartão: se data > fechamento (vencimento − 7 dias) → jogar pro próximo mês
-    payment_method = data.payment_method or 'pix'
-    original_date = expense_date_obj  # sempre guardar a data real de lançamento
-    if payment_method == 'cartao':
+    original_date = expense_date_obj
+    pm_record = db.query(PaymentMethod).filter(PaymentMethod.id == data.payment_method_id).first() if data.payment_method_id else None
+    if pm_record and pm_record.is_card and pm_record.due_day:
         import calendar as _cal
         from datetime import timedelta as _td
-        payer = db.query(User).filter(User.id == data.paid_by_user_id).first()
-        due_day = (payer.invoice_due_day or 1) if payer else 1
-        # Calcular próxima data de vencimento (1º do próximo mês + due_day - 1)
+        due_day = pm_record.due_day
         exp = expense_date_obj
         if exp.month == 12:
             next_due = exp.replace(year=exp.year + 1, month=1, day=due_day)
         else:
             max_next = _cal.monthrange(exp.year, exp.month + 1)[1]
             next_due = exp.replace(month=exp.month + 1, day=min(due_day, max_next))
-        # Fechamento = vencimento - 7 dias; lança no próximo mês se data > fechamento
         closing = next_due - _td(days=7)
         if expense_date_obj > closing:
-            # Avançar expense_date para o mês do vencimento (mantém o dia original, clampado)
             max_day = _cal.monthrange(next_due.year, next_due.month)[1]
             next_day = min(expense_date_obj.day, max_day)
             expense_date_obj = expense_date_obj.replace(year=next_due.year, month=next_due.month, day=next_day)
@@ -1649,7 +1783,7 @@ async def update_expense(
         installments=data.installments,
         notes=data.notes,
         updated_by_user_id=current_user.id,
-        payment_method=payment_method,
+        payment_method_id=data.payment_method_id,
         original_date=original_date
     )
     
@@ -1731,14 +1865,35 @@ async def get_dashboard(
     # 1. Users (dados estáticos)
     users_list = db.query(User).filter(User.is_active == True).order_by(User.display_order).all()
     users_data = [{
-        "id": u.id, 
-        "name": u.name, 
-        "email": u.email, 
-        "color": u.color or '#3B82F6', 
-        "emoji": u.emoji or '👤', 
-        "display_order": u.display_order or 0, 
+        "id": u.id,
+        "name": u.name,
+        "email": u.email,
+        "color": u.color or '#3B82F6',
+        "emoji": u.emoji or '👤',
+        "display_order": u.display_order or 0,
         "is_admin": u.is_admin,
+        "preferred_payment_method": u.preferred_payment_method,
+        "preferred_balance_method": u.preferred_balance_method,
+        "preferred_ipca_location": u.preferred_ipca_location or 1,
+        "preferred_split_profile_id": u.preferred_split_profile_id,
+        "hidden_category_ids": json.loads(u.hidden_category_ids or '[]'),
     } for u in users_list]
+
+    # 1b. Payment Methods (todos os métodos dos usuários ativos)
+    user_ids = [u.id for u in users_list]
+    pm_list = db.query(PaymentMethod).filter(
+        PaymentMethod.user_id.in_(user_ids)
+    ).order_by(PaymentMethod.user_id, PaymentMethod.display_order).all()
+    payment_methods_data = [{
+        "id": pm.id,
+        "description": pm.description,
+        "color": pm.color,
+        "is_card": pm.is_card,
+        "icon_path": pm.icon_path,
+        "user_id": pm.user_id,
+        "due_day": pm.due_day,
+        "display_order": pm.display_order,
+    } for pm in pm_list]
     
     # 2. Categories (dados estáticos)
     try:
@@ -1828,7 +1983,7 @@ async def get_dashboard(
             "installments": e.installments,
             "expense_date": str(e.expense_date),
             "original_date": str(e.original_date) if e.original_date else str(e.expense_date),
-            "payment_method": e.payment_method or 'pix',
+            **_expense_pm_fields(e),
             "paid_by_user_id": e.paid_by_user_id,
             "paid_by_name": e.paid_by.name,
             "category_id": e.category_id,
@@ -1906,6 +2061,7 @@ async def get_dashboard(
         "users": users_data,
         "categories": categories_data,
         "profiles": profiles_data,
+        "payment_methods": payment_methods_data,
         "expenses": expenses_data,
         "balances": balances_data,
         "totals": totals,
@@ -2435,7 +2591,7 @@ async def get_target_stats(
         cat_filter = f"AND e.category_id = ANY(:cats)"
         params["cats"] = list(cat_ids)
     if pm_filter_list:
-        pm_sql_filter = "AND e.payment_method = ANY(:pms)"
+        pm_sql_filter = "AND e.payment_method_id = ANY(:pms)"
         params["pms"] = pm_filter_list
 
     rows = db.execute(text(f"""

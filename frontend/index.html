@@ -1382,7 +1382,7 @@
         .dark-mode .ms-btn:active{background:#3c4043;}
         .dark-mode input[type="search"]{background:#3c4043 !important;color:#e8eaed !important;border-color:#5f6368 !important;}
         .dark-mode input[type="search"]::placeholder{color:#9aa0a6 !important;}
-        #pmFilterPix img,#pmFilterCartao img,#pmFilterVale img{filter:none;}
+        .pm-filter-btn img{filter:none;}
         .filter-h{height:38px;box-sizing:border-box;}
 
         /* ── Dark mode: suprimir flash de clique em textos não-interativos ── */
@@ -1519,6 +1519,10 @@
                         <span class="icon">🎯</span>
                         <span>Targets</span>
                     </button>
+                    <button class="sidebar-menu-item" onclick="openSidebarPanel('payments')">
+                        <span class="icon">💳</span>
+                        <span>Pagamento</span>
+                    </button>
                     <button class="sidebar-menu-item" onclick="openSidebarPanel('categories')">
                         <span class="icon">🛍️</span>
                         <span>Categorias</span>
@@ -1568,6 +1572,14 @@
                     </div>
                 </div>
                 
+                <!-- Painel: Pagamento -->
+                <div id="sidebarPanelPayments" class="sidebar-panel">
+                    <div class="sidebar-panel-header">
+                        <button onclick="showPaymentMethodModal()" style="background:#1a73e8;color:white;border:none;border-radius:20px;padding:12px 16px;font-size:14px;font-weight:500;cursor:pointer;width:100%;">+ Adicionar Método</button>
+                    </div>
+                    <div class="sidebar-panel-content" id="sidebarPaymentsList"></div>
+                </div>
+
                 <!-- Painel: Categorias -->
                 <div id="sidebarPanelCategories" class="sidebar-panel">
                     <div class="sidebar-panel-header">
@@ -1696,9 +1708,7 @@
                     </div>
                     <div style="flex:1;"></div>
                     <div style="display:flex;align-items:flex-end;gap:6px;height:38px;">
-                        <button id="pmFilterPix" onclick="togglePmFilter('pix')" title="Pix" style="width:38px;height:38px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/pix-48.png" style="width:20px;height:20px;object-fit:contain;"></button>
-                        <button id="pmFilterCartao" onclick="togglePmFilter('cartao')" title="Cartão" style="width:38px;height:38px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/cartao-48.png" style="width:20px;height:20px;object-fit:contain;"></button>
-                        <button id="pmFilterVale" onclick="togglePmFilter('vale')" title="Vale" style="width:38px;height:38px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;"><img src="/vale-48.png" style="width:20px;height:20px;object-fit:contain;"></button>
+                        <div id="pmFiltersContainer" style="display:contents;"></div>
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -1811,9 +1821,7 @@
                         </div>
                         <!-- Ícones de forma de pagamento (sem título, alinhados à direita) -->
                         <div class="flex gap-2 items-center" style="flex-shrink:0;padding-bottom:1px;">
-                            <button id="dailyPmFilterPix" onclick="toggleDailyPmFilter('pix')" title="Pix" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/pix-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
-                            <button id="dailyPmFilterCartao" onclick="toggleDailyPmFilter('cartao')" title="Cartão" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/cartao-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
-                            <button id="dailyPmFilterVale" onclick="toggleDailyPmFilter('vale')" title="Vale" style="width:34px;height:34px;border-radius:50%;border:2px solid transparent;background:#f1f3f4;padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;"><img src="/vale-48.png" style="width:18px;height:18px;object-fit:contain;"></button>
+                            <div id="dailyPmFiltersContainer" style="display:contents;"></div>
                         </div>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">
@@ -2190,6 +2198,7 @@
             users = data.users;
             categories = data.categories;
             profiles = data.profiles;
+            if (data.payment_methods) paymentMethods = data.payment_methods;
             staticCacheTimestamp = Date.now();
             
             // Atualizar cache dinâmico
@@ -2229,23 +2238,34 @@
             }
             
             console.log('🌐 Buscando dados estáticos');
-            const [u, c, p, t] = await Promise.all([
+            const [u, c, p, t, pm] = await Promise.all([
                 api(`${API}/users`),
                 api(`${API}/categories`),
                 api(`${API}/profiles`),
-                api(`${API}/targets`).catch(() => [])
+                api(`${API}/targets`).catch(() => []),
+                api(`${API}/payment-methods`).catch(() => [])
             ]);
-            
+
             users = u;
             categories = c;
             profiles = p;
             targets = t;
+            paymentMethods = pm;
             staticCacheTimestamp = Date.now();
-            
+
             return { users, categories, profiles };
         }
         
         let categoriesSortable = null, profilesSortable = null, usersSortable = null;
+
+        // Helpers para métodos de pagamento
+        function pmById(id) { return paymentMethods.find(pm => pm.id === id) || null; }
+        function userPms(userId) { return paymentMethods.filter(pm => pm.user_id === userId); }
+        function pmIcon(pm) {
+            if (!pm) return '';
+            if (pm.icon_path) return `<img src="${pm.icon_path}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">`;
+            return `<span style="width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:9px;flex-shrink:0;">💳</span>`;
+        }
 
         // ✅ 7️⃣ Formato brasileiro para números
         function formatBRL(value) {
@@ -2431,8 +2451,9 @@
 
         function stepMonth(id,dir){const s=document.getElementById(id);if(!s)return;const n=s.selectedIndex+dir;if(n>=0&&n<s.options.length){s.selectedIndex=n;s.dispatchEvent(new Event('change'));}}
 
-        let activePmFilter=[]; // [] = all selected
-        let activeDailyPmFilter=[]; // [] = all selected
+        let paymentMethods = []; // todos os métodos de pagamento de todos os usuários
+        let activePmFilter=[]; // [] = all selected (IDs inteiros)
+        let activeDailyPmFilter=[]; // [] = all selected (IDs inteiros)
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
         let dailyCatMonth='';
@@ -2468,20 +2489,56 @@
             if(dd&&btn&&!dd.contains(e.target)&&!btn.contains(e.target)) dd.classList.add('hidden');
         });
 
-        function toggleDailyPmFilter(method){
-            const idx=activeDailyPmFilter.indexOf(method);
-            if(idx>-1) activeDailyPmFilter.splice(idx,1); else activeDailyPmFilter.push(method);
-            if(activeDailyPmFilter.length===3) activeDailyPmFilter=[];
+        function renderPmFilterButtons() {
+            // Filtra métodos do usuário logado
+            const myPms = userPms(user.id);
+            const isDark = document.body.classList.contains('dark-mode');
+            const db = isDark ? '#3c4043' : '#f1f3f4';
+            const sg = isDark ? '#1e3a5f' : '#e8f0fe';
+
+            // Botões principais
+            const cont = document.getElementById('pmFiltersContainer');
+            if (cont) {
+                cont.innerHTML = myPms.map(pm => {
+                    const on = activePmFilter.length > 0 && activePmFilter.includes(pm.id);
+                    const iconHtml = pm.icon_path
+                        ? `<img src="${pm.icon_path}" style="width:20px;height:20px;object-fit:contain;">`
+                        : `<span style="font-size:12px;">💳</span>`;
+                    return `<button onclick="togglePmFilter(${pm.id})" id="pmFilter_${pm.id}" title="${pm.description}"
+                        style="width:38px;height:38px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                }).join('');
+            }
+
+            // Botões daily chart
+            const dcont = document.getElementById('dailyPmFiltersContainer');
+            if (dcont) {
+                dcont.innerHTML = myPms.map(pm => {
+                    const on = activeDailyPmFilter.length > 0 && activeDailyPmFilter.includes(pm.id);
+                    const iconHtml = pm.icon_path
+                        ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
+                        : `<span style="font-size:11px;">💳</span>`;
+                    return `<button onclick="toggleDailyPmFilter(${pm.id})" id="dailyPmFilter_${pm.id}" title="${pm.description}"
+                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                }).join('');
+            }
+        }
+
+        function toggleDailyPmFilter(id){
+            id = parseInt(id);
+            const idx=activeDailyPmFilter.indexOf(id);
+            if(idx>-1) activeDailyPmFilter.splice(idx,1); else activeDailyPmFilter.push(id);
+            const myPms = userPms(user.id);
+            if(activeDailyPmFilter.length === myPms.length) activeDailyPmFilter=[];
             applyDailyPmFilterStyles();
             updateDailyChart();
         }
         function applyDailyPmFilterStyles(){
             const isDark=document.body.classList.contains('dark-mode');
             const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
-            ['pix','cartao','vale'].forEach(m=>{
-                const btn=document.getElementById('dailyPmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
+            userPms(user.id).forEach(pm=>{
+                const btn=document.getElementById('dailyPmFilter_'+pm.id);
                 if(!btn)return;
-                const on=activeDailyPmFilter.length>0&&activeDailyPmFilter.includes(m);
+                const on=activeDailyPmFilter.length>0&&activeDailyPmFilter.includes(pm.id);
                 btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
             });
         }
@@ -2494,25 +2551,26 @@
             } else {
                 activeDailyPmFilter=[];
             }
-            selectedDailyCatIds=null; // força re-init de categorias baseado no novo target
+            selectedDailyCatIds=null;
             applyDailyPmFilterStyles();
             updateDailyChart();
         }
-        function togglePmFilter(method){
-            const idx=activePmFilter.indexOf(method);
-            if(idx>-1) activePmFilter.splice(idx,1); else activePmFilter.push(method);
-            // deselect all = select all
-            if(activePmFilter.length===3) activePmFilter=[];
+        function togglePmFilter(id){
+            id = parseInt(id);
+            const idx=activePmFilter.indexOf(id);
+            if(idx>-1) activePmFilter.splice(idx,1); else activePmFilter.push(id);
+            const myPms = userPms(user.id);
+            if(activePmFilter.length === myPms.length) activePmFilter=[];
             applyPmFilterStyles();
             loadDashboardData();
         }
         function applyPmFilterStyles(){
             const isDark=document.body.classList.contains('dark-mode');
             const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
-            ['pix','cartao','vale'].forEach(m=>{
-                const btn=document.getElementById('pmFilter'+m.charAt(0).toUpperCase()+m.slice(1));
+            userPms(user.id).forEach(pm=>{
+                const btn=document.getElementById('pmFilter_'+pm.id);
                 if(!btn)return;
-                const on=activePmFilter.length>0&&activePmFilter.includes(m);
+                const on=activePmFilter.length>0&&activePmFilter.includes(pm.id);
                 btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
             });
         }
@@ -2549,13 +2607,12 @@
                 
                 const myBalance=balances.find(b=>b.user_id===user.id);
                 // effectivePm: se o usuário logado pagou → método da despesa
-                //              se outro usuário pagou  → método preferencial do usuário logado
-                // Se o usuário logado pagou: usa o método da despesa
-                // Se outro usuário pagou: sempre Pix (o usuário vai reembolsar via transferência)
+                //              se outro usuário pagou  → método preferencial de balanço do usuário logado
                 const effectivePm = (e) => e.paid_by_user_id === user.id
-                    ? (e.payment_method || 'pix')
-                    : 'pix';
+                    ? e.payment_method_id
+                    : (user.preferred_balance_method || null);
 
+                renderPmFilterButtons();
                 if(activePmFilter.length>0){
                     let ft=0;
                     for(const e of expenses){
@@ -2688,7 +2745,7 @@
                                         let spent = 0;
                                         for (const expense of expenses) {
                                             if (catIds.size && !catIds.has(expense.category_id)) continue;
-                                            if (pmIds.size && !pmIds.has(expense.payment_method)) continue;
+                                            if (pmIds.size && !pmIds.has(expense.payment_method_id)) continue;
                                             for (const s of expense.splits) {
                                                 if (s.user_id !== balance.user_id) continue;
                                                 const d = new Date(s.due_date + 'T00:00:00');
@@ -3056,7 +3113,10 @@
                 const profile = profiles.find(p => p.id === e.split_profile_id);
                 const profileName = profile?.name || 'Perfil desconhecido';
                 
-                const pmIcon = `<img src="/${{'cartao':'cartao-48.png','vale':'vale-48.png','pix':'pix-48.png'}[e.payment_method||'pix']||'pix-48.png'}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">`;
+                const _ePm = pmById(e.payment_method_id);
+                const pmIconHtml = _ePm && _ePm.icon_path
+                    ? `<img src="${_ePm.icon_path}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">`
+                    : (_ePm ? `<span style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;border-radius:50%;background:${_ePm.color||'#999'};font-size:9px;flex-shrink:0;">💳</span>` : '');
                 return `
                 <div class="bg-white rounded-lg shadow p-4 mb-4">
                     <div class="flex justify-between items-start">
@@ -3068,7 +3128,7 @@
                             ${e.notes ? `<p class="text-sm text-gray-500 mt-2">${e.notes}</p>` : ''}
                         </div>
                         <div class="text-right ml-4">
-                            <p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIcon}</p>
+                            <p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIconHtml}</p>
                             <p class="text-sm text-gray-600">${e.installments}x</p>
                             <div class="flex gap-2 mt-2 justify-end">
                                 <button onclick="editExpense(${e.id})" class="text-blue-600 text-sm">✏️</button>
@@ -3305,6 +3365,10 @@
                     loadUsers();
                     loadSidebarUsers();
                 }
+                else if (type === 'payment-methods') {
+                    paymentMethods = paymentMethods.filter(p => p.id !== id);
+                    loadSidebarPaymentMethods();
+                }
                 loadDashboardData();
             } catch (error) {
                 alert(error.message || 'Erro ao deletar');
@@ -3383,7 +3447,7 @@
                     el.querySelectorAll('span').forEach(s => s.style.color = '');
                 }
             });
-            window._cartaoDueDay = dueDay || user.invoice_due_day || 1;
+            renderExpensePmOptions(paidById);
             updateCartaoHint();
         }
         
@@ -3408,41 +3472,69 @@
             });
         }
 
+        // Renderizar opções de método de pagamento do pagador selecionado
+        function renderExpensePmOptions(paidById) {
+            const container = document.getElementById('expPmOptionsContainer');
+            if (!container) return;
+            const pms = userPms(paidById || user.id);
+            const isDark = document.body.classList.contains('dark-mode');
+            const optionBg = isDark ? '#3c4043' : '#f8f9fa';
+            const optionSelectedBg = isDark ? '#8ab4f8' : '#e8f0fe';
+            const optionBorder = isDark ? '#8ab4f8' : '#1a73e8';
+            const optionTextColor = isDark ? '#9aa0a6' : '#5f6368';
+            const curId = parseInt(document.getElementById('exp_payment_method_id')?.value) || null;
+            // Se o método atual não pertence ao novo pagador, resetar para o preferido dele
+            const curPm = pms.find(p => p.id === curId);
+            const selId = curPm ? curId : (pms.find(p => p.id === (paidById === user.id ? user.preferred_payment_method : null))?.id || pms[0]?.id || null);
+            if (document.getElementById('exp_payment_method_id')) document.getElementById('exp_payment_method_id').value = selId || '';
+            container.innerHTML = pms.map(pm => {
+                const isSel = pm.id === selId;
+                const imgHtml = pm.icon_path
+                    ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">`
+                    : `<span style="font-size:18px;">💳</span>`;
+                return `<div onclick="selectPaymentMethod(${pm.id})" id="pm_opt_${pm.id}"
+                    class="pm-option flex flex-col items-center justify-center cursor-pointer ${isSel?'selected':''}"
+                    style="width:60px;height:55px;flex-shrink:0;border:2px solid ${isSel?optionBorder:'transparent'};background:${isSel?optionSelectedBg:optionBg};border-radius:12px;transition:.15s;">
+                    ${imgHtml}
+                    <span style="font-size:9px;color:${isSel&&isDark?'#202124':optionTextColor};margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
+                </div>`;
+            }).join('');
+        }
+
         // Função para selecionar método de pagamento no modal de usuário
-        function selectUserPayment(method) {
+        function selectUserPayment(pmId) {
+            pmId = parseInt(pmId);
             const inp = document.getElementById('usr_payment_value');
-            if (inp) inp.value = method;
-            document.querySelectorAll('input[name=usr_pm]').forEach(r => { if(r.value===method) r.checked=true; });
+            if (inp) inp.value = pmId;
             const isDark = document.body.classList.contains('dark-mode');
             const selBg     = isDark ? '#8ab4f8' : '#e8f0fe';
             const selBorder = isDark ? '#8ab4f8' : '#1a73e8';
             const defBg     = isDark ? '#3c4043' : '#f8f9fa';
-            ['pix','cartao','vale'].forEach(m=>{
-                const el=document.getElementById(`usr_pay_${m}_btn`);
-                if (!el) return;
-                const active = m === method;
+            document.querySelectorAll('.usr-pay-btn').forEach(el => {
+                const active = parseInt(el.dataset.pmId) === pmId;
                 el.classList.toggle('selected', active);
                 el.style.background  = active ? selBg : defBg;
                 el.style.border      = `2px solid ${active ? selBorder : 'transparent'}`;
-                el.style.outline     = 'none';
-                el.style.outlineOffset = '';
                 el.style.boxShadow   = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
             });
         }
 
         // Função para selecionar método de pagamento no modal de despesas
-        function selectPaymentMethod(method) {
-            document.getElementById('exp_payment_method').value = method;
+        function selectPaymentMethod(pmId) {
+            pmId = parseInt(pmId);
+            document.getElementById('exp_payment_method_id').value = pmId;
             const isDark = document.body.classList.contains('dark-mode');
             const selectedBg = isDark ? '#8ab4f8' : '#e8f0fe';
             const selectedBorder = isDark ? '#8ab4f8' : '#1a73e8';
             const defaultBg = isDark ? '#3c4043' : '#f8f9fa';
-
-            ['pm_pix','pm_cartao','pm_vale'].forEach(id=>{const el=document.getElementById(id);if(!el)return;
-                const active=el.id==='pm_'+method;el.classList.toggle('selected',active);
-                el.style.background=active?selectedBg:defaultBg;el.style.borderColor=active?selectedBorder:'transparent';
-                el.style.boxShadow=active&&isDark?'0 0 0 2px rgba(138,180,248,0.3)':'none';
-                el.querySelectorAll('span').forEach(s=>s.style.color=active&&isDark?'#202124':'');});
+            document.querySelectorAll('.pm-option[id^="pm_opt_"]').forEach(el => {
+                const active = parseInt(el.id.replace('pm_opt_', '')) === pmId;
+                el.classList.toggle('selected', active);
+                el.style.background = active ? selectedBg : defaultBg;
+                el.style.borderColor = active ? selectedBorder : 'transparent';
+                el.style.boxShadow = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
+                el.querySelectorAll('span').forEach(s => s.style.color = active && isDark ? '#202124' : '');
+            });
             updateCartaoHint();
         }
 
@@ -3450,14 +3542,12 @@
         function updateCartaoHint() {
             const hint = document.getElementById('pm_cartao_hint');
             if (!hint) return;
-            const method = document.getElementById('exp_payment_method')?.value;
-            if (method !== 'cartao') { hint.style.display = 'none'; return; }
+            const pmId = parseInt(document.getElementById('exp_payment_method_id')?.value) || null;
+            const pm = pmById(pmId);
+            if (!pm || !pm.is_card || !pm.due_day) { hint.style.display = 'none'; return; }
             const dateVal = document.getElementById('exp_date')?.value;
             if (!dateVal) { hint.style.display = 'none'; return; }
-            const dueDay = window._cartaoDueDay || user.invoice_due_day || 1;
-            // Fórmula: fechamento = próximo vencimento − 7 dias
-            // Ex: venc=1, março(31 dias) → next_due=01/abr → fechamento=25/mar → a partir de 26/mar vai pra abril
-            // Ex: venc=6, março(31 dias) → next_due=06/abr → fechamento=30/mar → a partir de 31/mar vai pra abril
+            const dueDay = pm.due_day;
             const expDate = new Date(dateVal + 'T00:00:00');
             const nextDue = new Date(expDate.getFullYear(), expDate.getMonth() + 1, dueDay);
             const closing = new Date(nextDue);
@@ -3631,7 +3721,7 @@
                                                 const isSelected = expense ? expense.paid_by_user_id === u.id : u.id === user.id;
                                                 const textColor = isSelected && isDark ? '#202124' : optionTextColor;
                                                 return `
-                                                <div onclick="selectPaidBy(${u.id}, ${u.id === user.id ? (user.invoice_due_day || 1) : (u.invoice_due_day || 1)})" 
+                                                <div onclick="selectPaidBy(${u.id})"
                                                      class="paid-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all ${isSelected ? 'selected' : ''}"
                                                      data-user-id="${u.id}"
                                                      style="background: ${isSelected ? optionSelectedBg : optionBg}; 
@@ -3647,24 +3737,8 @@
                                     <!-- 7. Método de Pagamento -->
                                     <div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Método de pagamento</label>
-                                        <input type="hidden" id="exp_payment_method" value="${expense?.payment_method || user.preferred_payment_method || 'pix'}">
-                                        <div class="flex gap-3 justify-center">
-                                            ${['pix','cartao','vale'].map(m => {
-                                                const isSelPm = (expense?.payment_method || user.preferred_payment_method || 'pix') === m;
-                                                const pmBg     = isSelPm ? optionSelectedBg : optionBg;
-                                                const pmBorder = isSelPm ? optionBorder : 'transparent';
-                                                const pmBoxShadow = isSelPm && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
-                                                const label=m==='pix'?'Pix':m==='cartao'?'Cartão':'Vale';
-                                                const pmImg=m==='pix'?'/pix-48.png':m==='cartao'?'/cartao-48.png':'/vale-48.png';
-                                                return `
-                                                <div onclick="selectPaymentMethod('${m}')" id="pm_${m}"
-                                                     class="pm-option flex flex-col items-center justify-center cursor-pointer ${isSelPm ? 'selected' : ''}"
-                                                     style="width:60px;height:55px;flex-shrink:0;border:2px solid ${pmBorder};background:${pmBg};box-shadow:${pmBoxShadow};border-radius:12px;transition:.15s;">
-                                                    <img src="${pmImg}" style="width:26px;height:26px;object-fit:contain;" alt="${m}">
-                                                    <span style="font-size:9px;color:${isSelPm&&isDark?'#202124':optionTextColor};margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span>
-                                                </div>`;
-                                            }).join('')}
-                                        </div>
+                                        <input type="hidden" id="exp_payment_method_id" value="${expense?.payment_method_id || user.preferred_payment_method || ''}">
+                                        <div class="flex gap-2 flex-wrap justify-center" id="expPmOptionsContainer"></div>
                                         <p id="pm_cartao_hint" class="text-xs mt-2" style="color: #e8710a; display:none;"></p>
                                     </div>
                                     <!-- 8. Observações -->
@@ -3690,8 +3764,8 @@
                     setTimeout(() => { document.activeElement?.blur(); }, 10);
                     setTimeout(() => { document.activeElement?.blur(); }, 50);
                 });
-                // Inicializar _cartaoDueDay com o pagador padrão
-                { const _iId=parseInt(document.getElementById('exp_paid')?.value); const _iU=!isNaN(_iId)?(users||[]).find(u=>u.id===_iId):null; window._cartaoDueDay=(_iU&&_iU.invoice_due_day)?_iU.invoice_due_day:(user.invoice_due_day||1); }
+                // Renderizar métodos de pagamento para o pagador padrão
+                { const _iId=parseInt(document.getElementById('exp_paid')?.value)||user.id; renderExpensePmOptions(_iId); }
                 updateCartaoHint();
 
                 document.getElementById('expenseForm').onsubmit = async (e) => {
@@ -3743,8 +3817,8 @@
                     try {
                         // Corrigir timezone da data para evitar offset de -1 dia
                         const expenseDate = document.getElementById('exp_date').value;
-                        const paymentMethod = document.getElementById('exp_payment_method')?.value || 'pix';
-                        
+                        const paymentMethodId = parseInt(document.getElementById('exp_payment_method_id')?.value) || null;
+
                         const data = {
                             description: document.getElementById('exp_desc').value,
                             total_amount: parseFloat(document.getElementById('exp_amt').value),
@@ -3754,7 +3828,7 @@
                             paid_by_user_id: parseInt(paidVal),
                             split_profile_id: parseInt(profVal),
                             notes: document.getElementById('exp_notes').value || null,
-                            payment_method: paymentMethod
+                            payment_method_id: paymentMethodId
                         };
                         
                         const url = expense ? `${API}/expenses/${expense.id}` : `${API}/expenses`;
@@ -4307,8 +4381,8 @@
             const dividerColor= isDark ? '#5f6368' : '#dadce0';
             const checkboxBg  = isDark ? '#3c4043' : '#f1f3f4';
 
-            const prefPayment=usr?.preferred_payment_method||'pix';
-            const pixSel=prefPayment==='pix';const cardSel=prefPayment==='cartao';const valeSel=prefPayment==='vale';
+            const prefPaymentId = usr?.preferred_payment_method || null;
+            const prefBalanceId = usr?.preferred_balance_method || null;
 
             const _savedScrollY = window.scrollY;
             document.body.classList.add('modal-open');
@@ -4368,21 +4442,30 @@
                                     <!-- Método de pagamento preferencial -->
                                     <div class="mb-4">
                                         <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Método de pagamento preferencial</label>
-                                        <input type="hidden" id="usr_payment_value" value="${prefPayment}">
-                                        <div class="flex gap-3">
-                                            ${['pix','cartao','vale'].map(m => {
-                                                const pmLabel = m==='pix'?'Pix':m==='cartao'?'Cartão':'Vale';
-                                                const on = prefPayment === m;
-                                                return `<label class="flex flex-col items-center gap-1 cursor-pointer flex-1 tgt-pm-label" onclick="event.stopPropagation()">
-                                                    <div class="pm-option ${on?'selected':''}" id="usr_pay_${m}_btn"
-                                                         style="width:44px;height:44px;border-radius:12px;border:2px solid ${on?optBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${on?optSelBg:optBg};transition:.15s;">
-                                                        <img src="/${m}-48.png" style="width:26px;height:26px;object-fit:contain;">
+                                        <input type="hidden" id="usr_payment_value" value="${prefPaymentId || ''}">
+                                        <div class="flex gap-2 flex-wrap">
+                                            ${userPms(usr?.id || user.id).map(pm => {
+                                                const on = pm.id === prefPaymentId;
+                                                const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
+                                                return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()">
+                                                    <div class="pm-option usr-pay-btn ${on?'selected':''}" data-pm-id="${pm.id}"
+                                                         style="width:44px;height:44px;border-radius:12px;border:2px solid ${on?optBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${on?optSelBg:optBg};transition:.15s;"
+                                                         onclick="selectUserPayment(${pm.id})">
+                                                        ${imgHtml}
                                                     </div>
-                                                    <input type="radio" name="usr_pm" class="sr-only" value="${m}" ${on?'checked':''} onchange="selectUserPayment(${m})">
-                                                    <span class="text-xs">${pmLabel}</span>
+                                                    <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
                                                 </label>`;
                                             }).join('')}
                                         </div>
+                                    </div>
+
+                                    <!-- Método de saldo preferencial -->
+                                    <div class="mb-4">
+                                        <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Método de saldo / reembolso</label>
+                                        <select id="usr_balance_method" class="w-full px-4 py-2 border rounded-lg" style="background: ${inputBg}; color: ${textColor}; border-color: ${inputBorder};">
+                                            <option value="">Nenhum</option>
+                                            ${userPms(usr?.id || user.id).map(pm => `<option value="${pm.id}" ${pm.id === prefBalanceId ? 'selected' : ''}>${pm.description}</option>`).join('')}
+                                        </select>
                                     </div>
 
                                     <!-- Perfil de divisão preferencial -->
@@ -4392,14 +4475,6 @@
                                             <option value="">Nenhum</option>
                                             ${profiles.filter(p => p.users?.some(u => u.user_id === (usr?.id || user.id))).map(p => '<option value="' + p.id + '" ' + (p.id === (usr?.preferred_split_profile_id || null) ? 'selected' : '') + '>' + (p.emoji || '⚖️') + ' ' + p.name + '</option>').join('')}
                                         </select>
-                                    </div>
-
-                                    <!-- Dia de vencimento da fatura -->
-                                    <div class="mb-4">
-                                        <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Dia de vencimento da fatura</label>
-                                        <input type="number" id="usr_due_day" min="1" max="31" value="${usr?.invoice_due_day || 1}"
-                                            class="w-full px-4 border rounded-lg" placeholder="Ex: 15" inputmode="numeric"
-                                            style="height:42px;background: ${inputBg}; color: ${textColor}; border-color: ${inputBorder};">
                                     </div>
 
                                     <!-- Localidade IPCA preferencial -->
@@ -4451,8 +4526,8 @@
                             email: document.getElementById('usr_email').value,
                             color: document.getElementById('usr_color').value,
                             emoji: document.getElementById('usr_emoji').value || '👤',
-                            preferred_payment_method: document.getElementById('usr_payment_value')?.value || 'pix',
-                            invoice_due_day: parseInt(document.getElementById('usr_due_day').value) || 1,
+                            preferred_payment_method: parseInt(document.getElementById('usr_payment_value')?.value) || null,
+                            preferred_balance_method: parseInt(document.getElementById('usr_balance_method')?.value) || null,
                             preferred_ipca_location: parseInt(document.getElementById('usr_ipca_location').value) || 1,
                             preferred_split_profile_id: parseInt(document.getElementById('usr_pref_profile')?.value) || null,
                         };
@@ -4569,10 +4644,9 @@
             const _selBdr = _dark ? '#8ab4f8' : '#1a73e8';
             const _defBg  = _dark ? '#3c4043' : '#f8f9fa';
             const _shadow = _dark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
-            ['pix','cartao','vale'].forEach(m => {
-                const cb   = document.querySelector(`.tgt-pm-cb[value="${m}"]`);
-                const wrap = document.getElementById('tgt_pm_wrap_' + m);
-                if (!cb || !wrap) return;
+            document.querySelectorAll('.tgt-pm-cb').forEach(cb => {
+                const wrap = document.getElementById('tgt_pm_wrap_' + cb.value);
+                if (!wrap) return;
                 const on = cb.checked;
                 wrap.classList.toggle('selected', on);
                 wrap.style.borderColor = on ? _selBdr : 'transparent';
@@ -4699,18 +4773,17 @@
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium mb-2" style="color:#5f6368;">Métodos de pagamento</label>
-                                    <div class="flex gap-3">
-                                        ${['pix','cartao','vale'].map(m => {
-                                            const pmLabel = m==='pix'?'Pix':m==='cartao'?'Cartão':'Vale';
-                                            const pmImg = '/'+m+'-48.png';
-                                            const on = selPmIds.length===0||selPmIds.includes(m);
-                                            return `<label class="flex flex-col items-center gap-1 cursor-pointer flex-1 tgt-pm-label" onclick="event.stopPropagation()">
-                                                <div class="pm-option ${on?'selected':''}" id="tgt_pm_wrap_${m}"
+                                    <div class="flex gap-2 flex-wrap">
+                                        ${userPms(user.id).map(pm => {
+                                            const on = selPmIds.length===0||selPmIds.includes(pm.id);
+                                            const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
+                                            return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()">
+                                                <div class="pm-option ${on?'selected':''}" id="tgt_pm_wrap_${pm.id}"
                                                      style="width:44px;height:44px;border-radius:12px;border:2px solid ${on?optionBorder:'transparent'};display:flex;align-items:center;justify-content:center;background:${on?optionSelectedBg:optionBg};box-shadow:${on&&isDark?'0 0 0 2px rgba(138,180,248,0.3)':'none'};transition:.15s;">
-                                                    <img src="${pmImg}" style="width:26px;height:26px;object-fit:contain;">
+                                                    ${imgHtml}
                                                 </div>
-                                                <input type="checkbox" class="tgt-pm-cb sr-only" value="${m}" ${on?'checked':''} onchange="tgtUpdatePm()">
-                                                <span class="text-xs">${pmLabel}</span>
+                                                <input type="checkbox" class="tgt-pm-cb sr-only" value="${pm.id}" ${on?'checked':''} onchange="tgtUpdatePm()">
+                                                <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
                                             </label>`;
                                         }).join('')}
                                     </div>
@@ -4760,7 +4833,7 @@
                         emoji: document.getElementById('tgt_emoji').value || '🎯',
                         monthly_amount: parseFloat(document.getElementById('tgt_amount').value),
                         category_ids: (() => { const all = document.querySelectorAll('.tgt-cat-cb'); const checked = Array.from(all).filter(cb => cb.checked); return checked.length === all.length ? [] : checked.map(cb => parseInt(cb.value)); })(),
-                        payment_methods: (() => { const all = document.querySelectorAll('.tgt-pm-cb'); const checked = Array.from(all).filter(cb => cb.checked); return checked.length === all.length ? [] : checked.map(cb => cb.value); })(),
+                        payment_methods: (() => { const all = document.querySelectorAll('.tgt-pm-cb'); const checked = Array.from(all).filter(cb => cb.checked); return checked.length === all.length ? [] : checked.map(cb => parseInt(cb.value)); })(),
                         display_mode: document.querySelector('input[name=tgt_mode]:checked')?.value || 'daily',
                         ticket_months: parseInt(document.getElementById('tgt_ticket_months').value) || 6,
                     };
@@ -6152,7 +6225,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (isShared && !showShared) continue;
                     if (!isShared && !showIndividual) continue;
                     // Filtro de forma de pagamento
-                    if (activeDailyPmFilter.length > 0 && !activeDailyPmFilter.includes(expense.payment_method)) continue;
+                    if (activeDailyPmFilter.length > 0 && !activeDailyPmFilter.includes(expense.payment_method_id)) continue;
                     // Filtro de categorias
                     if (selectedDailyCatIds !== null && !selectedDailyCatIds.includes(expense.category_id)) continue;
                     const day = origDate.getDate();
@@ -6233,7 +6306,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     for (let d = 1; d <= daysInMonth; d++) tgtDisplayDayTotals[d] = 0;
                     for (const expense of expenses) {
                         if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
-                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method_id)) continue;
                         const origStr = expense.original_date || expense.expense_date;
                         if (!origStr) continue;
                         const origDate = new Date(origStr + 'T00:00:00');
@@ -6252,7 +6325,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     for (let d = 1; d <= daysInMonth; d++) gastosDueDayTotals[d] = 0;
                     for (const expense of curExp) {
                         if (tgtCatIds && !tgtCatIds.has(Number(expense.category_id))) continue;
-                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method)) continue;
+                        if (tgtPmIds && !tgtPmIds.has(expense.payment_method_id)) continue;
                         const origStr = expense.original_date || expense.expense_date;
                         if (!origStr) continue;
                         const origDate = new Date(origStr + 'T00:00:00');
@@ -6497,36 +6570,36 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const showShared=expTypeChecked.includes('compartilhada');
             const isDark=document.body.classList.contains('dark-mode');
             const textColor=isDark?'#e8eaed':'#5f6368',gridColor=isDark?'#3c4043':'#e0e0e0';
-            const PM_COLORS={pix:'#1a73e8',cartao:'#34a853',vale:'#fa7b17'};
-            const PM_LABELS={pix:'Pix',cartao:'Cartão',vale:'Vale'};
+            const myPmList = userPms(user.id);
             const isSharedExp=(ex,y,m)=>{const us=new Set(ex.splits.filter(s=>{const d=new Date(s.due_date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()+1===m;}).map(s=>s.user_id));return us.size>1||(us.size===1&&!us.has(user.id));};
             try{
                 const monthlyByPm={};
                 for(const month of selectedMonths){
                     const {expenses}=await fetchExpensesWithCache(month);
                     const [year,mon]=month.split('-').map(Number);
-                    monthlyByPm[month]={pix:0,cartao:0,vale:0};
+                    monthlyByPm[month]={};
+                    myPmList.forEach(pm=>monthlyByPm[month][pm.id]=0);
                     for(const ex of expenses){
                         if(selectedCatIds.length>0&&!selectedCatIds.includes(ex.category_id))continue;
                         const shared=isSharedExp(ex,year,mon);
                         if(shared&&!showShared)continue;
                         if(!shared&&!showIndividual)continue;
                         // effective PM para o usuário logado
-                        const pm=ex.paid_by_user_id===user.id?(ex.payment_method||'pix'):'pix';
-                        if(!(pm in monthlyByPm[month]))monthlyByPm[month][pm]=0;
+                        const pmId=ex.paid_by_user_id===user.id?ex.payment_method_id:null;
+                        if(pmId==null)continue;
+                        if(!(pmId in monthlyByPm[month]))monthlyByPm[month][pmId]=0;
                         for(const s of ex.splits){
                             if(s.user_id!==user.id)continue;
                             const d=new Date(s.due_date+'T00:00:00');
                             if(d.getFullYear()!==year||d.getMonth()+1!==mon)continue;
-                            monthlyByPm[month][pm]+=parseFloat(s.user_amount);
+                            monthlyByPm[month][pmId]+=parseFloat(s.user_amount);
                         }
                     }
                 }
                 const months=selectedMonths.slice().sort();
-                const allPms=['pix','cartao','vale'];
-                const datasets=allPms.filter(pm=>months.some(m=>(monthlyByPm[m]?.[pm]||0)>0))
-                    .map(pm=>({label:PM_LABELS[pm],data:months.map(m=>monthlyByPm[m]?.[pm]||0),backgroundColor:PM_COLORS[pm],borderColor:PM_COLORS[pm],borderWidth:1,borderRadius:0,borderSkipped:false}));
-                const monthTotals=months.map(m=>allPms.reduce((s,pm)=>s+(monthlyByPm[m]?.[pm]||0),0));
+                const datasets=myPmList.filter(pm=>months.some(m=>(monthlyByPm[m]?.[pm.id]||0)>0))
+                    .map(pm=>({label:pm.description,data:months.map(m=>monthlyByPm[m]?.[pm.id]||0),backgroundColor:pm.color||'#999',borderColor:pm.color||'#999',borderWidth:1,borderRadius:0,borderSkipped:false}));
+                const monthTotals=months.map(m=>myPmList.reduce((s,pm)=>s+(monthlyByPm[m]?.[pm.id]||0),0));
                 if(pmBarChart)pmBarChart.destroy();
                 pmBarChart=new Chart(document.getElementById('pmBarChart').getContext('2d'),{
                     type:'bar',data:{labels:months,datasets},
@@ -6719,12 +6792,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 'notifications': '🔔 Notificações',
                 'recurring': '🔁 Recorrentes',
                 'targets': '🎯 Targets',
+                'payments': '💳 Pagamento',
                 'categories': '🛍️ Categorias',
                 'profiles': '⚖️ Perfis',
                 'users': '👥 Usuários'
             };
             if (title) title.textContent = titles[panel] || 'Configurações';
-            
+
             // Carregar dados do painel
             if (panel === 'recurring') {
                 loadSidebarRecurring();
@@ -6732,6 +6806,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 loadSidebarNotifications();
             } else if (panel === 'targets') {
                 loadSidebarTargets();
+            } else if (panel === 'payments') {
+                loadSidebarPaymentMethods();
             } else if (panel === 'categories') {
                 loadSidebarCategories();
             } else if (panel === 'profiles') {
@@ -6840,10 +6916,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 '<option value="' + c.id + '" ' + (c.id === (rec?.category_id||null) ? 'selected' : '') + '>' + (c.icon||'📁') + ' ' + c.name + '</option>'
             ).join('');
 
-            const pmRow = ['pix','cartao','vale'].map(m => {
-                const pmLabel = m==='pix'?'Pix':m==='cartao'?'Cartão':'Vale';
-                const on = (rec?.payment_method || user.preferred_payment_method || 'pix') === m;
-                return '<label class="flex flex-col items-center gap-1 cursor-pointer flex-1 tgt-pm-label" onclick="event.stopPropagation()"><div class="pm-option ' + (on?'selected':'') + '" id="rec_pm_wrap_' + m + '" style="width:44px;height:44px;border-radius:12px;border:2px solid ' + (on?optionBorder:'transparent') + ';display:flex;align-items:center;justify-content:center;background:' + (on?optionSelectedBg:optionBg) + ';transition:.15s;"><img src="/' + m + '-48.png" style="width:26px;height:26px;object-fit:contain;"></div><input type="radio" name="rec_pm" class="sr-only" value="' + m + '" ' + (on?'checked':'') + ' onchange="recUpdatePm()"><span class="text-xs">' + pmLabel + '</span></label>';
+            const _recPmList = userPms(rec?.paid_by_user_id || user.id);
+            const _recSelPmId = rec?.payment_method_id || user.preferred_payment_method || (_recPmList[0]?.id || null);
+            const pmRow = _recPmList.map(pm => {
+                const on = pm.id === _recSelPmId;
+                const imgHtml = pm.icon_path ? '<img src="' + pm.icon_path + '" style="width:26px;height:26px;object-fit:contain;">' : '<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:' + (pm.color||'#999') + ';font-size:12px;">💳</span>';
+                return '<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()"><div class="pm-option ' + (on?'selected':'') + '" id="rec_pm_wrap_' + pm.id + '" style="width:44px;height:44px;border-radius:12px;border:2px solid ' + (on?optionBorder:'transparent') + ';display:flex;align-items:center;justify-content:center;background:' + (on?optionSelectedBg:optionBg) + ';transition:.15s;">' + imgHtml + '</div><input type="radio" name="rec_pm" class="sr-only" value="' + pm.id + '" ' + (on?'checked':'') + ' onchange="recUpdatePm()"><span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + pm.description + '</span></label>';
             }).join('');
 
             const amountDisplay = rec ? formatBRL(rec.total_amount) : '';
@@ -6920,7 +6998,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     category_id: parseInt(catVal),
                     split_profile_id: parseInt(document.getElementById('rec_profile').value),
                     paid_by_user_id: parseInt(document.getElementById('rec_paid_by').value),
-                    payment_method: document.querySelector('input[name=rec_pm]:checked')?.value || 'pix',
+                    payment_method_id: parseInt(document.querySelector('input[name=rec_pm]:checked')?.value) || null,
                     insert_day: parseInt(document.getElementById('rec_insert_day').value) || 1,
                 };
                 try {
@@ -6961,15 +7039,189 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const selBg  = isDark ? '#8ab4f8' : '#e8f0fe';
             const selBdr = isDark ? '#8ab4f8' : '#1a73e8';
             const defBg  = isDark ? '#3c4043' : '#f8f9fa';
-            ['pix','cartao','vale'].forEach(m => {
-                const rb   = document.querySelector('input[name=rec_pm][value="' + m + '"]');
-                const wrap = document.getElementById('rec_pm_wrap_' + m);
-                if (!rb || !wrap) return;
+            document.querySelectorAll('input[name=rec_pm]').forEach(rb => {
+                const wrap = document.getElementById('rec_pm_wrap_' + rb.value);
+                if (!wrap) return;
                 const on = rb.checked;
                 wrap.classList.toggle('selected', on);
                 wrap.style.borderColor = on ? selBdr : 'transparent';
                 wrap.style.background  = on ? selBg : defBg;
             });
+        }
+
+        // ================================================================
+        // MÉTODOS DE PAGAMENTO
+        // ================================================================
+        async function loadSidebarPaymentMethods() {
+            const list = document.getElementById('sidebarPaymentsList');
+            if (!list) return;
+            const pms = userPms(user.id);
+            if (!pms.length) {
+                list.innerHTML = '<p class="text-sm text-gray-400 p-4 text-center">Nenhum método cadastrado.</p>';
+                return;
+            }
+            const isDark = document.body.classList.contains('dark-mode');
+            const textColor = isDark ? '#e8eaed' : '#202124';
+            const subColor  = isDark ? '#9aa0a6' : '#5f6368';
+            const cardBg    = isDark ? '#2d2e30' : '#ffffff';
+            const borderColor = isDark ? '#3c4043' : '#e0e0e0';
+
+            list.innerHTML = pms.map(pm => {
+                const imgHtml = pm.icon_path
+                    ? `<img src="${pm.icon_path}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;">`
+                    : `<span style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:14px;flex-shrink:0;">💳</span>`;
+                const badge = pm.is_card ? `<span style="font-size:10px;background:#e8f0fe;color:#1a73e8;border-radius:8px;padding:1px 6px;margin-left:4px;">Cartão</span>` : '';
+                const dueInfo = pm.is_card && pm.due_day ? `<span style="font-size:11px;color:${subColor};">Venc. dia ${pm.due_day}</span>` : '';
+                return `<div class="sidebar-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:${cardBg};border:1px solid ${borderColor};margin-bottom:6px;cursor:pointer;" onclick="showPaymentMethodModal(${pm.id})">
+                    ${imgHtml}
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:2px;">
+                            <span style="font-size:14px;font-weight:500;color:${textColor};">${pm.description}</span>${badge}
+                        </div>
+                        ${dueInfo}
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        ${pm.color ? `<span style="width:14px;height:14px;border-radius:50%;background:${pm.color};display:inline-block;flex-shrink:0;"></span>` : ''}
+                        <button onclick="event.stopPropagation();deleteItem('payment-methods',${pm.id})" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px;">🗑️</button>
+                    </div>
+                </div>`;
+            }).join('');
+
+            // Drag-and-drop reorder
+            if (window.Sortable) {
+                Sortable.create(list, {
+                    animation: 150,
+                    handle: '.sidebar-item',
+                    onEnd: async function(evt) {
+                        const ids = Array.from(list.querySelectorAll('.sidebar-item')).map(el => {
+                            const btn = el.querySelector('button[onclick*="deleteItem"]');
+                            const match = btn?.getAttribute('onclick')?.match(/(\d+)\)$/);
+                            return match ? parseInt(match[1]) : null;
+                        }).filter(Boolean);
+                        try { await api(`${API}/payment-methods/reorder`, { method: 'POST', body: JSON.stringify({ ids }) }); }
+                        catch(e) { console.error('reorder pm:', e); }
+                    }
+                });
+            }
+        }
+
+        async function showPaymentMethodModal(pmId = null) {
+            const pm = pmId ? paymentMethods.find(p => p.id === pmId) : null;
+            const isDark = document.body.classList.contains('dark-mode');
+            const modalBg   = isDark ? '#2d2e30' : 'white';
+            const headerBg  = isDark ? '#35363a' : '#e8f0fe';
+            const labelColor= isDark ? '#9aa0a6' : '#5f6368';
+            const textColor = isDark ? '#e8eaed' : '#202124';
+            const inputBg   = isDark ? '#3c4043' : 'white';
+            const inputBorder = isDark ? '#5f6368' : '#dadce0';
+
+            const _savedScrollY = window.scrollY;
+            document.body.classList.add('modal-open');
+            document.body.style.top = `-${_savedScrollY}px`;
+            document.getElementById('modalContainer').innerHTML = `
+                <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;">
+                    <div class="w-full max-w-md overflow-hidden flex flex-col" style="border-radius:28px;background:${modalBg};box-shadow:0 4px 8px 3px rgba(60,64,67,0.15),0 1px 3px rgba(60,64,67,0.3);max-height:calc(100dvh - 2rem);">
+                        <div style="background:${headerBg};padding:1.25rem 1.5rem;border-radius:28px 28px 0 0;flex-shrink:0;">
+                            <div class="flex justify-between items-center">
+                                <div class="flex items-center gap-3">
+                                    <div style="width:40px;height:40px;background:#d2e3fc;border-radius:50%;display:flex;align-items:center;justify-content:center;"><span style="font-size:1.1rem;">💳</span></div>
+                                    <h2 style="font-size:1.25rem;font-weight:500;color:${textColor};margin:0;">${pm ? 'Editar' : 'Novo'} método</h2>
+                                </div>
+                                <button onclick="closeModal()" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;"><span style="font-size:1.5rem;color:${labelColor};">✕</span></button>
+                            </div>
+                        </div>
+                        <form id="pmForm" class="flex flex-col" style="flex:1;overflow:hidden;">
+                            <div class="p-6 space-y-4" style="overflow-y:auto;flex:1;">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2" style="color:${labelColor};">Nome *</label>
+                                    <input type="text" id="pm_desc" required value="${pm?.description||''}" class="w-full px-4 py-2 border rounded-lg" style="background:${inputBg};color:${textColor};border-color:${inputBorder};">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2" style="color:${labelColor};">Ícone (PNG)</label>
+                                    <div class="flex items-center gap-3">
+                                        <div id="pm_icon_preview" style="width:44px;height:44px;border-radius:12px;background:#f1f3f4;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                            ${pm?.icon_path ? `<img src="${pm.icon_path}" style="width:30px;height:30px;object-fit:contain;">` : '<span style="font-size:1.2rem;">💳</span>'}
+                                        </div>
+                                        <input type="file" id="pm_icon_file" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="flex-1 text-sm" style="color:${textColor};">
+                                    </div>
+                                    ${pm?.icon_path ? `<input type="hidden" id="pm_icon_path" value="${pm.icon_path}">` : '<input type="hidden" id="pm_icon_path" value="">'}
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2" style="color:${labelColor};">Cor</label>
+                                    <input type="color" id="pm_color" value="${pm?.color||'#1a73e8'}" class="w-full px-2 border rounded-lg" style="height:42px;border-color:${inputBorder};">
+                                </div>
+                                <div class="flex items-center gap-3 p-3 rounded-lg" style="background:${isDark?'#3c4043':'#f1f3f4'};">
+                                    <input type="checkbox" id="pm_is_card" class="w-5 h-5" style="accent-color:#1a73e8;" ${pm?.is_card?'checked':''} onchange="document.getElementById('pm_due_row').classList.toggle('hidden',!this.checked)">
+                                    <label for="pm_is_card" style="color:${textColor};">É cartão de crédito?</label>
+                                </div>
+                                <div id="pm_due_row" class="${pm?.is_card?'':'hidden'}">
+                                    <label class="block text-sm font-medium mb-2" style="color:${labelColor};">Dia de vencimento (1–31)</label>
+                                    <input type="number" id="pm_due_day" min="1" max="31" value="${pm?.due_day||1}" class="w-full px-4 border rounded-lg" style="height:42px;background:${inputBg};color:${textColor};border-color:${inputBorder};">
+                                </div>
+                                <div id="pmError" class="hidden text-red-600 text-sm"></div>
+                            </div>
+                            <div class="p-4 flex gap-3" style="border-top:1px solid ${inputBorder};flex-shrink:0;">
+                                <button type="button" onclick="closeModal()" class="flex-1 py-3" style="background:#f1f3f4;color:#1a73e8;font-weight:500;border-radius:20px;border:none;">Cancelar</button>
+                                <button type="submit" class="flex-1 py-3" style="background:#1a73e8;color:white;font-weight:500;border-radius:20px;border:none;">Salvar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
+
+            // Preview icon on file select
+            document.getElementById('pm_icon_file').onchange = async function() {
+                const file = this.files[0];
+                if (!file) return;
+                const preview = document.getElementById('pm_icon_preview');
+                const reader = new FileReader();
+                reader.onload = e => { preview.innerHTML = `<img src="${e.target.result}" style="width:30px;height:30px;object-fit:contain;">`; };
+                reader.readAsDataURL(file);
+            };
+
+            document.getElementById('pmForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = e.target.querySelector('[type=submit]');
+                btn.disabled = true; btn.textContent = 'Salvando...';
+                try {
+                    // Upload icon if selected
+                    let iconPath = document.getElementById('pm_icon_path').value;
+                    const fileInput = document.getElementById('pm_icon_file');
+                    if (fileInput.files[0]) {
+                        const fd = new FormData();
+                        fd.append('file', fileInput.files[0]);
+                        const res = await fetch(`${API}/payment-methods/upload-icon`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` },
+                            body: fd
+                        });
+                        if (!res.ok) throw new Error('Erro no upload do ícone');
+                        const j = await res.json();
+                        iconPath = j.icon_path;
+                    }
+                    const payload = {
+                        description: document.getElementById('pm_desc').value,
+                        color: document.getElementById('pm_color').value,
+                        is_card: document.getElementById('pm_is_card').checked,
+                        due_day: document.getElementById('pm_is_card').checked ? (parseInt(document.getElementById('pm_due_day').value)||null) : null,
+                        icon_path: iconPath || null,
+                    };
+                    if (pm) {
+                        const updated = await api(`${API}/payment-methods/${pm.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+                        const idx = paymentMethods.findIndex(p => p.id === pm.id);
+                        if (idx >= 0) paymentMethods[idx] = updated;
+                    } else {
+                        const created = await api(`${API}/payment-methods`, { method: 'POST', body: JSON.stringify(payload) });
+                        paymentMethods.push(created);
+                    }
+                    closeModal();
+                    loadSidebarPaymentMethods();
+                    renderPmFilterButtons();
+                } catch(err) {
+                    document.getElementById('pmError').textContent = err.message;
+                    document.getElementById('pmError').classList.remove('hidden');
+                    btn.disabled = false; btn.textContent = 'Salvar';
+                }
+            };
         }
 
         function backToSidebarMenu() {

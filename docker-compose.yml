@@ -33,6 +33,7 @@ services:
       DEBUG: ${DEBUG}
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
+      - icons_library:/app/icons/library
     ports:
       - "${BACKEND_PORT:-8080}:8000"
 
@@ -67,3 +68,4 @@ services:
 
 volumes:
   postgres_data:
+  icons_library:

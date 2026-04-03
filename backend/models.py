@@ -6,10 +6,27 @@ from datetime import datetime, time
 from database import Base
 
 
+class PaymentMethod(Base):
+    """Métodos de pagamento por usuário (cartão, pix, vale, etc.)"""
+    __tablename__ = "payment_methods"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    description   = Column(String(100), nullable=False)
+    color         = Column(String(20))
+    is_card       = Column(Boolean, nullable=False, default=False)
+    icon_path     = Column(String(255))
+    user_id       = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    due_day       = Column(Integer)          # dia de vencimento — só relevante quando is_card = True
+    display_order = Column(Integer, default=0)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
 class User(Base):
     """User model"""
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
@@ -21,12 +38,12 @@ class User(Base):
     display_order = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     # Preferências do usuário
-    preferred_payment_method = Column(String(10), default='pix')   # 'pix' ou 'cartao'
-    invoice_due_day = Column(Integer, default=1)                   # dia de vencimento da fatura (1-31)
+    preferred_payment_method = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
+    preferred_balance_method = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
     preferred_ipca_location = Column(Integer, default=1)           # D1C da tabela ipca (1=Brasil)
     hidden_category_ids = Column(String, default='[]')             # JSON list de category IDs ocultos pelo usuário
     preferred_split_profile_id = Column(Integer, nullable=True)    # perfil de divisão preferencial
-    
+
     # Relationships
     device_tokens = relationship("DeviceToken", back_populates="user", cascade="all, delete-orphan")
     notification_preferences = relationship("NotificationPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -88,15 +105,16 @@ class Expense(Base):
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     split_profile_id = Column(Integer, ForeignKey("split_profiles.id"), nullable=False, index=True)
     notes = Column(String)
-    payment_method = Column(String(10), default='pix')             # 'pix' ou 'cartao'
+    payment_method_id = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
     original_date = Column(Date, nullable=True)                    # data real de lançamento (antes do ajuste de cartão)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_user_id = Column(Integer, ForeignKey("users.id"))
-    
+
     # Relationships com lazy="joined" para eager loading
     paid_by = relationship("User", foreign_keys=[paid_by_user_id], lazy="joined")
     category = relationship("Category", foreign_keys=[category_id], lazy="joined")
     split_profile = relationship("SplitProfile", foreign_keys=[split_profile_id], lazy="joined")
+    payment_method_rel = relationship("PaymentMethod", foreign_keys=[payment_method_id], lazy="joined")
 
 
 class ExpenseSplit(Base):
@@ -173,7 +191,7 @@ class Target(Base):
     emoji          = Column(String(10), nullable=False, default="🎯")
     monthly_amount = Column(Numeric(10, 2), nullable=False, default=0)
     category_ids   = Column(String, nullable=True)   # JSON: "[1,2,3]"
-    payment_methods = Column(String, nullable=True)  # JSON: '["pix","cartao","vale"]' — null = todos
+    payment_methods = Column(String, nullable=True)  # JSON: '[1,2,3]' — IDs de payment_methods; null = todos
     display_mode   = Column(String(20), nullable=False, default="daily")   # 'daily' | 'ticket'
     ticket_months  = Column(Integer, nullable=False, default=6)
     sort_order     = Column(Integer, nullable=False, default=0)
@@ -193,7 +211,7 @@ class RecurringExpense(Base):
     category_id     = Column(Integer, ForeignKey("categories.id"), nullable=False, index=True)
     split_profile_id= Column(Integer, ForeignKey("split_profiles.id"), nullable=False, index=True)
     paid_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    payment_method  = Column(String(10), default='pix')
+    payment_method_id = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
     notes           = Column(String, nullable=True)
     insert_day      = Column(Integer, nullable=True, default=1)   # dia do mês para gerar a despesa
     is_active       = Column(Boolean, nullable=False, default=True)
@@ -201,6 +219,7 @@ class RecurringExpense(Base):
     created_by_user_id   = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
-    category     = relationship("Category",     foreign_keys=[category_id],      lazy="joined")
-    split_profile= relationship("SplitProfile", foreign_keys=[split_profile_id], lazy="joined")
-    paid_by      = relationship("User",         foreign_keys=[paid_by_user_id],  lazy="joined")
+    category       = relationship("Category",      foreign_keys=[category_id],       lazy="joined")
+    split_profile  = relationship("SplitProfile", foreign_keys=[split_profile_id], lazy="joined")
+    paid_by        = relationship("User",          foreign_keys=[paid_by_user_id],   lazy="joined")
+    payment_method_rel = relationship("PaymentMethod", foreign_keys=[payment_method_id], lazy="joined")
