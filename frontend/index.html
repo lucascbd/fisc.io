@@ -7156,9 +7156,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     <input type="file" id="pm_icon_file" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="sr-only">
                                     <input type="hidden" id="pm_icon_path" value="${pm?.icon_path||''}">
                                     <!-- Galeria de ícones -->
-                                    <div id="pm_gallery" class="hidden" style="margin-top:10px;border:1px solid ${inputBorder};border-radius:12px;padding:10px;background:${inputBg};max-height:320px;overflow-y:auto;overflow-x:hidden;">
+                                    <div id="pm_gallery" class="hidden" style="margin-top:10px;border:1px solid ${inputBorder};border-radius:12px;overflow:hidden;background:${inputBg};">
+                                        <div style="padding:10px;max-height:320px;overflow-y:auto;overflow-x:hidden;">
                                         <div id="pm_gallery_grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
                                             <span style="font-size:12px;color:${labelColor};">Carregando...</span>
+                                        </div>
                                         </div>
                                     </div>
                                 </div>
