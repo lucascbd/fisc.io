@@ -3493,7 +3493,7 @@
             container.innerHTML = pms.map(pm => {
                 const isSel = pm.id === selId;
                 const imgHtml = pm.icon_path
-                    ? `<img src="${pm.icon_path}" style="width:22px;height:22px;object-fit:contain;">`
+                    ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">`
                     : `<span style="font-size:1.3rem;">💳</span>`;
                 return `<div onclick="selectPaymentMethod(${pm.id})" id="pm_opt_${pm.id}"
                     class="pm-option flex flex-col items-center justify-center cursor-pointer ${isSel?'selected':''}"
