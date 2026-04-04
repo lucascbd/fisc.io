@@ -8528,7 +8528,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         window._auditData = null;
         window._myUserId  = window._myUserId || null;
 
-        function openAuditModal() {
+        window.openAuditModal = function openAuditModal() {
             const savedScroll = window.pageYOffset || 0;
             document.body.style.top = `-${savedScroll}px`;
             document.body.classList.add('modal-open');
@@ -8663,7 +8663,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             </div>`;
         }
 
-        function selectAuditPm(pmId) {
+        window.selectAuditPm = function selectAuditPm(pmId) {
             window._auditPmId = pmId;
             const isDark = document.body.classList.contains('dark-mode');
             const selBg  = isDark ? '#8ab4f8' : '#e8f0fe';
@@ -8677,7 +8677,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             _auditCheckReady();
         }
 
-        function auditFileSelected(input) {
+        window.auditFileSelected = function auditFileSelected(input) {
             const file = input.files[0];
             if (!file) return;
             window._auditFile = file;
@@ -8686,7 +8686,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             _auditCheckReady();
         }
 
-        function auditHandleDrop(event) {
+        window.auditHandleDrop = function auditHandleDrop(event) {
             event.preventDefault();
             const file = event.dataTransfer.files[0];
             if (!file) return;
@@ -8710,7 +8710,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             btn.style.cursor     = ok ? 'pointer'  : 'not-allowed';
         }
 
-        async function runAudit() {
+        window.runAudit = async function runAudit() {
             if (!window._auditFile || !window._auditPmId) return;
             document.getElementById('auditStep1').style.display = 'none';
             document.getElementById('auditStep2').style.display = 'block';
@@ -8766,7 +8766,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 `(${s.unmatched + (micro > 0 ? 1 : 0)})`;
         }
 
-        function showAuditTab(tab) {
+        window.showAuditTab = function showAuditTab(tab) {
             const isDark = document.body.classList.contains('dark-mode');
             const sub    = isDark ? '#9aa0a6' : '#5f6368';
             const colors = { matched:'#34a853', ambiguous:'#f9ab00', unmatched:'#ea4335' };
@@ -8890,7 +8890,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             }).join('');
         }
 
-        function _auditConfirmAmbig(idx) {
+        window._auditConfirmAmbig = function _auditConfirmAmbig(idx) {
             const sel = document.querySelector(`input[name="ambig_${idx}"]:checked`);
             if (!sel) { alert('Selecione uma opção'); return; }
             const item = window._auditData.ambiguous[idx];
@@ -9020,7 +9020,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (el) el.style.display = 'none';
         }
 
-        async function _auditAdd(idx) {
+        window._auditAdd = async function _auditAdd(idx) {
             const catId  = parseInt(document.getElementById(`uc_${idx}`)?.value);
             const profId = parseInt(document.getElementById(`up_${idx}`)?.value);
             const userId = parseInt(document.getElementById(`uu_${idx}`)?.value);
@@ -9062,7 +9062,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             } catch(e) { alert(e.message || 'Erro ao adicionar'); }
         }
 
-        async function _auditAddMicro() {
+        window._auditAddMicro = async function _auditAddMicro() {
             const catId  = parseInt(document.getElementById('microCat')?.value);
             const profId = parseInt(document.getElementById('microProf')?.value);
             const userId = parseInt(document.getElementById('microUser')?.value);
@@ -9098,7 +9098,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             } catch(e) { alert(e.message || 'Erro'); }
         }
 
-        function auditReset() {
+        window.auditReset = function auditReset() {
             window._auditFile = null;
             window._auditPmId = null;
             window._auditData = null;
