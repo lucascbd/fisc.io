@@ -5362,22 +5362,21 @@
                 // Coletar categorias e tipos que existem nos meses selecionados
                 const _catSet = new Set();
                 let _hasIndividual = false, _hasShared = false;
-                for (const m of _months) {
-                    try {
-                        const { expenses: _ex } = await fetchExpensesWithCache(m);
-                        const [_y, _n] = m.split('-').map(Number);
-                        for (const ex of _ex) {
-                            const splitsInMonth = ex.splits.filter(s => {
-                                const d = new Date(s.due_date + 'T00:00:00');
-                                return d.getFullYear() === _y && d.getMonth() + 1 === _n;
-                            });
-                            if (!splitsInMonth.length) continue;
-                            _catSet.add(ex.category_id);
-                            const us = new Set(splitsInMonth.map(s => s.user_id));
-                            if (us.size > 1 || (us.size === 1 && !us.has(user.id))) _hasShared = true;
-                            else _hasIndividual = true;
-                        }
-                    } catch(e) {}
+                const _allMonthExp = await Promise.all(_months.map(m => fetchMonthExpenses(m).catch(() => [])));
+                for (let _mi = 0; _mi < _months.length; _mi++) {
+                    const m = _months[_mi];
+                    const [_y, _n] = m.split('-').map(Number);
+                    for (const ex of _allMonthExp[_mi]) {
+                        const splitsInMonth = ex.splits.filter(s => {
+                            const d = new Date(s.due_date + 'T00:00:00');
+                            return d.getFullYear() === _y && d.getMonth() + 1 === _n;
+                        });
+                        if (!splitsInMonth.length) continue;
+                        _catSet.add(ex.category_id);
+                        const us = new Set(splitsInMonth.map(s => s.user_id));
+                        if (us.size > 1 || (us.size === 1 && !us.has(user.id))) _hasShared = true;
+                        else _hasIndividual = true;
+                    }
                 }
 
                 // Categorias disponíveis no período
@@ -5952,11 +5951,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const userIdSet = new Set();
             const catIdSet = new Set();
 
-            for (const month of selectedMonths) {
-                const { expenses } = await fetchExpensesWithCache(month);
-                const [year, mon] = month.split('-').map(Number);
+            const _prefetched = await Promise.all(selectedMonths.map(m => fetchMonthExpenses(m)));
+            const _expByMonth = Object.fromEntries(selectedMonths.map((m, i) => [m, _prefetched[i]]));
 
-                for (const expense of expenses) {
+            for (const month of selectedMonths) {
+                const [year, mon] = month.split('-').map(Number);
+                for (const expense of _expByMonth[month]) {
                     for (const split of expense.splits) {
                         const d = new Date(split.due_date + 'T00:00:00');
                         if (d.getFullYear() === year && d.getMonth() + 1 === mon) {
@@ -6000,14 +6000,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const ufContainer=document.getElementById('userFilterContainer');
             if(ufContainer){
                 let hasShared=false;
-                for(const month of selectedMonths){
-                    const {expenses:exps}=await fetchExpensesWithCache(month);
+                outer: for(const month of selectedMonths){
                     const [yr,mn]=month.split('-').map(Number);
-                    for(const ex of exps){
+                    for(const ex of _expByMonth[month]){
                         const us=new Set(ex.splits.filter(s=>{const d=new Date(s.due_date+'T00:00:00');return d.getFullYear()===yr&&d.getMonth()+1===mn;}).map(s=>s.user_id));
-                        if(us.size>1||(us.size===1&&!us.has(user.id))){hasShared=true;break;}
+                        if(us.size>1||(us.size===1&&!us.has(user.id))){hasShared=true;break outer;}
                     }
-                    if(hasShared)break;
                 }
                 ufContainer.innerHTML=`
                     <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${barExpTypeFilter.includes('individual')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
