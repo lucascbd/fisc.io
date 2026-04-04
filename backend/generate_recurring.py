@@ -67,7 +67,7 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
                 expense_date=expense_date,
                 installments=1,
                 notes=r.notes,
-                payment_method=r.payment_method,
+                payment_method_id=r.payment_method_id,
                 created_by_user_id=r.created_by_user_id,
             )
             r.last_generated_month = current_month_str
