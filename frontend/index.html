@@ -7199,7 +7199,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 </div>
                                 <div class="flex items-center gap-3 p-3 rounded-lg" style="background:${checkboxBg};">
                                     <input type="checkbox" id="pm_is_card" class="w-5 h-5" style="accent-color:#1a73e8;" ${pm?.is_card?'checked':''} onchange="document.getElementById('pm_due_row').classList.toggle('hidden',!this.checked)">
-                                    <label for="pm_is_card" style="color:${textColor};">É cartão de crédito?</label>
+                                    <label for="pm_is_card" style="color:${textColor};">Cartão de crédito</label>
                                 </div>
                                 <div id="pm_due_row" class="${pm?.is_card?'':'hidden'}">
                                     <label class="block text-sm font-medium mb-2" style="color:${labelColor};">Dia de vencimento (1–31)</label>
