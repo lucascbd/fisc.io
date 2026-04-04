@@ -2,15 +2,15 @@
 Audit service: reconcile bank CSV/OFX files against DB expenses.
 
 Supported formats:
-  - CSV: data,lançamento,valor  (credit card export)
-  - OFX: SGML format            (checking account export)
+  - CSV: configurable columns (date, description, amount)
+  - OFX: SGML format (checking account export)
 """
 import re
 import io
 import csv
 import unicodedata
-from datetime import date
-from decimal import Decimal
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
 from difflib import SequenceMatcher
@@ -24,18 +24,18 @@ from models import Expense, ExpenseSplit
 # ── Thresholds & constants ────────────────────────────────────────────────────
 MICRO_THRESHOLD  = Decimal('0.10')   # |amount| below this → micro-adjustment
 SIM_AUTO_MATCH   = 0.68              # similarity >= this + date_ok → matched
-SIM_AMBIGUOUS    = 0.38              # similarity below this → discard candidate
+SIM_AMBIGUOUS    = 0.20              # similarity below this → discard candidate
 DATE_WINDOW_REG  = 7                 # days tolerance for regular expenses
 DATE_WINDOW_PAR  = 35                # days tolerance for installment parcels
 
-# OFX: MEMO patterns to silently skip (investment/internal transactions)
+# OFX: MEMO/NAME patterns to silently skip (investment/internal transactions)
 OFX_SKIP = [
     'REND PAGO APLIC AUT MAIS',
     'APLICACAO CDB DI',
     'RESGATE CDB DI',
-    'ITAU BLACK',          # credit card bill payment from checking
-    'CREDITO LIBERAD',     # internal PIX card credit rebate
-    'PIX ORIGEM CARTAO',   # internal PIX card credit rebate
+    'ITAU BLACK',
+    'CREDITO LIBERAD',
+    'PIX ORIGEM CARTAO',
 ]
 
 # CSV: description patterns to silently skip
@@ -45,6 +45,9 @@ CSV_SKIP = [
 
 # ── Parcel regex: NN/NN at end of description ─────────────────────────────────
 _PARCEL_RE = re.compile(r'\s*(\d{2})/(\d{2})$')
+
+# ── Date formats to try when parsing ─────────────────────────────────────────
+_DATE_FMTS = ['%Y-%m-%d', '%d/%m/%Y', '%d/%m/%y', '%m/%d/%Y', '%Y%m%d']
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -90,10 +93,44 @@ def _parse_parcel(desc: str) -> Tuple[str, Optional[int], Optional[int]]:
     if not m:
         return desc.strip(), None, None
     num, total = int(m.group(1)), int(m.group(2))
-    # Sanity check: parcel number ≤ total and both > 0
     if num < 1 or total < 1 or num > total:
         return desc.strip(), None, None
     return desc[:m.start()].strip(), num, total
+
+
+def _parse_date(val: str) -> Optional[date]:
+    val = val.strip()
+    for fmt in _DATE_FMTS:
+        try:
+            return datetime.strptime(val, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_amount(val: str) -> Optional[Decimal]:
+    """Parse Brazilian/international amount string."""
+    val = val.strip()
+    # Remove currency symbol and whitespace
+    val = re.sub(r'[R$\s]', '', val)
+    # Remove trailing D/C (débito/crédito markers)
+    val = re.sub(r'[DdCc]$', '', val)
+    val = val.strip()
+    if not val:
+        return None
+    # Handle negative in parentheses: (1.234,56) → -1234.56
+    negative = val.startswith('-') or (val.startswith('(') and val.endswith(')'))
+    val = val.strip('-()').strip()
+    # Brazilian format: 1.234,56 (dot=thousands, comma=decimal)
+    if ',' in val and '.' in val:
+        val = val.replace('.', '').replace(',', '.')
+    elif ',' in val:
+        val = val.replace(',', '.')
+    try:
+        result = Decimal(val)
+        return -result if negative else result
+    except InvalidOperation:
+        return None
 
 
 def _txn_dict(txn: FileTxn) -> dict:
@@ -120,36 +157,94 @@ def _exp_dict(exp: Expense) -> dict:
     }
 
 
+# ── CSV helpers ───────────────────────────────────────────────────────────────
+def detect_csv_headers(content: str) -> List[str]:
+    """Return the list of column headers from the first CSV line."""
+    first_line = content.strip().splitlines()[0] if content.strip() else ''
+    # Try comma, then semicolon
+    for sep in [',', ';', '\t']:
+        parts = first_line.split(sep)
+        if len(parts) >= 2:
+            return [p.strip().strip('"') for p in parts]
+    return []
+
+
+def _best_col(headers: List[str], keywords: List[str]) -> Optional[str]:
+    """Auto-select column header best matching the given keywords."""
+    norm_headers = [_strip_accents(h).lower().strip() for h in headers]
+    for kw in keywords:
+        for i, nh in enumerate(norm_headers):
+            if kw in nh:
+                return headers[i]
+    return headers[0] if headers else None
+
+
 # ── CSV parser ────────────────────────────────────────────────────────────────
-def parse_csv(content: str) -> Tuple[List[FileTxn], int]:
-    """Parse credit card CSV (data,lançamento,valor)."""
+def parse_csv(
+    content: str,
+    col_date:   Optional[str] = None,
+    col_desc:   Optional[str] = None,
+    col_amount: Optional[str] = None,
+    negate:     bool = False,
+) -> Tuple[List[FileTxn], int]:
+    """
+    Parse credit card CSV.
+    If column names are not provided, auto-detect from headers.
+    """
     txns: List[FileTxn] = []
     silent = 0
 
+    headers = detect_csv_headers(content)
+    norm_headers = {_strip_accents(h).lower().strip(): h for h in headers}
+
+    # Auto-detect if not provided
+    if not col_date:
+        col_date = _best_col(headers, ['data', 'date', 'dt'])
+    if not col_desc:
+        col_desc = _best_col(headers, ['lancamento', 'descricao', 'historico', 'desc', 'nome', 'memorial'])
+    if not col_amount:
+        col_amount = _best_col(headers, ['valor', 'value', 'amount', 'vl ', 'vlr', 'montante'])
+
+    # Build normalized lookup key for each requested column
+    def _find_key(requested: str) -> Optional[str]:
+        if not requested:
+            return None
+        norm = _strip_accents(requested).lower().strip()
+        return norm if norm in norm_headers else None
+
+    key_date   = _find_key(col_date)
+    key_desc   = _find_key(col_desc)
+    key_amount = _find_key(col_amount)
+
     reader = csv.DictReader(io.StringIO(content))
     for row in reader:
-        # Normalize field names (handles 'lançamento' with accent)
         row_n = {_strip_accents(k).lower().strip(): v.strip() for k, v in row.items()}
-        desc_raw = row_n.get('lancamento', '')
-        date_str = row_n.get('data', '')
-        val_str  = row_n.get('valor', '')
 
-        if not desc_raw or not date_str or not val_str:
+        date_str = row_n.get(key_date, '')   if key_date   else ''
+        desc_raw = row_n.get(key_desc, '')   if key_desc   else ''
+        val_str  = row_n.get(key_amount, '') if key_amount else ''
+
+        if not date_str and not desc_raw and not val_str:
             continue
 
-        try:
-            txn_date = date.fromisoformat(date_str)
-        except ValueError:
+        txn_date = _parse_date(date_str)
+        if txn_date is None:
             continue
 
-        try:
-            amount = Decimal(val_str.replace(',', '.'))
-        except Exception:
+        amount = _parse_amount(val_str)
+        if amount is None:
             continue
+
+        if negate:
+            amount = -amount
 
         # Silent filter
         if any(k.lower() in desc_raw.lower() for k in CSV_SKIP):
             silent += 1
+            continue
+
+        # Skip zero-amount rows
+        if amount == 0:
             continue
 
         is_micro = abs(amount) < MICRO_THRESHOLD
@@ -157,7 +252,7 @@ def parse_csv(content: str) -> Tuple[List[FileTxn], int]:
 
         txns.append(FileTxn(
             txn_date=txn_date, description=base, amount=amount,
-            raw_line=f"{date_str},{desc_raw},{val_str}",
+            raw_line=f"{date_str} | {desc_raw} | {val_str}",
             parcel_num=pnum, parcel_total=ptotal, is_micro=is_micro,
         ))
 
@@ -174,18 +269,33 @@ def parse_ofx(content: str) -> Tuple[List[FileTxn], int]:
         m = re.search(rf'<{name}>\s*([^\n<]+)', block)
         return m.group(1).strip() if m else ''
 
-    blocks = re.findall(r'<STMTTRN>(.*?)</STMTTRN>', content, re.DOTALL)
+    blocks = re.findall(r'<STMTTRN>(.*?)</STMTTRN>', content, re.DOTALL | re.IGNORECASE)
 
     for block in blocks:
-        memo     = _tag(block, 'MEMO')
+        memo     = _tag(block, 'MEMO') or _tag(block, 'NAME')
         date_str = _tag(block, 'DTPOSTED')[:8]   # YYYYMMDD
         amt_str  = _tag(block, 'TRNAMT')
         fitid    = _tag(block, 'FITID')
 
-        try:
-            txn_date = date(int(date_str[:4]), int(date_str[4:6]), int(date_str[6:8]))
-            ofx_amt  = Decimal(amt_str)
-        except Exception:
+        # Combine NAME + MEMO when both present and different
+        name_val = _tag(block, 'NAME')
+        memo_val = _tag(block, 'MEMO')
+        if name_val and memo_val and _normalize(name_val) != _normalize(memo_val):
+            memo = f"{name_val} {memo_val}"
+        elif name_val:
+            memo = name_val
+        elif memo_val:
+            memo = memo_val
+
+        if not memo or not date_str or not amt_str:
+            continue
+
+        txn_date = _parse_date(date_str)
+        if txn_date is None:
+            continue
+
+        ofx_amt = _parse_amount(amt_str)
+        if ofx_amt is None:
             continue
 
         # Silent filter
@@ -194,8 +304,11 @@ def parse_ofx(content: str) -> Tuple[List[FileTxn], int]:
             continue
 
         # OFX sign convention: DEBIT = negative (expense), CREDIT = positive (income)
-        # We flip: expense = positive, income = negative
         expense_amount = -ofx_amt
+
+        # Skip zero-amount rows
+        if expense_amount == 0:
+            continue
 
         is_micro = abs(expense_amount) < MICRO_THRESHOLD
         base, pnum, ptotal = _parse_parcel(memo)
@@ -217,14 +330,13 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
     """
     result = AuditResult()
 
-    # Load all expenses for this PM
     expenses: List[Expense] = (
         db.query(Expense)
         .filter(Expense.payment_method_id == payment_method_id)
         .all()
     )
 
-    # Pre-load splits only for installment expenses (avoid N+1)
+    # Pre-load splits for installment expenses
     inst_ids = [e.id for e in expenses if e.installments > 1]
     splits_by_exp: Dict[int, List[ExpenseSplit]] = defaultdict(list)
     if inst_ids:
@@ -234,9 +346,8 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
             splits_by_exp[s.expense_id].append(s)
 
     # Parcel cache: (norm_base_desc, parcel_total) → expense_id
-    # When parcel N/M is auto-matched, subsequent parcels skip scoring
     parcel_cache: Dict[Tuple[str, int], int] = {}
-    used_ids: set = set()    # prevent double-matching same DB expense
+    used_ids: set = set()
 
     for txn in txns:
         # ── Micro-adjustments ─────────────────────────────────────────────
@@ -265,7 +376,6 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
             if exp.id in used_ids:
                 continue
 
-            # ── Amount check ──────────────────────────────────────────────
             is_parcel_match = (
                 txn.parcel_num and txn.parcel_total
                 and exp.installments == txn.parcel_total
@@ -279,18 +389,16 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
                     continue
                 if abs(float(sp.installment_amount) - file_amount) > 0.02:
                     continue
-                # Date window: purchase_date + (parcel_num-1) months ≈ txn_date
                 expected = exp.expense_date + relativedelta(months=txn.parcel_num - 1)
                 date_ok = abs((txn.txn_date - expected).days) <= DATE_WINDOW_PAR
             else:
                 exp_amt = float(exp.total_amount)
                 if exp_amt <= 0:
                     continue
-                if abs(exp_amt - file_amount) / exp_amt > 0.02:
+                if abs(exp_amt - file_amount) / max(exp_amt, file_amount) > 0.02:
                     continue
                 date_ok = abs((txn.txn_date - exp.expense_date).days) <= DATE_WINDOW_REG
 
-            # ── Similarity ────────────────────────────────────────────────
             sim = _sim(txn.description, exp.description)
             if sim < SIM_AMBIGUOUS:
                 continue
@@ -304,7 +412,6 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
         # Sort: date_ok first, then similarity descending
         candidates.sort(key=lambda x: (x['date_ok'], x['similarity']), reverse=True)
 
-        # ── Classify ──────────────────────────────────────────────────────
         if not candidates:
             result.unmatched.append({'file': _txn_dict(txn)})
 
@@ -313,7 +420,6 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
             best = candidates[0]
             exp_id = best['expense']['id']
             used_ids.add(exp_id)
-            # Populate parcel cache for subsequent parcels
             if txn.parcel_num and txn.parcel_total:
                 cache_key = (_normalize(txn.description), txn.parcel_total)
                 parcel_cache[cache_key] = exp_id
@@ -324,7 +430,6 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
             })
 
         else:
-            # Multiple candidates, low similarity, or date mismatch → ambiguous
             result.ambiguous.append({
                 'file':       _txn_dict(txn),
                 'candidates': candidates[:5],

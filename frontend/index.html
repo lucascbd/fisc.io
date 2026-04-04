@@ -8523,10 +8523,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         // ====================================================================
         // AUDIT MODAL
         // ====================================================================
-        window._auditFile = null;
-        window._auditPmId = null;
-        window._auditData = null;
-        window._myUserId  = window._myUserId || null;
+        window._auditFile     = null;
+        window._auditPmId     = null;
+        window._auditData     = null;
+        window._myUserId      = window._myUserId || null;
+        window._auditColDate  = null;
+        window._auditColDesc  = null;
+        window._auditColAmount= null;
+        window._auditNegate   = false;
 
         window.openAuditModal = function openAuditModal() {
             const savedScroll = window.pageYOffset || 0;
@@ -8594,6 +8598,39 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                   </div>
                   <input type="file" id="auditFileInput" accept=".csv,.ofx"
                          style="display:none;" onchange="auditFileSelected(this)">
+
+                  <!-- CSV column mapping (shown only for .csv files) -->
+                  <div id="auditCsvMapping" style="display:none;margin-bottom:20px;
+                       border:1px solid ${border};border-radius:10px;padding:14px;">
+                    <div style="font-size:0.82rem;font-weight:600;color:${txt};margin-bottom:12px;">
+                      📋 Colunas do CSV</div>
+                    <div style="display:grid;gap:10px;">
+                      <div style="display:grid;grid-template-columns:100px 1fr;align-items:center;gap:8px;">
+                        <label style="font-size:0.8rem;color:${sub};">Data</label>
+                        <select id="auditColDate" onchange="window._auditColDate=this.value"
+                          style="padding:6px 8px;border:1px solid ${border};border-radius:6px;
+                                 background:${cardBg};color:${txt};font-size:0.82rem;"></select>
+                      </div>
+                      <div style="display:grid;grid-template-columns:100px 1fr;align-items:center;gap:8px;">
+                        <label style="font-size:0.8rem;color:${sub};">Descrição</label>
+                        <select id="auditColDesc" onchange="window._auditColDesc=this.value"
+                          style="padding:6px 8px;border:1px solid ${border};border-radius:6px;
+                                 background:${cardBg};color:${txt};font-size:0.82rem;"></select>
+                      </div>
+                      <div style="display:grid;grid-template-columns:100px 1fr;align-items:center;gap:8px;">
+                        <label style="font-size:0.8rem;color:${sub};">Valor</label>
+                        <select id="auditColAmount" onchange="window._auditColAmount=this.value"
+                          style="padding:6px 8px;border:1px solid ${border};border-radius:6px;
+                                 background:${cardBg};color:${txt};font-size:0.82rem;"></select>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:8px;padding-top:2px;">
+                        <input type="checkbox" id="auditNegate"
+                               onchange="window._auditNegate=this.checked" style="cursor:pointer;">
+                        <label for="auditNegate" style="font-size:0.8rem;color:${sub};cursor:pointer;">
+                          Inverter sinal (despesas estão como negativo no arquivo)</label>
+                      </div>
+                    </div>
+                  </div>
 
                   <div style="margin-bottom:20px;">
                     <div style="font-size:0.82rem;font-weight:500;color:${sub};margin-bottom:10px;">
@@ -8686,7 +8723,45 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             window._auditFile = file;
             document.getElementById('auditFileName').textContent = `📄 ${file.name}`;
             document.getElementById('auditDropZone').style.borderColor = '#1a73e8';
+            const isCsv = file.name.toLowerCase().endsWith('.csv');
+            const mapDiv = document.getElementById('auditCsvMapping');
+            if (mapDiv) mapDiv.style.display = isCsv ? 'block' : 'none';
+            if (isCsv) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const firstLine = (e.target.result || '').split('\n')[0];
+                    const sep = firstLine.includes(';') ? ';' : ',';
+                    const headers = firstLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+                    _auditPopulateCsvCols(headers);
+                };
+                reader.readAsText(file, 'utf-8');
+            }
             _auditCheckReady();
+        }
+
+        function _auditPopulateCsvCols(headers) {
+            const stripAcc = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            const opts = headers.map(h => `<option value="${h}">${h}</option>`).join('');
+            ['auditColDate','auditColDesc','auditColAmount'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = opts;
+            });
+            const trySelect = (elId, keywords) => {
+                const el = document.getElementById(elId);
+                if (!el) return;
+                const match = headers.find(h => keywords.some(k => stripAcc(h).includes(k)));
+                if (match) el.value = match;
+            };
+            trySelect('auditColDate',   ['data','date','dt']);
+            trySelect('auditColDesc',   ['lancamento','descricao','historico','desc','nome','memorial']);
+            trySelect('auditColAmount', ['valor','value','amount','vl','vlr','montante']);
+            // Sync to window vars
+            const d = document.getElementById('auditColDate');
+            const s = document.getElementById('auditColDesc');
+            const a = document.getElementById('auditColAmount');
+            window._auditColDate   = d ? d.value : null;
+            window._auditColDesc   = s ? s.value : null;
+            window._auditColAmount = a ? a.value : null;
         }
 
         window.auditHandleDrop = function auditHandleDrop(event) {
@@ -8701,6 +8776,20 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 dt.items.add(file);
                 document.getElementById('auditFileInput').files = dt.files;
             } catch(e) {}
+            // Trigger same CSV-detection logic as file input
+            const isCsv = file.name.toLowerCase().endsWith('.csv');
+            const mapDiv = document.getElementById('auditCsvMapping');
+            if (mapDiv) mapDiv.style.display = isCsv ? 'block' : 'none';
+            if (isCsv) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const firstLine = (e.target.result || '').split('\n')[0];
+                    const sep = firstLine.includes(';') ? ';' : ',';
+                    const headers = firstLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+                    _auditPopulateCsvCols(headers);
+                };
+                reader.readAsText(file, 'utf-8');
+            }
             _auditCheckReady();
         }
 
@@ -8721,6 +8810,17 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const fd = new FormData();
                 fd.append('file', window._auditFile);
                 fd.append('payment_method_id', window._auditPmId);
+                // CSV column mapping (read live from selects in case user changed them)
+                if (window._auditFile.name.toLowerCase().endsWith('.csv')) {
+                    const dEl = document.getElementById('auditColDate');
+                    const sEl = document.getElementById('auditColDesc');
+                    const aEl = document.getElementById('auditColAmount');
+                    const nEl = document.getElementById('auditNegate');
+                    if (dEl && dEl.value) fd.append('col_date',   dEl.value);
+                    if (sEl && sEl.value) fd.append('col_desc',   sEl.value);
+                    if (aEl && aEl.value) fd.append('col_amount', aEl.value);
+                    fd.append('negate_amount', (nEl && nEl.checked) ? 'true' : 'false');
+                }
                 const token = localStorage.getItem('token');
                 const res = await fetch(`${API}/audit/analyze`, {
                     method: 'POST',

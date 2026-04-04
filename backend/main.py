@@ -2705,12 +2705,28 @@ async def get_target_stats(
 # AUDIT ENDPOINT — reconcile CSV/OFX bank files against DB expenses
 # ============================================================================
 
-from audit_service import parse_csv, parse_ofx, match_transactions as _audit_match
+from audit_service import parse_csv, parse_ofx, match_transactions as _audit_match, detect_csv_headers
+
+@app.get(f"{settings.API_V1_PREFIX}/audit/csv-headers")
+async def audit_csv_headers(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    content = await file.read()
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        text = content.decode('latin-1')
+    return {"headers": detect_csv_headers(text)}
 
 @app.post(f"{settings.API_V1_PREFIX}/audit/analyze")
 async def audit_analyze(
     file: UploadFile = File(...),
     payment_method_id: int = Form(...),
+    col_date:   Optional[str] = Form(None),
+    col_desc:   Optional[str] = Form(None),
+    col_amount: Optional[str] = Form(None),
+    negate_amount: str = Form('false'),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -2723,7 +2739,13 @@ async def audit_analyze(
 
     fname = (file.filename or '').lower()
     if fname.endswith('.csv'):
-        txns, silent = parse_csv(text)
+        txns, silent = parse_csv(
+            text,
+            col_date=col_date or None,
+            col_desc=col_desc or None,
+            col_amount=col_amount or None,
+            negate=negate_amount.lower() == 'true',
+        )
     elif fname.endswith('.ofx'):
         txns, silent = parse_ofx(text)
     else:
