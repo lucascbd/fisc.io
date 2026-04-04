@@ -3509,41 +3509,24 @@
             }).join('');
         }
 
-        // Função para selecionar método de pagamento no modal de usuário
-        function selectUserPayment(pmId) {
-            pmId = parseInt(pmId);
-            const inp = document.getElementById('usr_payment_value');
-            if (inp) inp.value = pmId;
+        function _selectUserPmButtons(pmId, inputId, btnClass) {
+            const inp = document.getElementById(inputId);
+            if (inp) inp.value = pmId ?? '';
             const isDark = document.body.classList.contains('dark-mode');
             const selBg     = isDark ? '#8ab4f8' : '#e8f0fe';
             const selBorder = isDark ? '#8ab4f8' : '#1a73e8';
             const defBg     = isDark ? '#3c4043' : '#f8f9fa';
-            document.querySelectorAll('.usr-pay-btn').forEach(el => {
-                const active = parseInt(el.dataset.pmId) === pmId;
+            document.querySelectorAll(`.${btnClass}`).forEach(el => {
+                const id = el.dataset.pmId ? parseInt(el.dataset.pmId) : null;
+                const active = id === pmId;
                 el.classList.toggle('selected', active);
-                el.style.background  = active ? selBg : defBg;
-                el.style.border      = `2px solid ${active ? selBorder : 'transparent'}`;
-                el.style.boxShadow   = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
+                el.style.background = active ? selBg : defBg;
+                el.style.border     = `2px solid ${active ? selBorder : 'transparent'}`;
+                el.style.boxShadow  = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
             });
         }
-
-        function selectUserBalance(pmId) {
-            pmId = pmId ? parseInt(pmId) : null;
-            const inp = document.getElementById('usr_balance_method');
-            if (inp) inp.value = pmId || '';
-            const isDark = document.body.classList.contains('dark-mode');
-            const selBg     = isDark ? '#8ab4f8' : '#e8f0fe';
-            const selBorder = isDark ? '#8ab4f8' : '#1a73e8';
-            const defBg     = isDark ? '#3c4043' : '#f8f9fa';
-            document.querySelectorAll('.usr-bal-btn').forEach(el => {
-                const btnPmId = el.dataset.pmId ? parseInt(el.dataset.pmId) : null;
-                const active = btnPmId === pmId;
-                el.classList.toggle('selected', active);
-                el.style.background  = active ? selBg : defBg;
-                el.style.border      = `2px solid ${active ? selBorder : 'transparent'}`;
-                el.style.boxShadow   = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
-            });
-        }
+        function selectUserPayment(pmId) { _selectUserPmButtons(parseInt(pmId), 'usr_payment_value', 'usr-pay-btn'); }
+        function selectUserBalance(pmId) { _selectUserPmButtons(pmId ? parseInt(pmId) : null, 'usr_balance_method', 'usr-bal-btn'); }
 
         // Função para selecionar método de pagamento no modal de despesas
         function selectPaymentMethod(pmId) {
@@ -7250,7 +7233,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     document.getElementById('pm_gallery_grid').innerHTML = sorted.map(path => {
                         const isSelected = document.getElementById('pm_icon_path').value === path;
                         const delBadge = user.is_admin
-                            ? `<div id="gallery_del_${btoa(path).replace(/[+=\/]/g,'_')}" class="gallery-del-badge"
+                            ? `<div id="gallery_del_${_galleryPathId(path)}" class="gallery-del-badge"
                                 onclick="deletePmGalleryIcon(event,'${path}')"
                                 style="display:none;position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#d93025;color:white;font-size:11px;font-weight:700;align-items:center;justify-content:center;cursor:pointer;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;">✕</div>`
                             : '';
@@ -7258,7 +7241,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             ? `onmousedown="startGalleryLongPress('${path}')" onmouseup="cancelGalleryLongPress()" onmouseleave="cancelGalleryLongPress()" ontouchstart="startGalleryLongPress('${path}')" ontouchend="cancelGalleryLongPress()" ontouchmove="cancelGalleryLongPress()"`
                             : '';
                         return `<div style="position:relative;padding:5px;">
-                            <div onclick="selectPmGalleryIcon('${path}')" id="gallery_${btoa(path).replace(/[+=\/]/g,'_')}"
+                            <div onclick="selectPmGalleryIcon('${path}')" id="gallery_${_galleryPathId(path)}"
                                 ${longPressAttrs}
                                 style="height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border .15s;user-select:none;">
                                 <img src="${path}" style="width:34px;height:34px;object-fit:contain;pointer-events:none;">
@@ -7268,20 +7251,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }).join('');
                 } catch(e) { document.getElementById('pm_gallery_grid').innerHTML = '<span style="font-size:12px;color:#d93025;">Erro ao carregar</span>'; }
             };
-            let _pmLongPressTimer = null;
+            const _galleryPathId = path => btoa(path).replace(/[+=\/]/g, '_');
+            window._pmLongPressTimer = window._pmLongPressTimer ?? null;
             window.startGalleryLongPress = function(path) {
-                _pmLongPressTimer = setTimeout(() => {
-                    _pmLongPressTimer = null;
+                window._pmLongPressTimer = setTimeout(() => {
+                    window._pmLongPressTimer = null;
                     _exitGalleryJiggle();
-                    const iconEl = document.getElementById('gallery_' + btoa(path).replace(/[+=\/]/g,'_'));
+                    const iconEl = document.getElementById('gallery_' + _galleryPathId(path));
                     if (iconEl) iconEl.classList.add('gallery-jiggling');
-                    const badgeEl = document.getElementById('gallery_del_' + btoa(path).replace(/[+=\/]/g,'_'));
+                    const badgeEl = document.getElementById('gallery_del_' + _galleryPathId(path));
                     if (badgeEl) badgeEl.style.display = 'flex';
                     setTimeout(() => document.addEventListener('click', _exitGalleryJiggle, { once: true }), 10);
                 }, 600);
             };
             window.cancelGalleryLongPress = function() {
-                if (_pmLongPressTimer) { clearTimeout(_pmLongPressTimer); _pmLongPressTimer = null; }
+                if (window._pmLongPressTimer) { clearTimeout(window._pmLongPressTimer); window._pmLongPressTimer = null; }
             };
             window._exitGalleryJiggle = function() {
                 document.querySelectorAll('.gallery-jiggling').forEach(el => el.classList.remove('gallery-jiggling'));
@@ -7308,7 +7292,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // highlight selected
                 const isDark2 = document.body.classList.contains('dark-mode');
                 document.querySelectorAll('#pm_gallery_grid [id^="gallery_"]').forEach(el => {
-                    const active = el.id === `gallery_${btoa(path).replace(/[+=\/]/g,'_')}`;
+                    const active = el.id === `gallery_${_galleryPathId(path)}`;
                     el.style.border = `2px solid ${active ? (isDark2?'#8ab4f8':'#1a73e8') : 'transparent'}`;
                 });
             };

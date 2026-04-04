@@ -11,6 +11,7 @@ from typing import List, Optional
 import json
 import os
 import uuid
+import glob
 import calendar
 from pydantic import BaseModel
 import bcrypt
@@ -612,6 +613,23 @@ def _pm_dict(pm: "PaymentMethod | None") -> dict:
         "user_id": pm.user_id,
         "display_order": pm.display_order,
     }
+
+
+def _shift_card_date(expense_date: date, pm: "PaymentMethod") -> date:
+    """If expense date is past the card closing window, shift it to next billing month."""
+    if not (pm and pm.is_card and pm.due_day):
+        return expense_date
+    due_day = pm.due_day
+    if expense_date.month == 12:
+        next_due = expense_date.replace(year=expense_date.year + 1, month=1, day=due_day)
+    else:
+        max_next = calendar.monthrange(expense_date.year, expense_date.month + 1)[1]
+        next_due = expense_date.replace(month=expense_date.month + 1, day=min(due_day, max_next))
+    closing = next_due - timedelta(days=7)
+    if expense_date > closing:
+        max_day = calendar.monthrange(next_due.year, next_due.month)[1]
+        return expense_date.replace(year=next_due.year, month=next_due.month, day=min(expense_date.day, max_day))
+    return expense_date
 
 def _recurring_dict(r: RecurringExpense) -> dict:
     pm = r.payment_method_rel
@@ -1225,9 +1243,8 @@ async def delete_payment_method(
 @app.get(f"{settings.API_V1_PREFIX}/payment-methods/icons-library")
 def list_icons_library(current_user: User = Depends(get_current_user)):
     """List all icons: bundled library + user uploads."""
-    import glob as _glob
-    lib = sorted(_glob.glob("/app/icons/library/*"))
-    uploads = sorted(_glob.glob("/app/icons/uploads/*"))
+    lib = sorted(glob.glob("/app/icons/library/*"))
+    uploads = sorted(glob.glob("/app/icons/uploads/*"))
     icons = [f"/icons/library/{os.path.basename(f)}" for f in lib] + \
             [f"/icons/uploads/{os.path.basename(f)}" for f in uploads]
     return {"icons": icons}
@@ -1240,10 +1257,11 @@ async def delete_library_icon(filename: str, current_user: User = Depends(get_cu
     safe_name = os.path.basename(filename)
     # Try uploads first, then bundled library
     for directory in ("/app/icons/uploads", "/app/icons/library"):
-        path = os.path.join(directory, safe_name)
-        if os.path.exists(path):
-            os.remove(path)
+        try:
+            os.remove(os.path.join(directory, safe_name))
             return {"message": "Deleted"}
+        except FileNotFoundError:
+            continue
     raise HTTPException(status_code=404, detail="Icon not found")
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/upload-icon")
@@ -1256,7 +1274,6 @@ async def upload_payment_method_icon(
         raise HTTPException(status_code=400, detail="Apenas imagens são permitidas")
     ext = os.path.splitext(file.filename or "icon.png")[1] or ".png"
     filename = f"{uuid.uuid4().hex}{ext}"
-    os.makedirs("/app/icons/uploads", exist_ok=True)
     dest = f"/app/icons/uploads/{filename}"
     contents = await file.read()
     with open(dest, "wb") as f:
@@ -1582,9 +1599,10 @@ async def list_expenses(
     query = db.query(Expense).options(
         joinedload(Expense.paid_by),
         joinedload(Expense.category),
-        joinedload(Expense.split_profile)
+        joinedload(Expense.split_profile),
+        joinedload(Expense.payment_method_rel),
     )
-    
+
     # Filtro de visibilidade: usuário só vê despesas em que está envolvido
     vis = visible_expense_ids_subquery(db, current_user)
     query = query.filter(Expense.id.in_(vis))
@@ -1641,7 +1659,8 @@ async def list_expenses_with_splits(
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
             joinedload(Expense.category),
-            joinedload(Expense.split_profile)
+            joinedload(Expense.split_profile),
+            joinedload(Expense.payment_method_rel),
         ).filter(Expense.id.in_(expense_ids_subquery)).filter(Expense.id.in_(vis))
         expenses = q.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
 
@@ -1658,7 +1677,8 @@ async def list_expenses_with_splits(
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
             joinedload(Expense.category),
-            joinedload(Expense.split_profile)
+            joinedload(Expense.split_profile),
+            joinedload(Expense.payment_method_rel),
         ).filter(Expense.id.in_(vis))
         expenses = q.order_by(Expense.expense_date.desc()).offset(skip).limit(limit).all()
         
@@ -1715,24 +1735,9 @@ async def create_expense(
     """Create new expense"""
     expense_date_obj = date.fromisoformat(data.expense_date)
 
-    # Cartão: se data > fechamento (vencimento − 7 dias) → jogar pro próximo mês
-    original_date = expense_date_obj  # sempre guardar a data real de lançamento
+    original_date = expense_date_obj
     pm_record = db.query(PaymentMethod).filter(PaymentMethod.id == data.payment_method_id).first() if data.payment_method_id else None
-    if pm_record and pm_record.is_card and pm_record.due_day:
-        import calendar as _cal
-        from datetime import timedelta as _td
-        due_day = pm_record.due_day
-        exp = expense_date_obj
-        if exp.month == 12:
-            next_due = exp.replace(year=exp.year + 1, month=1, day=due_day)
-        else:
-            max_next = _cal.monthrange(exp.year, exp.month + 1)[1]
-            next_due = exp.replace(month=exp.month + 1, day=min(due_day, max_next))
-        closing = next_due - _td(days=7)
-        if expense_date_obj > closing:
-            max_day = _cal.monthrange(next_due.year, next_due.month)[1]
-            next_day = min(expense_date_obj.day, max_day)
-            expense_date_obj = expense_date_obj.replace(year=next_due.year, month=next_due.month, day=next_day)
+    expense_date_obj = _shift_card_date(expense_date_obj, pm_record)
 
     expense = ExpenseService.create_expense(
         db=db,
@@ -1782,21 +1787,7 @@ async def update_expense(
 
     original_date = expense_date_obj
     pm_record = db.query(PaymentMethod).filter(PaymentMethod.id == data.payment_method_id).first() if data.payment_method_id else None
-    if pm_record and pm_record.is_card and pm_record.due_day:
-        import calendar as _cal
-        from datetime import timedelta as _td
-        due_day = pm_record.due_day
-        exp = expense_date_obj
-        if exp.month == 12:
-            next_due = exp.replace(year=exp.year + 1, month=1, day=due_day)
-        else:
-            max_next = _cal.monthrange(exp.year, exp.month + 1)[1]
-            next_due = exp.replace(month=exp.month + 1, day=min(due_day, max_next))
-        closing = next_due - _td(days=7)
-        if expense_date_obj > closing:
-            max_day = _cal.monthrange(next_due.year, next_due.month)[1]
-            next_day = min(expense_date_obj.day, max_day)
-            expense_date_obj = expense_date_obj.replace(year=next_due.year, month=next_due.month, day=next_day)
+    expense_date_obj = _shift_card_date(expense_date_obj, pm_record)
 
     # UPDATE real - mantém o ID
     expense = ExpenseService.update_expense(
@@ -1912,16 +1903,7 @@ async def get_dashboard(
     pm_list = db.query(PaymentMethod).filter(
         PaymentMethod.user_id.in_(user_ids)
     ).order_by(PaymentMethod.user_id, PaymentMethod.display_order).all()
-    payment_methods_data = [{
-        "id": pm.id,
-        "description": pm.description,
-        "color": pm.color,
-        "is_card": pm.is_card,
-        "icon_path": pm.icon_path,
-        "user_id": pm.user_id,
-        "due_day": pm.due_day,
-        "display_order": pm.display_order,
-    } for pm in pm_list]
+    payment_methods_data = [_pm_dict(pm) for pm in pm_list]
     
     # 2. Categories (dados estáticos)
     try:
@@ -1969,7 +1951,8 @@ async def get_dashboard(
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
             joinedload(Expense.category),
-            joinedload(Expense.split_profile)
+            joinedload(Expense.split_profile),
+            joinedload(Expense.payment_method_rel),
         ).filter(Expense.id.in_(expense_ids_subquery)).filter(Expense.id.in_(vis))
         expenses_query = q.order_by(Expense.expense_date.desc()).all()
 
@@ -1985,7 +1968,8 @@ async def get_dashboard(
         q = db.query(Expense).options(
             joinedload(Expense.paid_by),
             joinedload(Expense.category),
-            joinedload(Expense.split_profile)
+            joinedload(Expense.split_profile),
+            joinedload(Expense.payment_method_rel),
         ).filter(Expense.id.in_(vis))
         expenses_query = q.order_by(Expense.expense_date.desc()).limit(500).all()
 
