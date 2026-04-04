@@ -62,50 +62,6 @@ class FirebaseService:
             db.rollback()
     
     @classmethod
-    def _get_user_notification_preference(cls, db, user_id: int, action_type: str) -> bool:
-        """
-        Verifica se o usuário quer receber notificações deste tipo
-        
-        Args:
-            db: Sessão do banco
-            user_id: ID do usuário
-            action_type: 'new', 'edit', 'delete', 'reminder'
-            
-        Returns:
-            True se deve enviar, False caso contrário
-        """
-        try:
-            from models import NotificationPreferences
-            
-            prefs = db.query(NotificationPreferences).filter(
-                NotificationPreferences.user_id == user_id
-            ).first()
-            
-            if not prefs:
-                # Se não tem preferências salvas, usar defaults
-                defaults = {
-                    'new': True,
-                    'edit': False,
-                    'delete': False,
-                    'reminder': True
-                }
-                return defaults.get(action_type, True)
-            
-            # Mapear action_type para campo do banco
-            preference_map = {
-                'new': prefs.notify_new_expense,
-                'edit': prefs.notify_edit_expense,
-                'delete': prefs.notify_delete_expense,
-                'reminder': prefs.notify_reminders
-            }
-            
-            return preference_map.get(action_type, True)
-            
-        except Exception as e:
-            logger.warning(f"⚠️ Erro ao verificar preferências (assumindo True): {e}")
-            return True  # Em caso de erro, envia a notificação
-    
-    @classmethod
     def send_push(
         cls,
         tokens: List[str],
@@ -227,53 +183,69 @@ class FirebaseService:
         Returns:
             Resultado do envio
         """
-        from models import SplitProfileUser, DeviceToken, User
-        
+        from models import SplitProfileUser, DeviceToken, User, NotificationPreferences
+
         logger.info(f"🔔 send_to_profile_users: profile_id={profile_id}, exclude={exclude_user_id}, action={action_type}")
-        
+
         # Buscar usuários do perfil (exceto quem fez a ação)
         profile_users = db.query(SplitProfileUser).filter(
             SplitProfileUser.profile_id == profile_id,
             SplitProfileUser.user_id != exclude_user_id
         ).all()
-        
+
         if not profile_users:
             logger.info(f"ℹ️ Nenhum outro usuário no perfil {profile_id}")
             return {"success_count": 0, "failure_count": 0, "reason": "no_other_users_in_profile"}
-        
+
+        pu_user_ids = [pu.user_id for pu in profile_users]
+
+        # Preload users e preferências em batch para evitar N+1
+        users_map = {u.id: u for u in db.query(User).filter(User.id.in_(pu_user_ids)).all()}
+        prefs_map = {p.user_id: p for p in db.query(NotificationPreferences).filter(
+            NotificationPreferences.user_id.in_(pu_user_ids)
+        ).all()}
+
         # Filtrar usuários que QUEREM receber este tipo de notificação
         user_ids_to_notify = []
         users_skipped = []
-        
+
+        pref_field_map = {'new': 'notify_new_expense', 'edit': 'notify_edit_expense',
+                          'delete': 'notify_delete_expense', 'reminder': 'notify_reminders'}
+        pref_defaults = {'new': True, 'edit': False, 'delete': False, 'reminder': True}
+
         for pu in profile_users:
             if action_type:
-                wants_notification = cls._get_user_notification_preference(db, pu.user_id, action_type)
+                prefs = prefs_map.get(pu.user_id)
+                if prefs:
+                    wants_notification = getattr(prefs, pref_field_map.get(action_type, ''), True)
+                else:
+                    wants_notification = pref_defaults.get(action_type, True)
                 if wants_notification:
                     user_ids_to_notify.append(pu.user_id)
                 else:
-                    user = db.query(User).filter(User.id == pu.user_id).first()
+                    user = users_map.get(pu.user_id)
                     users_skipped.append(user.name if user else str(pu.user_id))
             else:
                 # Se não especificou action_type, envia para todos
                 user_ids_to_notify.append(pu.user_id)
-        
+
         if users_skipped:
             logger.info(f"⏭️ Usuários pulados (preferência desativada): {', '.join(users_skipped)}")
-        
+
         if not user_ids_to_notify:
             logger.info(f"ℹ️ Nenhum usuário quer receber notificação de '{action_type}'")
             return {"success_count": 0, "failure_count": 0, "reason": "all_users_disabled_this_notification"}
-        
+
         logger.info(f"👥 Enviando para {len(user_ids_to_notify)} usuário(s)")
-        
+
         # Buscar tokens dos usuários filtrados
         tokens = db.query(DeviceToken.token, DeviceToken.user_id).filter(
             DeviceToken.user_id.in_(user_ids_to_notify)
         ).all()
-        
-        # Log detalhado
+
+        # Log detalhado (users_map já carregado em batch acima)
         for t in tokens:
-            user = db.query(User).filter(User.id == t.user_id).first()
+            user = users_map.get(t.user_id)
             logger.info(f"🔑 Token: user={user.name if user else '?'}, token={t.token[:30]}...")
         
         token_list = [t[0] for t in tokens]

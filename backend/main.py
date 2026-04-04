@@ -2392,58 +2392,65 @@ async def debug_cross_user_check(
             result["diagnosis"].append("❌ Você não está em nenhum perfil de divisão!")
             return result
         
-        # 2. Para cada perfil, verificar quem mais está nele
+        # 2. Para cada perfil, verificar quem mais está nele — batch load para evitar N+1
+        profile_ids = [mp.profile_id for mp in my_profiles]
+        profiles_map = {p.id: p for p in db.query(SplitProfile).filter(SplitProfile.id.in_(profile_ids)).all()}
+
+        other_pus = db.query(SplitProfileUser).filter(
+            SplitProfileUser.profile_id.in_(profile_ids),
+            SplitProfileUser.user_id != current_user.id
+        ).all()
+        other_user_ids = list({ou.user_id for ou in other_pus})
+        users_map = {u.id: u for u in db.query(User).filter(User.id.in_(other_user_ids)).all()}
+        tokens_by_user: dict = {}
+        for t in db.query(DeviceToken).filter(DeviceToken.user_id.in_(other_user_ids)).all():
+            tokens_by_user.setdefault(t.user_id, []).append(t)
+
         for mp in my_profiles:
-            profile = db.query(SplitProfile).filter(SplitProfile.id == mp.profile_id).first()
-            
-            # Outros usuários no mesmo perfil
-            other_users_in_profile = db.query(SplitProfileUser).filter(
-                SplitProfileUser.profile_id == mp.profile_id,
-                SplitProfileUser.user_id != current_user.id
-            ).all()
-            
+            profile = profiles_map.get(mp.profile_id)
+            other_users_in_profile = [ou for ou in other_pus if ou.profile_id == mp.profile_id]
+
             profile_info = {
                 "profile_id": mp.profile_id,
                 "profile_name": profile.name if profile else "?",
                 "other_users": []
             }
-            
+
             for ou in other_users_in_profile:
-                user = db.query(User).filter(User.id == ou.user_id).first()
-                
-                # Tokens desse usuário
-                tokens = db.query(DeviceToken).filter(DeviceToken.user_id == ou.user_id).all()
-                
+                user = users_map.get(ou.user_id)
+                tkns = tokens_by_user.get(ou.user_id, [])
                 profile_info["other_users"].append({
                     "user_id": ou.user_id,
                     "user_name": user.name if user else "?",
-                    "token_count": len(tokens),
-                    "tokens": [t.token[:30] + "..." for t in tokens]
+                    "token_count": len(tkns),
+                    "tokens": [t.token[:30] + "..." for t in tkns]
                 })
-            
+
             if not other_users_in_profile:
                 result["diagnosis"].append(f"⚠️ Perfil '{profile.name if profile else '?'}': Você é o único usuário!")
             else:
                 users_with_tokens = sum(1 for u in profile_info["other_users"] if u["token_count"] > 0)
                 users_without_tokens = sum(1 for u in profile_info["other_users"] if u["token_count"] == 0)
-                
+
                 if users_without_tokens > 0:
                     names = [u["user_name"] for u in profile_info["other_users"] if u["token_count"] == 0]
                     result["diagnosis"].append(
                         f"⚠️ Perfil '{profile.name if profile else '?'}': {', '.join(names)} não tem token registrado!"
                     )
-                
+
                 if users_with_tokens > 0:
                     result["diagnosis"].append(
                         f"✅ Perfil '{profile.name if profile else '?'}': {users_with_tokens} usuário(s) podem receber push"
                     )
-            
+
             result["profiles"].append(profile_info)
-        
-        # 3. Listar todos os tokens no sistema
+
+        # 3. Listar todos os tokens no sistema — batch load user names
         all_tokens = db.query(DeviceToken).all()
+        all_token_user_ids = list({t.user_id for t in all_tokens})
+        all_users_map = {u.id: u for u in db.query(User).filter(User.id.in_(all_token_user_ids)).all()}
         for t in all_tokens:
-            user = db.query(User).filter(User.id == t.user_id).first()
+            user = all_users_map.get(t.user_id)
             result["all_tokens"].append({
                 "user_id": t.user_id,
                 "user_name": user.name if user else "?",
