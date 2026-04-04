@@ -1541,7 +1541,11 @@
                         <span class="icon">👥</span>
                         <span>Usuários</span>
                     </button>
-                    
+                    <button class="sidebar-menu-item" onclick="toggleSidebar(); openAuditModal()">
+                        <span class="icon">🔍</span>
+                        <span>Auditar</span>
+                    </button>
+
                     <div class="sidebar-divider"></div>
                     
                     <div class="theme-toggle" onclick="toggleDarkMode()">
@@ -2218,6 +2222,7 @@
             categories = data.categories;
             profiles = data.profiles;
             if (data.payment_methods) paymentMethods = data.payment_methods;
+            if (data.current_user_id) window._myUserId = data.current_user_id;
             staticCacheTimestamp = Date.now();
             
             // Atualizar cache dinâmico
@@ -8514,6 +8519,592 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             showExpenseModal();
         });
         
+
+        // ====================================================================
+        // AUDIT MODAL
+        // ====================================================================
+        window._auditFile = null;
+        window._auditPmId = null;
+        window._auditData = null;
+        window._myUserId  = window._myUserId || null;
+
+        function openAuditModal() {
+            const savedScroll = window.pageYOffset || 0;
+            document.body.style.top = `-${savedScroll}px`;
+            document.body.classList.add('modal-open');
+            window._auditFile = null;
+            window._auditPmId = null;
+
+            const isDark   = document.body.classList.contains('dark-mode');
+            const bg       = isDark ? '#1e1e1e' : '#fff';
+            const txt      = isDark ? '#e8eaed' : '#202124';
+            const border   = isDark ? '#3c4043' : '#e0e0e0';
+            const sub      = isDark ? '#9aa0a6' : '#5f6368';
+            const cardBg   = isDark ? '#2d2d2d' : '#f8f9fa';
+
+            const pmHtml = (paymentMethods || []).map(pm => {
+                const img = pm.icon_path
+                    ? `<img src="${pm.icon_path}" style="width:24px;height:24px;object-fit:contain;">`
+                    : `<span style="font-size:1.1rem;">💳</span>`;
+                return `<div onclick="selectAuditPm(${pm.id})" id="audit_pm_${pm.id}" data-pm-id="${pm.id}"
+                    class="pm-option flex flex-col items-center justify-center cursor-pointer"
+                    style="width:56px;height:52px;gap:4px;flex-shrink:0;border:2px solid transparent;
+                           border-radius:12px;background:${isDark?'#3c4043':'#f8f9fa'};transition:.15s;">
+                    ${img}
+                    <span style="font-size:8px;line-height:1;color:${sub};max-width:52px;overflow:hidden;
+                                 text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
+                </div>`;
+            }).join('');
+
+            document.getElementById('modalContainer').innerHTML = `
+            <div id="auditOverlay" class="modal-overlay fixed inset-0 z-50 flex items-start justify-center pt-4 pb-4"
+                 style="background:rgba(0,0,0,0.5);overflow-y:auto;">
+              <div style="background:${bg};color:${txt};width:100%;max-width:680px;border-radius:16px;
+                          overflow:hidden;margin:0 12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+
+                <!-- Header -->
+                <div style="background:${isDark?'#1a3a5c':'#e8f0fe'};padding:16px 20px;
+                            display:flex;align-items:center;gap:12px;">
+                  <span style="font-size:1.5rem;">🔍</span>
+                  <div style="flex:1;">
+                    <div style="font-size:1.05rem;font-weight:600;color:${isDark?'#8ab4f8':'#1a73e8'};">
+                      Auditar Extrato</div>
+                    <div style="font-size:0.75rem;color:${sub};">
+                      Reconcilie seu arquivo bancário com as despesas do app</div>
+                  </div>
+                  <button onclick="closeModal()"
+                    style="background:none;border:none;cursor:pointer;font-size:1.5rem;color:${sub};padding:4px;">×</button>
+                </div>
+
+                <!-- Step 1: Upload -->
+                <div id="auditStep1" style="padding:20px;">
+                  <div id="auditDropZone"
+                    onclick="document.getElementById('auditFileInput').click()"
+                    ondragover="event.preventDefault();this.style.borderColor='#1a73e8';"
+                    ondragleave="this.style.borderColor='${border}';"
+                    ondrop="auditHandleDrop(event)"
+                    style="border:2px dashed ${border};border-radius:12px;padding:28px 20px;
+                           text-align:center;cursor:pointer;transition:.15s;margin-bottom:20px;">
+                    <div style="font-size:2.2rem;margin-bottom:6px;">📂</div>
+                    <div style="font-size:0.9rem;font-weight:500;color:${txt};margin-bottom:3px;">
+                      Clique ou arraste o arquivo</div>
+                    <div style="font-size:0.78rem;color:${sub};">.csv (cartão) · .ofx (conta corrente)</div>
+                    <div id="auditFileName" style="margin-top:8px;font-size:0.85rem;
+                                                   color:#1a73e8;font-weight:500;"></div>
+                  </div>
+                  <input type="file" id="auditFileInput" accept=".csv,.ofx"
+                         style="display:none;" onchange="auditFileSelected(this)">
+
+                  <div style="margin-bottom:20px;">
+                    <div style="font-size:0.82rem;font-weight:500;color:${sub};margin-bottom:10px;">
+                      Método de Pagamento do arquivo:</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;" id="auditPmRow">
+                      ${pmHtml || `<span style="font-size:0.82rem;color:${sub};">
+                                   Nenhum método cadastrado</span>`}
+                    </div>
+                  </div>
+
+                  <button id="auditRunBtn" onclick="runAudit()" disabled
+                    style="width:100%;padding:12px;border:none;border-radius:10px;
+                           font-size:0.95rem;font-weight:600;cursor:not-allowed;
+                           background:#ccc;color:#fff;transition:.15s;">
+                    🔍 Analisar arquivo
+                  </button>
+                </div>
+
+                <!-- Step 2: Loading -->
+                <div id="auditStep2" style="display:none;padding:48px 20px;text-align:center;">
+                  <div style="font-size:2.5rem;margin-bottom:12px;">⏳</div>
+                  <div style="font-size:0.9rem;color:${sub};">
+                    Analisando e comparando com a base...</div>
+                </div>
+
+                <!-- Step 3: Results -->
+                <div id="auditStep3" style="display:none;">
+                  <div id="auditStats"
+                    style="padding:10px 20px;background:${cardBg};border-bottom:1px solid ${border};
+                           font-size:0.78rem;display:flex;gap:14px;flex-wrap:wrap;color:${sub};"></div>
+
+                  <!-- Tabs -->
+                  <div style="display:flex;border-bottom:1px solid ${border};">
+                    <button id="auditTabBtnMatched" onclick="showAuditTab('matched')"
+                      style="flex:1;padding:11px 4px;border:none;background:none;cursor:pointer;
+                             font-size:0.8rem;font-weight:600;color:#34a853;
+                             border-bottom:3px solid #34a853;">
+                      ✅ Matched <span id="auditCntMatched"></span>
+                    </button>
+                    <button id="auditTabBtnAmbiguous" onclick="showAuditTab('ambiguous')"
+                      style="flex:1;padding:11px 4px;border:none;background:none;cursor:pointer;
+                             font-size:0.8rem;font-weight:600;color:${sub};
+                             border-bottom:3px solid transparent;">
+                      ⚠️ Ambíguo <span id="auditCntAmbiguous"></span>
+                    </button>
+                    <button id="auditTabBtnUnmatched" onclick="showAuditTab('unmatched')"
+                      style="flex:1;padding:11px 4px;border:none;background:none;cursor:pointer;
+                             font-size:0.8rem;font-weight:600;color:${sub};
+                             border-bottom:3px solid transparent;">
+                      ❌ Não encontrado <span id="auditCntUnmatched"></span>
+                    </button>
+                  </div>
+
+                  <div id="auditTabContent"
+                    style="max-height:62vh;overflow-y:auto;"></div>
+
+                  <div style="padding:10px 20px;border-top:1px solid ${border};text-align:center;">
+                    <button onclick="auditReset()"
+                      style="background:none;border:1px solid ${border};border-radius:8px;
+                             padding:7px 20px;font-size:0.82rem;cursor:pointer;color:${sub};">
+                      ← Novo arquivo
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>`;
+        }
+
+        function selectAuditPm(pmId) {
+            window._auditPmId = pmId;
+            const isDark = document.body.classList.contains('dark-mode');
+            const selBg  = isDark ? '#8ab4f8' : '#e8f0fe';
+            const selBdr = isDark ? '#8ab4f8' : '#1a73e8';
+            const defBg  = isDark ? '#3c4043' : '#f8f9fa';
+            document.querySelectorAll('[id^="audit_pm_"]').forEach(el => {
+                const active = parseInt(el.dataset.pmId) === pmId;
+                el.style.background = active ? selBg : defBg;
+                el.style.border = `2px solid ${active ? selBdr : 'transparent'}`;
+            });
+            _auditCheckReady();
+        }
+
+        function auditFileSelected(input) {
+            const file = input.files[0];
+            if (!file) return;
+            window._auditFile = file;
+            document.getElementById('auditFileName').textContent = `📄 ${file.name}`;
+            document.getElementById('auditDropZone').style.borderColor = '#1a73e8';
+            _auditCheckReady();
+        }
+
+        function auditHandleDrop(event) {
+            event.preventDefault();
+            const file = event.dataTransfer.files[0];
+            if (!file) return;
+            window._auditFile = file;
+            document.getElementById('auditFileName').textContent = `📄 ${file.name}`;
+            document.getElementById('auditDropZone').style.borderColor = '#1a73e8';
+            try {
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                document.getElementById('auditFileInput').files = dt.files;
+            } catch(e) {}
+            _auditCheckReady();
+        }
+
+        function _auditCheckReady() {
+            const btn = document.getElementById('auditRunBtn');
+            if (!btn) return;
+            const ok = !!(window._auditFile && window._auditPmId);
+            btn.disabled = !ok;
+            btn.style.background = ok ? '#1a73e8' : '#ccc';
+            btn.style.cursor     = ok ? 'pointer'  : 'not-allowed';
+        }
+
+        async function runAudit() {
+            if (!window._auditFile || !window._auditPmId) return;
+            document.getElementById('auditStep1').style.display = 'none';
+            document.getElementById('auditStep2').style.display = 'block';
+            try {
+                const fd = new FormData();
+                fd.append('file', window._auditFile);
+                fd.append('payment_method_id', window._auditPmId);
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API}/audit/analyze`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: fd
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `Erro ${res.status}`);
+                }
+                window._auditData = await res.json();
+
+                document.getElementById('auditStep2').style.display = 'none';
+                document.getElementById('auditStep3').style.display = 'block';
+
+                const s = window._auditData.stats;
+                document.getElementById('auditStats').innerHTML =
+                    `<span>📄 Total: <b>${s.total}</b></span>` +
+                    `<span style="color:#34a853;">✅ ${s.matched} matched</span>` +
+                    `<span style="color:#f9ab00;">⚠️ ${s.ambiguous} ambíguo</span>` +
+                    `<span style="color:#ea4335;">❌ ${s.unmatched} não encontrado</span>` +
+                    (s.micro ? `<span style="color:#9aa0a6;">🔧 ${s.micro} micro-ajustes</span>` : '') +
+                    (s.silent ? `<span style="color:#9aa0a6;">🔇 ${s.silent} filtrados</span>` : '');
+
+                _auditUpdateCounts();
+
+                // Open most actionable tab first
+                if (s.ambiguous > 0)       showAuditTab('ambiguous');
+                else if (s.unmatched > 0)  showAuditTab('unmatched');
+                else                        showAuditTab('matched');
+
+            } catch(e) {
+                document.getElementById('auditStep2').style.display = 'none';
+                document.getElementById('auditStep1').style.display = 'block';
+                alert(e.message || 'Erro ao processar arquivo');
+            }
+        }
+
+        function _auditUpdateCounts() {
+            if (!window._auditData) return;
+            const s = window._auditData.stats;
+            const micro = (window._auditData.micro_adjustments || []).length;
+            document.getElementById('auditCntMatched').textContent   = `(${s.matched})`;
+            document.getElementById('auditCntAmbiguous').textContent = `(${s.ambiguous})`;
+            document.getElementById('auditCntUnmatched').textContent =
+                `(${s.unmatched + (micro > 0 ? 1 : 0)})`;
+        }
+
+        function showAuditTab(tab) {
+            const isDark = document.body.classList.contains('dark-mode');
+            const sub    = isDark ? '#9aa0a6' : '#5f6368';
+            const colors = { matched:'#34a853', ambiguous:'#f9ab00', unmatched:'#ea4335' };
+            ['matched','ambiguous','unmatched'].forEach(t => {
+                const btn = document.getElementById(
+                    `auditTabBtn${t.charAt(0).toUpperCase()+t.slice(1)}`);
+                if (!btn) return;
+                const active = t === tab;
+                btn.style.color        = active ? colors[t] : sub;
+                btn.style.borderBottom = active ? `3px solid ${colors[t]}` : '3px solid transparent';
+            });
+            const d = window._auditData;
+            const el = document.getElementById('auditTabContent');
+            if (tab === 'matched')    el.innerHTML = _auditRenderMatched(d.matched);
+            if (tab === 'ambiguous')  el.innerHTML = _auditRenderAmbiguous(d.ambiguous);
+            if (tab === 'unmatched')  el.innerHTML = _auditRenderUnmatched(d.unmatched, d.micro_adjustments);
+        }
+
+        // ── Helpers ──────────────────────────────────────────────────────────
+        function _afmt(amount) {
+            const abs = Math.abs(amount).toFixed(2).replace('.', ',');
+            return amount < 0
+                ? `R$ ${abs} <span style="color:#34a853;font-size:0.75rem;">(entrada)</span>`
+                : `R$ ${abs}`;
+        }
+        function _adate(iso) {
+            const [y,m,d] = iso.split('-');
+            return `${d}/${m}/${y.slice(2)}`;
+        }
+
+        // ── Tab: Matched ─────────────────────────────────────────────────────
+        function _auditRenderMatched(items) {
+            if (!items.length)
+                return `<div style="padding:32px;text-align:center;color:#9aa0a6;">
+                         Nenhum lançamento com match automático</div>`;
+            const isDark = document.body.classList.contains('dark-mode');
+            const border = isDark ? '#3c4043' : '#f0f0f0';
+            const sub    = isDark ? '#9aa0a6' : '#5f6368';
+            return items.map(item => {
+                const parc = item.file.parcel_num
+                    ? ` <span style="color:${sub};font-size:0.73rem;">
+                          ${item.file.parcel_num}/${item.file.parcel_total}</span>` : '';
+                return `
+                <div style="padding:11px 20px;border-bottom:1px solid ${border};
+                            display:flex;gap:10px;align-items:center;">
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85rem;font-weight:500;">
+                      <span style="color:${sub};font-size:0.73rem;">${_adate(item.file.date)}</span>
+                      <span style="margin-left:6px;">${item.file.description}</span>${parc}
+                    </div>
+                    <div style="font-size:0.75rem;color:${sub};margin-top:2px;">
+                      → ${item.expense?.description || '?'} · ${item.reason}
+                    </div>
+                  </div>
+                  <div style="font-size:0.88rem;font-weight:600;white-space:nowrap;">
+                    ${_afmt(item.file.amount)}</div>
+                  <span style="font-size:1rem;">✅</span>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Tab: Ambiguous ───────────────────────────────────────────────────
+        function _auditRenderAmbiguous(items) {
+            if (!items.length)
+                return `<div style="padding:32px;text-align:center;color:#9aa0a6;">
+                         Sem itens ambíguos</div>`;
+            const isDark = document.body.classList.contains('dark-mode');
+            const border = isDark ? '#3c4043' : '#e0e0e0';
+            const sub    = isDark ? '#9aa0a6' : '#5f6368';
+            const txt    = isDark ? '#e8eaed' : '#202124';
+            const rbg    = isDark ? '#3c4043' : '#fff';
+
+            return items.map((item, idx) => {
+                const parc = item.file.parcel_num
+                    ? `<span style="font-size:0.73rem;color:${sub};margin-left:4px;">
+                         ${item.file.parcel_num}/${item.file.parcel_total}</span>` : '';
+                const opts = item.candidates.map(c => `
+                    <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;
+                                  border-radius:8px;cursor:pointer;margin-bottom:4px;
+                                  background:${rbg};border:1px solid ${border};">
+                      <input type="radio" name="ambig_${idx}" value="${c.expense.id}"
+                             style="accent-color:#1a73e8;flex-shrink:0;">
+                      <div style="flex:1;font-size:0.8rem;">
+                        <span style="font-weight:500;">${c.expense.description}</span>
+                        <span style="color:${sub};margin-left:5px;">${_adate(c.expense.expense_date)}</span>
+                        <span style="color:${sub};margin-left:5px;">
+                          R$ ${c.expense.total_amount.toFixed(2).replace('.',',')}</span>
+                      </div>
+                      <span style="font-size:0.73rem;font-weight:600;
+                                   color:${c.similarity>=0.7?'#34a853':'#f9ab00'};">
+                        ${(c.similarity*100).toFixed(0)}%</span>
+                    </label>`).join('') +
+                    `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;
+                                   border-radius:8px;cursor:pointer;background:${rbg};
+                                   border:1px solid ${border};">
+                       <input type="radio" name="ambig_${idx}" value="none"
+                              style="accent-color:#ea4335;flex-shrink:0;">
+                       <span style="font-size:0.8rem;color:${sub};">
+                         Nenhum desses → mover para ❌</span>
+                     </label>`;
+
+                return `
+                <div style="padding:14px 20px;border-bottom:1px solid ${border};">
+                  <div style="display:flex;justify-content:space-between;
+                              align-items:flex-start;margin-bottom:10px;">
+                    <div>
+                      <span style="font-size:0.73rem;color:${sub};">${_adate(item.file.date)}</span>
+                      <span style="font-size:0.9rem;font-weight:600;color:${txt};margin-left:7px;">
+                        ${item.file.description}</span>${parc}
+                    </div>
+                    <span style="font-size:0.88rem;font-weight:600;white-space:nowrap;margin-left:12px;">
+                      ${_afmt(item.file.amount)}</span>
+                  </div>
+                  <div style="margin-bottom:10px;">${opts}</div>
+                  <button onclick="_auditConfirmAmbig(${idx})"
+                    style="background:#1a73e8;color:#fff;border:none;border-radius:8px;
+                           padding:7px 16px;font-size:0.82rem;font-weight:500;cursor:pointer;">
+                    Confirmar
+                  </button>
+                </div>`;
+            }).join('');
+        }
+
+        function _auditConfirmAmbig(idx) {
+            const sel = document.querySelector(`input[name="ambig_${idx}"]:checked`);
+            if (!sel) { alert('Selecione uma opção'); return; }
+            const item = window._auditData.ambiguous[idx];
+            if (sel.value === 'none') {
+                window._auditData.unmatched.push({ file: item.file });
+                window._auditData.stats.unmatched++;
+            } else {
+                const cand = item.candidates.find(c => c.expense.id === parseInt(sel.value));
+                window._auditData.matched.push({
+                    file: item.file, expense: cand.expense,
+                    reason: `confirmado (${(cand.similarity*100).toFixed(0)}%)`
+                });
+                window._auditData.stats.matched++;
+            }
+            window._auditData.ambiguous.splice(idx, 1);
+            window._auditData.stats.ambiguous--;
+            _auditUpdateCounts();
+            if (window._auditData.ambiguous.length === 0) showAuditTab('unmatched');
+            else showAuditTab('ambiguous');
+        }
+
+        // ── Tab: Unmatched ───────────────────────────────────────────────────
+        function _auditRenderUnmatched(items, micro) {
+            const isDark  = document.body.classList.contains('dark-mode');
+            const border  = isDark ? '#3c4043' : '#e0e0e0';
+            const sub     = isDark ? '#9aa0a6' : '#5f6368';
+            const txt     = isDark ? '#e8eaed' : '#202124';
+            const selBg   = isDark ? '#3c4043' : '#fff';
+
+            const catOpts  = (categories || []).filter(c => c.is_active !== false)
+                .map(c => `<option value="${c.id}">${c.icon||''} ${c.name}</option>`).join('');
+            const profOpts = (profiles || []).map(p =>
+                `<option value="${p.id}">${p.emoji||'⚖️'} ${p.name}</option>`).join('');
+            const userOpts = (users || []).filter(u => u.is_active !== false)
+                .map(u => `<option value="${u.id}" ${u.id===window._myUserId?'selected':''}>${u.name}</option>`).join('');
+
+            if (!items.length && (!micro || !micro.length))
+                return `<div style="padding:32px;text-align:center;color:#9aa0a6;">
+                         🎉 Todos os lançamentos foram encontrados!</div>`;
+
+            const selStyle = `flex:1;min-width:100px;padding:5px 8px;border:1px solid ${border};
+                              border-radius:8px;font-size:0.8rem;background:${selBg};color:${txt};`;
+
+            const itemsHtml = items.map((item, idx) => {
+                const parc = item.file.parcel_num
+                    ? `<span style="font-size:0.73rem;color:${sub};margin-left:4px;">
+                         ${item.file.parcel_num}/${item.file.parcel_total}</span>` : '';
+                return `
+                <div id="unmatch_${idx}" style="padding:13px 20px;border-bottom:1px solid ${border};">
+                  <div style="display:flex;justify-content:space-between;align-items:center;
+                              margin-bottom:9px;">
+                    <div style="flex:1;min-width:0;overflow:hidden;">
+                      <span style="font-size:0.73rem;color:${sub};">${_adate(item.file.date)}</span>
+                      <span style="font-size:0.88rem;font-weight:600;color:${txt};margin-left:6px;">
+                        ${item.file.description}</span>${parc}
+                    </div>
+                    <div style="display:flex;align-items:center;gap:7px;flex-shrink:0;margin-left:10px;">
+                      <span style="font-size:0.88rem;font-weight:600;">${_afmt(item.file.amount)}</span>
+                      <button onclick="_auditIgnore(${idx})"
+                        style="background:none;border:1px solid ${border};border-radius:6px;
+                               padding:2px 8px;font-size:0.73rem;cursor:pointer;color:${sub};">
+                        Ignorar</button>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    <select id="uc_${idx}" style="${selStyle}">
+                      <option value="">Categoria...</option>${catOpts}</select>
+                    <select id="up_${idx}" style="${selStyle}">
+                      <option value="">Perfil...</option>${profOpts}</select>
+                    <select id="uu_${idx}" style="${selStyle}">
+                      ${userOpts}</select>
+                    <button onclick="_auditAdd(${idx})"
+                      style="background:#1a73e8;color:#fff;border:none;border-radius:8px;
+                             padding:6px 14px;font-size:0.8rem;font-weight:500;
+                             cursor:pointer;white-space:nowrap;">
+                      + Adicionar</button>
+                  </div>
+                </div>`;
+            }).join('');
+
+            // Micro-adjustments block
+            let microHtml = '';
+            if (micro && micro.length) {
+                const total   = micro.reduce((s,m) => s + m.amount, 0);
+                const details = micro.map(m =>
+                    `${m.description} ${m.amount.toFixed(2).replace('.',',')}`
+                ).join(' · ');
+                microHtml = `
+                <div id="auditMicroBlock"
+                  style="padding:13px 20px;border-bottom:1px solid ${border};
+                         background:${isDark?'#2a2a2a':'#fffde7'};">
+                  <div style="display:flex;justify-content:space-between;
+                              align-items:flex-start;gap:10px;margin-bottom:9px;">
+                    <div style="flex:1;min-width:0;">
+                      <span style="font-size:0.85rem;font-weight:600;color:${txt};">
+                        🔧 Micro-ajustes (${micro.length} itens)</span>
+                      <div style="font-size:0.73rem;color:${sub};margin-top:3px;
+                                  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        ${details}</div>
+                    </div>
+                    <span style="font-size:0.85rem;font-weight:600;white-space:nowrap;">
+                      R$ ${Math.abs(total).toFixed(2).replace('.',',')}</span>
+                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    <select id="microCat" style="${selStyle}">
+                      <option value="">Categoria...</option>${catOpts}</select>
+                    <select id="microProf" style="${selStyle}">
+                      <option value="">Perfil...</option>${profOpts}</select>
+                    <select id="microUser" style="${selStyle}">${userOpts}</select>
+                    <button onclick="_auditAddMicro()"
+                      style="background:#f9ab00;color:#fff;border:none;border-radius:8px;
+                             padding:6px 14px;font-size:0.8rem;font-weight:500;cursor:pointer;">
+                      + Adicionar</button>
+                    <button onclick="document.getElementById('auditMicroBlock').remove()"
+                      style="background:none;border:1px solid ${border};border-radius:8px;
+                             padding:6px 10px;font-size:0.8rem;cursor:pointer;color:${sub};">
+                      Ignorar todos</button>
+                  </div>
+                </div>`;
+            }
+
+            return microHtml + itemsHtml;
+        }
+
+        function _auditIgnore(idx) {
+            const el = document.getElementById(`unmatch_${idx}`);
+            if (el) el.style.display = 'none';
+        }
+
+        async function _auditAdd(idx) {
+            const catId  = parseInt(document.getElementById(`uc_${idx}`)?.value);
+            const profId = parseInt(document.getElementById(`up_${idx}`)?.value);
+            const userId = parseInt(document.getElementById(`uu_${idx}`)?.value);
+            if (!catId)  { alert('Selecione uma categoria'); return; }
+            if (!profId) { alert('Selecione um perfil'); return; }
+            if (!userId) { alert('Selecione o pagador'); return; }
+
+            const f    = window._auditData.unmatched[idx].file;
+            const inst = (f.parcel_num === 1 && f.parcel_total) ? f.parcel_total : 1;
+            const total = f.parcel_total
+                ? (Math.abs(f.amount) * (f.parcel_num === 1 ? f.parcel_total : 1)).toFixed(2)
+                : Math.abs(f.amount).toFixed(2);
+            const notes = f.parcel_num
+                ? `importado via auditoria (parcela ${f.parcel_num}/${f.parcel_total})` : null;
+
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API}/expenses`, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json',
+                               'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        description:      f.description,
+                        total_amount:     parseFloat(total),
+                        category_id:      catId,
+                        split_profile_id: profId,
+                        paid_by_user_id:  userId,
+                        expense_date:     f.date,
+                        installments:     inst,
+                        payment_method_id: window._auditPmId,
+                        notes
+                    })
+                });
+                if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || 'Erro');
+                const el = document.getElementById(`unmatch_${idx}`);
+                if (el) el.innerHTML = `<div style="padding:6px 0;color:#34a853;font-size:0.83rem;">
+                    ✅ ${f.description} — adicionado!</div>`;
+                invalidateCache();
+            } catch(e) { alert(e.message || 'Erro ao adicionar'); }
+        }
+
+        async function _auditAddMicro() {
+            const catId  = parseInt(document.getElementById('microCat')?.value);
+            const profId = parseInt(document.getElementById('microProf')?.value);
+            const userId = parseInt(document.getElementById('microUser')?.value);
+            if (!catId)  { alert('Selecione uma categoria'); return; }
+            if (!profId) { alert('Selecione um perfil'); return; }
+
+            const micro = window._auditData.micro_adjustments;
+            const total = Math.abs(micro.reduce((s,m) => s + m.amount, 0)).toFixed(2);
+            const first = micro[0]?.date || new Date().toISOString().slice(0,10);
+
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`${API}/expenses`, {
+                    method: 'POST',
+                    headers: { 'Content-Type':'application/json',
+                               'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        description:      `Ajustes de extrato (${micro.length} itens)`,
+                        total_amount:     parseFloat(total),
+                        category_id:      catId,
+                        split_profile_id: profId,
+                        paid_by_user_id:  userId,
+                        expense_date:     first,
+                        installments:     1,
+                        payment_method_id: window._auditPmId,
+                    })
+                });
+                if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || 'Erro');
+                const el = document.getElementById('auditMicroBlock');
+                if (el) el.innerHTML = `<div style="padding:6px 0;color:#34a853;font-size:0.83rem;">
+                    ✅ Micro-ajustes adicionados!</div>`;
+                invalidateCache();
+            } catch(e) { alert(e.message || 'Erro'); }
+        }
+
+        function auditReset() {
+            window._auditFile = null;
+            window._auditPmId = null;
+            window._auditData = null;
+            openAuditModal();
+        }
+
         console.log('✅ FAB draggable ativado');
     })();
     </script>

@@ -1,5 +1,5 @@
 """Budget System - FastAPI Main Application - UPDATED"""
-from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -2698,4 +2698,51 @@ async def get_target_stats(
         "times_left": times_left,
         "remaining": round(remaining, 2),
         "spent": round(spent_nominal, 2),
+    }
+
+
+# ============================================================================
+# AUDIT ENDPOINT — reconcile CSV/OFX bank files against DB expenses
+# ============================================================================
+
+from audit_service import parse_csv, parse_ofx, match_transactions as _audit_match
+
+@app.post(f"{settings.API_V1_PREFIX}/audit/analyze")
+async def audit_analyze(
+    file: UploadFile = File(...),
+    payment_method_id: int = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Parse a CSV or OFX bank file and match transactions against DB expenses."""
+    content = await file.read()
+    try:
+        text = content.decode('utf-8')
+    except UnicodeDecodeError:
+        text = content.decode('latin-1')
+
+    fname = (file.filename or '').lower()
+    if fname.endswith('.csv'):
+        txns, silent = parse_csv(text)
+    elif fname.endswith('.ofx'):
+        txns, silent = parse_ofx(text)
+    else:
+        raise HTTPException(status_code=400, detail="Formato não suportado. Use .csv ou .ofx")
+
+    result = _audit_match(db, txns, payment_method_id)
+    result.silent_filtered = silent
+
+    return {
+        "matched":           result.matched,
+        "ambiguous":         result.ambiguous,
+        "unmatched":         result.unmatched,
+        "micro_adjustments": result.micro_adjustments,
+        "stats": {
+            "total":    len(txns) + silent,
+            "silent":   silent,
+            "matched":  len(result.matched),
+            "ambiguous":len(result.ambiguous),
+            "unmatched":len(result.unmatched),
+            "micro":    len(result.micro_adjustments),
+        },
     }
