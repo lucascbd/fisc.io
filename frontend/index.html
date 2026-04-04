@@ -8664,6 +8664,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         }
 
         window.selectAuditPm = function selectAuditPm(pmId) {
+            pmId = parseInt(pmId);
             window._auditPmId = pmId;
             const isDark = document.body.classList.contains('dark-mode');
             const selBg  = isDark ? '#8ab4f8' : '#e8f0fe';
@@ -8671,8 +8672,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const defBg  = isDark ? '#3c4043' : '#f8f9fa';
             document.querySelectorAll('[id^="audit_pm_"]').forEach(el => {
                 const active = parseInt(el.dataset.pmId) === pmId;
+                el.classList.toggle('selected', active);
                 el.style.background = active ? selBg : defBg;
-                el.style.border = `2px solid ${active ? selBdr : 'transparent'}`;
+                el.style.borderColor = active ? selBdr : 'transparent';
+                el.style.boxShadow = active && isDark ? '0 0 0 2px rgba(138,180,248,0.3)' : 'none';
             });
             _auditCheckReady();
         }
