@@ -104,11 +104,11 @@ def generate_reminder_message(user_id, user_name, balances):
     if user_balance < 0:
         # Usuário DEVE dinheiro
         title = "🗓️ Fechamento do mês"
-        body = f"R$ {amount:.2f} a pagar"
+        body = f"R$ {amount:.2f} a pagar".replace('.', ',')
     else:
         # Usuário TEM A RECEBER
         title = "🗓️ Fechamento do mês"
-        body = f"R$ {amount:.2f} a receber"
+        body = f"R$ {amount:.2f} a receber".replace('.', ',')
     
     return title, body
 

@@ -1761,11 +1761,12 @@ async def create_expense(
             profile_id=expense.split_profile_id,
             exclude_user_id=current_user.id,
             title="💸 Despesa adicionada",
-            body=("{current_user.name} adicionou:\n{icon} {desc} - R$ {amt}".format(
+            body=("{current_user.name} adicionou:\n{icon} {desc} - R$ {amt}\n⚖️ {profile}".format(
                 current_user=current_user,
                 icon=expense.category.icon or '',
                 desc=expense.description,
-                amt=f"{float(expense.total_amount):.2f}".replace('.', ',')
+                amt=f"{float(expense.total_amount):.2f}".replace('.', ','),
+                profile=expense.split_profile.name if expense.split_profile else ''
             )),
             data={"expense_id": str(expense.id), "action": "new_expense"},
             action_type="new"
@@ -1813,11 +1814,12 @@ async def update_expense(
             profile_id=expense.split_profile_id,
             exclude_user_id=current_user.id,
             title="✏️ Despesa editada",
-            body=("{current_user.name} editou:\n{icon} {desc} - R$ {amt}".format(
+            body=("{current_user.name} editou:\n{icon} {desc} - R$ {amt}\n⚖️ {profile}".format(
                 current_user=current_user,
                 icon=expense.category.icon or '',
                 desc=expense.description,
-                amt=f"{float(expense.total_amount):.2f}".replace('.', ',')
+                amt=f"{float(expense.total_amount):.2f}".replace('.', ','),
+                profile=expense.split_profile.name if expense.split_profile else ''
             )),
             data={"expense_id": str(expense.id), "action": "edit_expense"},
             action_type="edit"
