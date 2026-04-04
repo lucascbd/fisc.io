@@ -2158,12 +2158,25 @@
                    (Date.now() - dynamicCacheTimestamp) < DYNAMIC_CACHE_TTL;
         }
         
+        // Cache por mês para os gráficos multi-mês (5 minutos)
+        const _monthDataCache = new Map();
+        const _MONTH_DATA_TTL = 300000;
+
+        async function fetchMonthExpenses(month) {
+            const hit = _monthDataCache.get(month);
+            if (hit && (Date.now() - hit.ts) < _MONTH_DATA_TTL) return hit.expenses;
+            const { expenses } = await fetchExpensesWithCache(month);
+            _monthDataCache.set(month, { expenses, ts: Date.now() });
+            return expenses;
+        }
+
         // Invalida cache (chamar após criar/editar/deletar)
         function invalidateCache() {
             cachedExpenses = null;
             cachedBalances = null;
             cachedMonth = null;
             dynamicCacheTimestamp = 0;
+            _monthDataCache.clear();
             chartsNeedReload = true;
             console.log('🗑️ Cache dinâmico invalidado');
         }
@@ -6002,8 +6015,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 `;
                 updateUserFilterSelectedText();
             }
-            await updateBarChart();
-            await updatePmBarChart();
+            await Promise.all([updateBarChart(), updatePmBarChart()]);
         }
 
         async function updatePieChart() {
@@ -6532,12 +6544,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     return us.size > 1 || (us.size === 1 && !us.has(user.id));
                 };
 
+                const allExpenses = await Promise.all(selectedMonths.map(m => fetchMonthExpenses(m)));
+                const expByMonth = Object.fromEntries(selectedMonths.map((m, i) => [m, allExpenses[i]]));
+
                 const monthlyPersonal = {}, monthlyShared = {};
                 for (const month of selectedMonths) {
-                    const { expenses } = await fetchExpensesWithCache(month);
                     const [year, mon] = month.split('-').map(Number);
                     monthlyPersonal[month] = 0; monthlyShared[month] = 0;
-                    for (const expense of expenses) {
+                    for (const expense of expByMonth[month]) {
                         if (selectedCatIds.length > 0 && !selectedCatIds.includes(expense.category_id)) continue;
                         const isShared = isSharedExpense(expense, year, mon);
                         const myAmt = expense.splits
@@ -6609,13 +6623,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const myPmList = userPms(user.id);
             const isSharedExp=(ex,y,m)=>{const us=new Set(ex.splits.filter(s=>{const d=new Date(s.due_date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()+1===m;}).map(s=>s.user_id));return us.size>1||(us.size===1&&!us.has(user.id));};
             try{
+                const allExpenses=await Promise.all(selectedMonths.map(m=>fetchMonthExpenses(m)));
+                const expByMonth=Object.fromEntries(selectedMonths.map((m,i)=>[m,allExpenses[i]]));
                 const monthlyByPm={};
                 for(const month of selectedMonths){
-                    const {expenses}=await fetchExpensesWithCache(month);
                     const [year,mon]=month.split('-').map(Number);
                     monthlyByPm[month]={};
                     myPmList.forEach(pm=>monthlyByPm[month][pm.id]=0);
-                    for(const ex of expenses){
+                    for(const ex of expByMonth[month]){
                         if(selectedCatIds.length>0&&!selectedCatIds.includes(ex.category_id))continue;
                         const shared=isSharedExp(ex,year,mon);
                         if(shared&&!showShared)continue;
@@ -6642,7 +6657,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options:{responsive:true,maintainAspectRatio:false,
                         plugins:{legend:{display:datasets.length>1,position:'top',labels:{color:textColor,font:{size:14}}},
                             tooltip:{callbacks:{label:ctx=>{const t=monthTotals[ctx.dataIndex]||1;return `${ctx.dataset.label}: R$ ${formatBRL(ctx.parsed.y)} (${t>0?((ctx.parsed.y/t)*100).toFixed(1):0}%)`;}}}},
-                        animation:{onComplete:function(){const ci=this;if(!ci.data.datasets.length)return;const last=ci.getDatasetMeta(ci.data.datasets.length-1);last.data.forEach((bar,i)=>{ci.ctx.fillStyle=isDark?'#e8eaed':'#5f6368';ci.ctx.font='bold 10px Arial';ci.ctx.textAlign='center';ci.ctx.fillText(Math.round(monthTotals[i]).toLocaleString('pt-BR'),bar.x,bar.y-8);});}},
+                        animation:{onComplete:function(){const ci=this;if(!ci.data.datasets.length)return;const nBars=ci.data.labels.length;for(let i=0;i<nBars;i++){let topBar=null,visTotal=0;for(let d=ci.data.datasets.length-1;d>=0;d--){const meta=ci.getDatasetMeta(d);if(meta.hidden)continue;if(!topBar&&meta.data[i])topBar=meta.data[i];visTotal+=ci.data.datasets[d].data[i]||0;}if(!topBar||visTotal<=0)continue;ci.ctx.fillStyle=isDark?'#e8eaed':'#5f6368';ci.ctx.font='bold 10px Arial';ci.ctx.textAlign='center';ci.ctx.fillText(Math.round(visTotal).toLocaleString('pt-BR'),topBar.x,topBar.y-8);}}},
                         scales:{y:{display:false,stacked:true,beginAtZero:true,suggestedMax:Math.max(...monthTotals,1)*1.15},x:{stacked:true,ticks:{color:textColor,font:{size:11}},grid:{color:gridColor,drawOnChartArea:false}}}
                     }
                 });
