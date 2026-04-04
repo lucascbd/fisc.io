@@ -1384,6 +1384,11 @@
         .dark-mode input[type="search"]{background:#3c4043 !important;color:#e8eaed !important;border-color:#5f6368 !important;}
         .dark-mode input[type="search"]::placeholder{color:#9aa0a6 !important;}
         .pm-filter-btn img{filter:none;}
+        @keyframes gallery-jiggle {
+            0%,100% { transform: rotate(-3deg) scale(1.05); }
+            50%     { transform: rotate(3deg)  scale(1.05); }
+        }
+        .gallery-jiggling { animation: gallery-jiggle 0.35s ease-in-out infinite; }
         .filter-h{height:38px;box-sizing:border-box;}
 
         /* ── Dark mode: suprimir flash de clique em textos não-interativos ── */
@@ -7244,23 +7249,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const sorted = [...data.icons].sort((a, b) => a.split('/').pop().toLowerCase().localeCompare(b.split('/').pop().toLowerCase()));
                     document.getElementById('pm_gallery_grid').innerHTML = sorted.map(path => {
                         const isSelected = document.getElementById('pm_icon_path').value === path;
-                        const delOverlay = user.is_admin
-                            ? `<div id="gallery_del_${btoa(path).replace(/[+=\/]/g,'_')}" class="gallery-del-overlay"
+                        const delBadge = user.is_admin
+                            ? `<div id="gallery_del_${btoa(path).replace(/[+=\/]/g,'_')}" class="gallery-del-badge"
                                 onclick="deletePmGalleryIcon(event,'${path}')"
-                                style="display:none;position:absolute;inset:0;border-radius:10px;background:rgba(217,48,37,0.88);align-items:center;justify-content:center;cursor:pointer;z-index:2;">
-                                <span style="color:white;font-size:1.3rem;">🗑️</span>
-                               </div>`
+                                style="display:none;position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#d93025;color:white;font-size:11px;font-weight:700;align-items:center;justify-content:center;cursor:pointer;z-index:3;box-shadow:0 1px 3px rgba(0,0,0,0.4);line-height:1;">✕</div>`
                             : '';
                         const longPressAttrs = user.is_admin
                             ? `onmousedown="startGalleryLongPress('${path}')" onmouseup="cancelGalleryLongPress()" onmouseleave="cancelGalleryLongPress()" ontouchstart="startGalleryLongPress('${path}')" ontouchend="cancelGalleryLongPress()" ontouchmove="cancelGalleryLongPress()"`
                             : '';
-                        return `<div style="position:relative;">
+                        return `<div style="position:relative;padding:5px;">
                             <div onclick="selectPmGalleryIcon('${path}')" id="gallery_${btoa(path).replace(/[+=\/]/g,'_')}"
                                 ${longPressAttrs}
-                                style="height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;user-select:none;">
+                                style="height:52px;border-radius:10px;border:2px solid ${isSelected?selBorder:'transparent'};background:${gridBg};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border .15s;user-select:none;">
                                 <img src="${path}" style="width:34px;height:34px;object-fit:contain;pointer-events:none;">
                             </div>
-                            ${delOverlay}
+                            ${delBadge}
                         </div>`;
                     }).join('');
                 } catch(e) { document.getElementById('pm_gallery_grid').innerHTML = '<span style="font-size:12px;color:#d93025;">Erro ao carregar</span>'; }
@@ -7269,21 +7272,24 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             window.startGalleryLongPress = function(path) {
                 _pmLongPressTimer = setTimeout(() => {
                     _pmLongPressTimer = null;
-                    document.querySelectorAll('.gallery-del-overlay').forEach(el => el.style.display = 'none');
-                    const el = document.getElementById('gallery_del_' + btoa(path).replace(/[+=\/]/g,'_'));
-                    if (el) el.style.display = 'flex';
-                    setTimeout(() => document.addEventListener('click', _hideGalleryOverlays, { once: true }), 10);
+                    _exitGalleryJiggle();
+                    const iconEl = document.getElementById('gallery_' + btoa(path).replace(/[+=\/]/g,'_'));
+                    if (iconEl) iconEl.classList.add('gallery-jiggling');
+                    const badgeEl = document.getElementById('gallery_del_' + btoa(path).replace(/[+=\/]/g,'_'));
+                    if (badgeEl) badgeEl.style.display = 'flex';
+                    setTimeout(() => document.addEventListener('click', _exitGalleryJiggle, { once: true }), 10);
                 }, 600);
             };
             window.cancelGalleryLongPress = function() {
                 if (_pmLongPressTimer) { clearTimeout(_pmLongPressTimer); _pmLongPressTimer = null; }
             };
-            window._hideGalleryOverlays = function() {
-                document.querySelectorAll('.gallery-del-overlay').forEach(el => el.style.display = 'none');
+            window._exitGalleryJiggle = function() {
+                document.querySelectorAll('.gallery-jiggling').forEach(el => el.classList.remove('gallery-jiggling'));
+                document.querySelectorAll('.gallery-del-badge').forEach(el => el.style.display = 'none');
             };
             window.deletePmGalleryIcon = async function(evt, path) {
                 evt.stopPropagation();
-                document.querySelectorAll('.gallery-del-overlay').forEach(el => el.style.display = 'none');
+                _exitGalleryJiggle();
                 const filename = path.split('/').pop();
                 try {
                     await api(`${API}/payment-methods/icons-library/${filename}`, { method: 'DELETE' });
