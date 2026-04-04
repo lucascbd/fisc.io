@@ -8542,7 +8542,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const sub      = isDark ? '#9aa0a6' : '#5f6368';
             const cardBg   = isDark ? '#2d2d2d' : '#f8f9fa';
 
-            const pmHtml = (paymentMethods || []).map(pm => {
+            const pmHtml = (paymentMethods || []).filter(pm => pm.user_id === window._myUserId).map(pm => {
                 const img = pm.icon_path
                     ? `<img src="${pm.icon_path}" style="width:24px;height:24px;object-fit:contain;">`
                     : `<span style="font-size:1.1rem;">💳</span>`;
