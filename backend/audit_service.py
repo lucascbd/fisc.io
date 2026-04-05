@@ -25,7 +25,6 @@ from models import Expense, ExpenseSplit
 MICRO_THRESHOLD  = Decimal('0.10')   # |amount| below this → micro-adjustment
 SIM_AUTO_MATCH   = 0.68              # similarity >= this + date_ok → matched
 SIM_AMBIGUOUS    = 0.20              # similarity below this → discard candidate
-DATE_WINDOW_REG  = 15                # days tolerance for regular expenses
 DATE_WINDOW_PAR  = 35                # days tolerance for installment parcels
 
 # OFX: MEMO/NAME patterns to silently skip (investment/internal transactions)
@@ -197,6 +196,9 @@ def parse_csv(
     """
     txns: List[FileTxn] = []
     silent = 0
+
+    # Strip BOM (common in Windows/Excel exports)
+    content = content.lstrip('\ufeff')
 
     sep = _detect_sep(content)
     headers = detect_csv_headers(content)
@@ -402,7 +404,9 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
                     continue
                 if abs(exp_amt - file_amount) / max(exp_amt, file_amount) > 0.02:
                     continue
-                date_ok = abs((txn.txn_date - exp.expense_date).days) <= DATE_WINDOW_REG
+                # Same month: bank statement month must match expense month
+                date_ok = (txn.txn_date.year  == exp.expense_date.year and
+                           txn.txn_date.month == exp.expense_date.month)
 
             sim = _sim(txn.description, exp.description)
             # If amount+date both match, always surface as candidate (min ambiguous).

@@ -8838,7 +8838,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 const s = window._auditData.stats;
                 document.getElementById('auditStats').innerHTML =
-                    `<span>📄 Total: <b>${s.total}</b></span>` +
+                    `<span>📄 Lidos: <b>${s.parsed ?? s.total}</b></span>` +
                     `<span style="color:#34a853;">✅ ${s.matched} matched</span>` +
                     `<span style="color:#f9ab00;">⚠️ ${s.ambiguous} ambíguo</span>` +
                     `<span style="color:#ea4335;">❌ ${s.unmatched} não encontrado</span>` +

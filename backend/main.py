@@ -2761,6 +2761,7 @@ async def audit_analyze(
         "micro_adjustments": result.micro_adjustments,
         "stats": {
             "total":    len(txns) + silent,
+            "parsed":   len(txns),
             "silent":   silent,
             "matched":  len(result.matched),
             "ambiguous":len(result.ambiguous),
