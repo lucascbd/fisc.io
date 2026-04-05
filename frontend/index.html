@@ -8647,11 +8647,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     <div style="font-size:0.82rem;font-weight:500;color:${sub};margin-bottom:10px;">
                       Mês de referência:</div>
                     <div class="ms-wrap" style="width:100%;">
-                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',-1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">◄</button>
+                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">◄</button>
                       <select id="auditMonthSelect" class="ms-select"
                         onchange="window._auditMonth=this.value;_auditCheckReady()"
                         style="flex:1;text-align:center;"></select>
-                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">►</button>
+                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',-1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">►</button>
                     </div>
                   </div>
 
