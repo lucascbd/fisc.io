@@ -341,31 +341,66 @@ def match_transactions(
     """
     Classify each file transaction as matched / ambiguous / unmatched
     against DB expenses for the given payment_method_id.
-    If audit_month is provided, only expenses from that year/month are considered.
+
+    audit_month scoping:
+      - Single expenses:     expense_date must be in the selected month
+      - Installment expenses: at least one split.due_date must be in the month;
+                              only the matching split is used for amount/date comparison
     """
     result = AuditResult()
 
-    q = db.query(Expense).filter(Expense.payment_method_id == payment_method_id)
+    filt_year = filt_month = None
     if audit_month:
         try:
-            y, m = int(audit_month[:4]), int(audit_month[5:7])
-            q = q.filter(
-                extract('year',  Expense.expense_date) == y,
-                extract('month', Expense.expense_date) == m,
-            )
+            filt_year, filt_month = int(audit_month[:4]), int(audit_month[5:7])
         except (ValueError, IndexError):
             pass
 
-    expenses: List[Expense] = q.all()
+    # ── Load single (non-installment) expenses filtered by month ─────────────
+    q_single = db.query(Expense).filter(
+        Expense.payment_method_id == payment_method_id,
+        Expense.installments == 1,
+    )
+    if filt_year:
+        q_single = q_single.filter(
+            extract('year',  Expense.expense_date) == filt_year,
+            extract('month', Expense.expense_date) == filt_month,
+        )
+    single_expenses: List[Expense] = q_single.all()
 
-    # Pre-load splits for installment expenses
-    inst_ids = [e.id for e in expenses if e.installments > 1]
+    # ── Load installment expenses that have a split due in the month ──────────
+    q_inst = db.query(Expense).filter(
+        Expense.payment_method_id == payment_method_id,
+        Expense.installments > 1,
+    )
+    inst_expenses: List[Expense] = q_inst.all()
+
+    # Pre-load ALL splits for installment expenses
+    inst_ids = [e.id for e in inst_expenses]
     splits_by_exp: Dict[int, List[ExpenseSplit]] = defaultdict(list)
     if inst_ids:
         for s in (db.query(ExpenseSplit)
                     .filter(ExpenseSplit.expense_id.in_(inst_ids))
                     .all()):
             splits_by_exp[s.expense_id].append(s)
+
+    # For installments: keep only expenses that have ≥1 split due in the month.
+    # Also build a lookup: exp_id → split for that month (the "active" split).
+    active_split_by_exp: Dict[int, ExpenseSplit] = {}
+    filtered_inst: List[Expense] = []
+    for exp in inst_expenses:
+        if filt_year:
+            month_splits = [
+                s for s in splits_by_exp.get(exp.id, [])
+                if s.due_date.year == filt_year and s.due_date.month == filt_month
+            ]
+            if not month_splits:
+                continue
+            # Use the first matching split as the active one for this month
+            active_split_by_exp[exp.id] = month_splits[0]
+        filtered_inst.append(exp)
+
+    expenses: List[Expense] = single_expenses + filtered_inst
 
     # Parcel cache: (norm_base_desc, parcel_total) → expense_id
     parcel_cache: Dict[Tuple[str, int], int] = {}
@@ -398,47 +433,43 @@ def match_transactions(
             if exp.id in used_ids:
                 continue
 
-            exp_amt      = float(exp.total_amount)
-            display_amt  = exp_amt          # shown to user; overridden for installments
-            amount_ok    = False
+            exp_amt     = float(exp.total_amount)
+            display_amt = exp_amt
+            amount_ok   = False
+            ref_date    = exp.expense_date   # date used for proximity ranking
 
-            # ── Try installment parcel match first ────────────────────────
-            is_parcel_match = (
-                txn.parcel_num and txn.parcel_total
-                and exp.installments == txn.parcel_total
-            )
-            if is_parcel_match:
-                splits = splits_by_exp.get(exp.id, [])
-                sp = next((s for s in splits
-                           if s.installment_number == txn.parcel_num), None)
-                if sp:
-                    sp_amt = float(sp.installment_amount)
-                    if abs(sp_amt - file_amount) <= 0.01:
+            if exp.installments > 1:
+                # ── Installment expense ───────────────────────────────────
+                # Priority 1: explicit parcel suffix match (e.g. 02/12 in CSV)
+                is_parcel_match = (
+                    txn.parcel_num and txn.parcel_total
+                    and exp.installments == txn.parcel_total
+                )
+                if is_parcel_match:
+                    sp = next((s for s in splits_by_exp.get(exp.id, [])
+                               if s.installment_number == txn.parcel_num), None)
+                    if sp and abs(float(sp.installment_amount) - file_amount) <= 0.01:
                         amount_ok   = True
-                        display_amt = sp_amt
+                        display_amt = float(sp.installment_amount)
+                        ref_date    = sp.due_date
 
-            # ── Regular (non-parcel) amount match ─────────────────────────
-            if not amount_ok:
-                if exp_amt <= 0:
-                    continue
-                # Also try each installment split against file_amount
-                # (CSV may list individual installment without parcel suffix)
-                if exp.installments > 1:
-                    for sp in splits_by_exp.get(exp.id, []):
-                        sp_amt = float(sp.installment_amount)
-                        if abs(sp_amt - file_amount) <= 0.01:
-                            amount_ok   = True
-                            display_amt = sp_amt
-                            break
+                # Priority 2: use the active split for this month
                 if not amount_ok:
-                    if abs(exp_amt - file_amount) <= 0.01:
-                        amount_ok = True
+                    active = active_split_by_exp.get(exp.id)
+                    if active and abs(float(active.installment_amount) - file_amount) <= 0.01:
+                        amount_ok   = True
+                        display_amt = float(active.installment_amount)
+                        ref_date    = active.due_date
+            else:
+                # ── Single expense ────────────────────────────────────────
+                if exp_amt > 0 and abs(exp_amt - file_amount) <= 0.01:
+                    amount_ok = True
 
             if not amount_ok:
                 continue
 
-            # ── Date proximity (soft signal, not a hard gate) ─────────────
-            days_diff = abs((txn.txn_date - exp.expense_date).days)
+            # ── Date proximity (soft signal only) ─────────────────────────
+            days_diff = abs((txn.txn_date - ref_date).days)
             date_ok   = days_diff <= 7
 
             # ── Description similarity ────────────────────────────────────
