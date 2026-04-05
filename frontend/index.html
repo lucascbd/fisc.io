@@ -8956,7 +8956,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         <span style="font-weight:500;">${c.expense.description}</span>
                         <span style="color:${sub};margin-left:5px;">${_adate(c.expense.expense_date)}</span>
                         <span style="color:${sub};margin-left:5px;">
-                          R$ ${c.expense.total_amount.toFixed(2).replace('.',',')}</span>
+                          R$ ${(c.expense.display_amount ?? c.expense.total_amount).toFixed(2).replace('.',',')}${c.expense.installments > 1 ? ` <span style="color:${sub};font-size:0.7rem;">(parc.)</span>` : ''}</span>
                       </div>
                       <span style="font-size:0.73rem;font-weight:600;
                                    color:${c.similarity>=0.7?'#34a853':'#f9ab00'};">
@@ -9118,7 +9118,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             return microHtml + itemsHtml;
         }
 
-        function _auditIgnore(idx) {
+        window._auditIgnore = function _auditIgnore(idx) {
             const el = document.getElementById(`unmatch_${idx}`);
             if (el) el.style.display = 'none';
         }

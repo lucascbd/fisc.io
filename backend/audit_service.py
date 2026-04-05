@@ -143,11 +143,12 @@ def _txn_dict(txn: FileTxn) -> dict:
     }
 
 
-def _exp_dict(exp: Expense) -> dict:
+def _exp_dict(exp: Expense, display_amount: Optional[float] = None) -> dict:
     return {
         'id':               exp.id,
         'description':      exp.description,
         'total_amount':     float(exp.total_amount),
+        'display_amount':   display_amount if display_amount is not None else float(exp.total_amount),
         'expense_date':     exp.expense_date.isoformat(),
         'installments':     exp.installments,
         'category_id':      exp.category_id,
@@ -383,46 +384,64 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
             if exp.id in used_ids:
                 continue
 
+            exp_amt      = float(exp.total_amount)
+            display_amt  = exp_amt          # shown to user; overridden for installments
+            amount_ok    = False
+
+            # ── Try installment parcel match first ────────────────────────
             is_parcel_match = (
                 txn.parcel_num and txn.parcel_total
                 and exp.installments == txn.parcel_total
             )
-
             if is_parcel_match:
                 splits = splits_by_exp.get(exp.id, [])
                 sp = next((s for s in splits
                            if s.installment_number == txn.parcel_num), None)
-                if not sp:
-                    continue
-                if abs(float(sp.installment_amount) - file_amount) > 0.02:
-                    continue
-                expected = exp.expense_date + relativedelta(months=txn.parcel_num - 1)
-                date_ok = abs((txn.txn_date - expected).days) <= DATE_WINDOW_PAR
-            else:
-                exp_amt = float(exp.total_amount)
+                if sp:
+                    sp_amt = float(sp.installment_amount)
+                    if abs(sp_amt - file_amount) <= 0.01:
+                        amount_ok   = True
+                        display_amt = sp_amt
+
+            # ── Regular (non-parcel) amount match ─────────────────────────
+            if not amount_ok:
                 if exp_amt <= 0:
                     continue
-                if abs(exp_amt - file_amount) / max(exp_amt, file_amount) > 0.02:
-                    continue
-                # Same month: bank statement month must match expense month
-                date_ok = (txn.txn_date.year  == exp.expense_date.year and
-                           txn.txn_date.month == exp.expense_date.month)
+                # Also try each installment split against file_amount
+                # (CSV may list individual installment without parcel suffix)
+                if exp.installments > 1:
+                    for sp in splits_by_exp.get(exp.id, []):
+                        sp_amt = float(sp.installment_amount)
+                        if abs(sp_amt - file_amount) <= 0.01:
+                            amount_ok   = True
+                            display_amt = sp_amt
+                            break
+                if not amount_ok:
+                    if abs(exp_amt - file_amount) <= 0.01:
+                        amount_ok = True
 
-            sim = _sim(txn.description, exp.description)
-            # If amount+date both match, always surface as candidate (min ambiguous).
-            # Bank descriptions (PIX, OFX) rarely match app descriptions literally.
-            # Only discard when BOTH description AND date are poor.
-            if sim < SIM_AMBIGUOUS and not date_ok:
+            if not amount_ok:
                 continue
 
+            # ── Date proximity (soft signal, not a hard gate) ─────────────
+            days_diff = abs((txn.txn_date - exp.expense_date).days)
+            date_ok   = days_diff <= 7
+
+            # ── Description similarity ────────────────────────────────────
+            sim = _sim(txn.description, exp.description)
+
             candidates.append({
-                'expense':    _exp_dict(exp),
+                'expense':    _exp_dict(exp, display_amt),
                 'similarity': round(sim, 2),
                 'date_ok':    date_ok,
+                'days_diff':  days_diff,
             })
 
-        # Sort: date_ok first, then similarity descending
-        candidates.sort(key=lambda x: (x['date_ok'], x['similarity']), reverse=True)
+        # Sort: date_ok first, then similarity desc, then days_diff asc
+        candidates.sort(
+            key=lambda x: (x['date_ok'], x['similarity'], -x['days_diff']),
+            reverse=True,
+        )
 
         if not candidates:
             result.unmatched.append({'file': _txn_dict(txn)})
@@ -442,9 +461,14 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
             })
 
         else:
+            # Strip internal-only days_diff before sending to frontend
+            clean = [
+                {k: v for k, v in c.items() if k != 'days_diff'}
+                for c in candidates[:5]
+            ]
             result.ambiguous.append({
                 'file':       _txn_dict(txn),
-                'candidates': candidates[:5],
+                'candidates': clean,
             })
 
     return result
