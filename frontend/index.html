@@ -9136,8 +9136,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const total = f.parcel_total
                 ? (Math.abs(f.amount) * (f.parcel_num === 1 ? f.parcel_total : 1)).toFixed(2)
                 : Math.abs(f.amount).toFixed(2);
-            const notes = f.parcel_num
-                ? `importado via auditoria (parcela ${f.parcel_num}/${f.parcel_total})` : null;
+            const notes = null;
 
             try {
                 const token = localStorage.getItem('token');
