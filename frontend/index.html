@@ -8564,19 +8564,22 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             document.getElementById('modalContainer').innerHTML = `
             <div id="auditOverlay" class="modal-overlay fixed inset-0 z-50 flex items-start justify-center pt-4 pb-4"
                  style="background:rgba(0,0,0,0.5);overflow-y:auto;">
-              <div style="background:${bg};color:${txt};width:100%;max-width:680px;border-radius:16px;
-                          overflow:hidden;margin:0 12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+              <div style="background:${bg};color:${txt};width:100%;max-width:680px;border-radius:28px;
+                          overflow:hidden;margin:0 12px;box-shadow:0 4px 8px 3px rgba(60,64,67,0.15),0 1px 3px rgba(60,64,67,0.3);">
 
                 <!-- Header -->
-                <div style="background:${isDark?'#1a3a5c':'#e8f0fe'};padding:16px 20px;
-                            display:flex;align-items:center;gap:12px;">
-                  <span style="font-size:1.5rem;">🔍</span>
-                  <div style="flex:1;">
-                    <div style="font-size:1.05rem;font-weight:600;color:${isDark?'#8ab4f8':'#1a73e8'};">
-                      Auditar extrato</div>
+                <div style="background:${isDark?'#35363a':'#e8f0fe'};padding:1.25rem 1.5rem;
+                            border-radius:28px 28px 0 0;display:flex;align-items:center;gap:12px;">
+                  <div style="width:40px;height:40px;background:${isDark?'#8ab4f820':'#d2e3fc'};
+                              border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <span style="font-size:1.1rem;">🔍</span>
                   </div>
+                  <h2 style="flex:1;font-size:1.1rem;font-weight:500;color:${txt};">Auditar Extrato</h2>
                   <button onclick="closeModal()"
-                    style="background:none;border:none;cursor:pointer;font-size:1.5rem;color:${sub};padding:4px;">×</button>
+                    style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;
+                           justify-content:center;background:transparent;border:none;cursor:pointer;">
+                    <span style="font-size:1.5rem;color:${sub};">✕</span>
+                  </button>
                 </div>
 
                 <!-- Step 1: Upload -->
