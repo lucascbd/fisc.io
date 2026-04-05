@@ -8574,7 +8574,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                               border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                     <span style="font-size:1.1rem;">🔍</span>
                   </div>
-                  <h2 style="flex:1;font-size:1.1rem;font-weight:500;color:${txt};">Auditar Extrato</h2>
+                  <h2 style="flex:1;font-size:1.1rem;font-weight:500;color:${txt};">Auditar extrato</h2>
                   <button onclick="closeModal()"
                     style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;
                            justify-content:center;background:transparent;border:none;cursor:pointer;">
@@ -8646,12 +8646,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                   <div style="margin-bottom:20px;">
                     <div style="font-size:0.82rem;font-weight:500;color:${sub};margin-bottom:10px;">
                       Mês de referência:</div>
-                    <input type="month" id="auditMonth"
-                      value="${new Date().toISOString().slice(0,7)}"
-                      onchange="window._auditMonth=this.value; _auditCheckReady()"
-                      style="padding:8px 12px;border:1px solid ${border};border-radius:8px;
-                             background:${cardBg};color:${txt};font-size:0.9rem;
-                             width:100%;box-sizing:border-box;">
+                    <div class="ms-wrap" style="width:100%;">
+                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',-1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">◄</button>
+                      <select id="auditMonthSelect" class="ms-select"
+                        onchange="window._auditMonth=this.value;_auditCheckReady()"
+                        style="flex:1;text-align:center;"></select>
+                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">►</button>
+                    </div>
                   </div>
 
                   <button id="auditRunBtn" onclick="runAudit()" disabled
@@ -8711,6 +8712,35 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
               </div>
             </div>`;
+
+            // Populate month stepper from /expenses/months, default to current month
+            const currentMonthVal = new Date().toISOString().slice(0, 7);
+            api(`${API}/expenses/months`).then(data => {
+                const sel = document.getElementById('auditMonthSelect');
+                if (!sel) return;
+                const mlist = Array.isArray(data) ? data : [];
+                // If current month not in list, prepend it
+                if (!mlist.find(m => m.value === currentMonthVal)) {
+                    const d = new Date(currentMonthVal + '-01');
+                    const label = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+                    mlist.push({ value: currentMonthVal, label });
+                    mlist.sort((a, b) => a.value.localeCompare(b.value));
+                }
+                sel.innerHTML = mlist.map(m => `<option value="${m.value}">${m.label}</option>`).join('');
+                const target = window._auditMonth || currentMonthVal;
+                sel.value = mlist.find(m => m.value === target) ? target
+                    : (mlist.length ? mlist[mlist.length - 1].value : currentMonthVal);
+                window._auditMonth = sel.value;
+                _auditCheckReady();
+            }).catch(() => {
+                // Fallback: plain month input
+                const sel = document.getElementById('auditMonthSelect');
+                if (sel) {
+                    sel.innerHTML = `<option value="${currentMonthVal}">${currentMonthVal}</option>`;
+                    sel.value = currentMonthVal;
+                    window._auditMonth = currentMonthVal;
+                }
+            });
         }
 
         window.selectAuditPm = function selectAuditPm(pmId) {
@@ -8809,7 +8839,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         function _auditCheckReady() {
             const btn = document.getElementById('auditRunBtn');
             if (!btn) return;
-            const month = document.getElementById('auditMonth')?.value || window._auditMonth;
+            const month = document.getElementById('auditMonthSelect')?.value || window._auditMonth;
             const ok = !!(window._auditFile && window._auditPmId && month);
             btn.disabled = !ok;
             btn.style.background = ok ? '#1a73e8' : '#ccc';
@@ -8835,8 +8865,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (aEl && aEl.value) fd.append('col_amount', aEl.value);
                     fd.append('negate_amount', (nEl && nEl.checked) ? 'true' : 'false');
                 }
-                const mEl = document.getElementById('auditMonth');
-                if (mEl && mEl.value) fd.append('audit_month', mEl.value);
+                const mEl = document.getElementById('auditMonthSelect');
+                const mVal = (mEl && mEl.value) || window._auditMonth;
+                if (mVal) fd.append('audit_month', mVal);
                 const token = localStorage.getItem('token');
                 const res = await fetch(`${API}/audit/analyze`, {
                     method: 'POST',
