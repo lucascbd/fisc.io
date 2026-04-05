@@ -9146,13 +9146,22 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (!profId) { alert('Selecione um perfil'); return; }
             if (!userId) { alert('Selecione o pagador'); return; }
 
-            const f    = window._auditData.unmatched[idx].file;
-            const inst = (f.parcel_num === 1 && f.parcel_total) ? f.parcel_total : 1;
-            const total = f.parcel_total
-                ? (Math.abs(f.amount) * (f.parcel_num === 1 ? f.parcel_total : 1)).toFixed(2)
+            const f       = window._auditData.unmatched[idx].file;
+            const isParc  = !!(f.parcel_num && f.parcel_total);
+            const inst    = isParc ? f.parcel_total : 1;
+            const total   = isParc
+                ? (Math.abs(f.amount) * f.parcel_total).toFixed(2)
                 : Math.abs(f.amount).toFixed(2);
-            const notes = f.parcel_num
+            const notes   = isParc
                 ? `Importado via auditoria - parcela ${f.parcel_num}/${f.parcel_total}` : 'Importado via auditoria';
+
+            // For parcel N/M, backtrack to the original purchase date
+            let expenseDate = f.date;
+            if (isParc && f.parcel_num > 1) {
+                const d = new Date(f.date + 'T00:00:00');
+                d.setMonth(d.getMonth() - (f.parcel_num - 1));
+                expenseDate = d.toISOString().slice(0, 10);
+            }
 
             try {
                 const token = localStorage.getItem('token');
@@ -9166,7 +9175,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         category_id:      catId,
                         split_profile_id: profId,
                         paid_by_user_id:  userId,
-                        expense_date:     f.date,
+                        expense_date:     expenseDate,
                         installments:     inst,
                         payment_method_id: window._auditPmId,
                         notes
