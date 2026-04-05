@@ -25,7 +25,7 @@ from models import Expense, ExpenseSplit
 MICRO_THRESHOLD  = Decimal('0.10')   # |amount| below this → micro-adjustment
 SIM_AUTO_MATCH   = 0.68              # similarity >= this + date_ok → matched
 SIM_AMBIGUOUS    = 0.20              # similarity below this → discard candidate
-DATE_WINDOW_REG  = 7                 # days tolerance for regular expenses
+DATE_WINDOW_REG  = 15                # days tolerance for regular expenses
 DATE_WINDOW_PAR  = 35                # days tolerance for installment parcels
 
 # OFX: MEMO/NAME patterns to silently skip (investment/internal transactions)
@@ -158,15 +158,19 @@ def _exp_dict(exp: Expense) -> dict:
 
 
 # ── CSV helpers ───────────────────────────────────────────────────────────────
+def _detect_sep(content: str) -> str:
+    """Detect CSV separator: semicolon wins if present (BR banks use ; because , is decimal)."""
+    first_line = content.strip().splitlines()[0] if content.strip() else ''
+    if first_line.count(';') >= first_line.count(',') and first_line.count(';') > 0:
+        return ';'
+    return ','
+
+
 def detect_csv_headers(content: str) -> List[str]:
     """Return the list of column headers from the first CSV line."""
+    sep = _detect_sep(content)
     first_line = content.strip().splitlines()[0] if content.strip() else ''
-    # Try comma, then semicolon
-    for sep in [',', ';', '\t']:
-        parts = first_line.split(sep)
-        if len(parts) >= 2:
-            return [p.strip().strip('"') for p in parts]
-    return []
+    return [p.strip().strip('"').strip("'") for p in first_line.split(sep)]
 
 
 def _best_col(headers: List[str], keywords: List[str]) -> Optional[str]:
@@ -194,19 +198,20 @@ def parse_csv(
     txns: List[FileTxn] = []
     silent = 0
 
+    sep = _detect_sep(content)
     headers = detect_csv_headers(content)
     norm_headers = {_strip_accents(h).lower().strip(): h for h in headers}
 
-    # Auto-detect if not provided
+    # Auto-detect columns if not provided
     if not col_date:
         col_date = _best_col(headers, ['data', 'date', 'dt'])
     if not col_desc:
         col_desc = _best_col(headers, ['lancamento', 'descricao', 'historico', 'desc', 'nome', 'memorial'])
     if not col_amount:
-        col_amount = _best_col(headers, ['valor', 'value', 'amount', 'vl ', 'vlr', 'montante'])
+        col_amount = _best_col(headers, ['valor', 'value', 'amount', 'vl', 'vlr', 'montante'])
 
-    # Build normalized lookup key for each requested column
-    def _find_key(requested: str) -> Optional[str]:
+    # Normalize requested column name → key used in row_n
+    def _find_key(requested: Optional[str]) -> Optional[str]:
         if not requested:
             return None
         norm = _strip_accents(requested).lower().strip()
@@ -216,9 +221,9 @@ def parse_csv(
     key_desc   = _find_key(col_desc)
     key_amount = _find_key(col_amount)
 
-    reader = csv.DictReader(io.StringIO(content))
+    reader = csv.DictReader(io.StringIO(content), delimiter=sep)
     for row in reader:
-        row_n = {_strip_accents(k).lower().strip(): v.strip() for k, v in row.items()}
+        row_n = {_strip_accents(k).lower().strip(): (v or '').strip() for k, v in row.items()}
 
         date_str = row_n.get(key_date, '')   if key_date   else ''
         desc_raw = row_n.get(key_desc, '')   if key_desc   else ''
@@ -400,7 +405,10 @@ def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int)
                 date_ok = abs((txn.txn_date - exp.expense_date).days) <= DATE_WINDOW_REG
 
             sim = _sim(txn.description, exp.description)
-            if sim < SIM_AMBIGUOUS:
+            # If amount+date both match, always surface as candidate (min ambiguous).
+            # Bank descriptions (PIX, OFX) rarely match app descriptions literally.
+            # Only discard when BOTH description AND date are poor.
+            if sim < SIM_AMBIGUOUS and not date_ok:
                 continue
 
             candidates.append({
