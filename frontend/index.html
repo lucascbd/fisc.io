@@ -8531,6 +8531,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         window._auditColDesc  = null;
         window._auditColAmount= null;
         window._auditNegate   = false;
+        window._auditMonth    = new Date().toISOString().slice(0, 7);
 
         window.openAuditModal = function openAuditModal() {
             const savedScroll = window.pageYOffset || 0;
@@ -8639,6 +8640,17 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                       ${pmHtml || `<span style="font-size:0.82rem;color:${sub};">
                                    Nenhum método cadastrado</span>`}
                     </div>
+                  </div>
+
+                  <div style="margin-bottom:20px;">
+                    <div style="font-size:0.82rem;font-weight:500;color:${sub};margin-bottom:10px;">
+                      Mês de referência:</div>
+                    <input type="month" id="auditMonth"
+                      value="${new Date().toISOString().slice(0,7)}"
+                      onchange="window._auditMonth=this.value; _auditCheckReady()"
+                      style="padding:8px 12px;border:1px solid ${border};border-radius:8px;
+                             background:${cardBg};color:${txt};font-size:0.9rem;
+                             width:100%;box-sizing:border-box;">
                   </div>
 
                   <button id="auditRunBtn" onclick="runAudit()" disabled
@@ -8796,7 +8808,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         function _auditCheckReady() {
             const btn = document.getElementById('auditRunBtn');
             if (!btn) return;
-            const ok = !!(window._auditFile && window._auditPmId);
+            const month = document.getElementById('auditMonth')?.value || window._auditMonth;
+            const ok = !!(window._auditFile && window._auditPmId && month);
             btn.disabled = !ok;
             btn.style.background = ok ? '#1a73e8' : '#ccc';
             btn.style.cursor     = ok ? 'pointer'  : 'not-allowed';
@@ -8821,6 +8834,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (aEl && aEl.value) fd.append('col_amount', aEl.value);
                     fd.append('negate_amount', (nEl && nEl.checked) ? 'true' : 'false');
                 }
+                const mEl = document.getElementById('auditMonth');
+                if (mEl && mEl.value) fd.append('audit_month', mEl.value);
                 const token = localStorage.getItem('token');
                 const res = await fetch(`${API}/audit/analyze`, {
                     method: 'POST',

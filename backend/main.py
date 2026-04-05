@@ -2723,10 +2723,11 @@ async def audit_csv_headers(
 async def audit_analyze(
     file: UploadFile = File(...),
     payment_method_id: int = Form(...),
-    col_date:   Optional[str] = Form(None),
-    col_desc:   Optional[str] = Form(None),
-    col_amount: Optional[str] = Form(None),
+    col_date:     Optional[str] = Form(None),
+    col_desc:     Optional[str] = Form(None),
+    col_amount:   Optional[str] = Form(None),
     negate_amount: str = Form('false'),
+    audit_month:  Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -2751,7 +2752,7 @@ async def audit_analyze(
     else:
         raise HTTPException(status_code=400, detail="Formato não suportado. Use .csv ou .ofx")
 
-    result = _audit_match(db, txns, payment_method_id)
+    result = _audit_match(db, txns, payment_method_id, audit_month=audit_month)
     result.silent_filtered = silent
 
     return {

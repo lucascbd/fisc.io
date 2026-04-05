@@ -18,6 +18,7 @@ from collections import defaultdict
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import extract
 
 from models import Expense, ExpenseSplit
 
@@ -331,18 +332,31 @@ def parse_ofx(content: str) -> Tuple[List[FileTxn], int]:
 
 
 # ── Matching engine ───────────────────────────────────────────────────────────
-def match_transactions(db: Session, txns: List[FileTxn], payment_method_id: int) -> AuditResult:
+def match_transactions(
+    db: Session,
+    txns: List[FileTxn],
+    payment_method_id: int,
+    audit_month: Optional[str] = None,   # "YYYY-MM"
+) -> AuditResult:
     """
     Classify each file transaction as matched / ambiguous / unmatched
     against DB expenses for the given payment_method_id.
+    If audit_month is provided, only expenses from that year/month are considered.
     """
     result = AuditResult()
 
-    expenses: List[Expense] = (
-        db.query(Expense)
-        .filter(Expense.payment_method_id == payment_method_id)
-        .all()
-    )
+    q = db.query(Expense).filter(Expense.payment_method_id == payment_method_id)
+    if audit_month:
+        try:
+            y, m = int(audit_month[:4]), int(audit_month[5:7])
+            q = q.filter(
+                extract('year',  Expense.expense_date) == y,
+                extract('month', Expense.expense_date) == m,
+            )
+        except (ValueError, IndexError):
+            pass
+
+    expenses: List[Expense] = q.all()
 
     # Pre-load splits for installment expenses
     inst_ids = [e.id for e in expenses if e.installments > 1]
