@@ -9149,19 +9149,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const f       = window._auditData.unmatched[idx].file;
             const isParc  = !!(f.parcel_num && f.parcel_total);
             const inst    = isParc ? f.parcel_total : 1;
-            const total   = isParc
-                ? (Math.abs(f.amount) * f.parcel_total).toFixed(2)
-                : Math.abs(f.amount).toFixed(2);
+            // Preserve sign: OFX income entries have negative amount
+            const rawAmt  = isParc ? f.amount * f.parcel_total : f.amount;
+            const total   = Math.abs(rawAmt).toFixed(2);
+            const isIncome = f.amount < 0;
             const notes   = isParc
                 ? `Importado via auditoria - parcela ${f.parcel_num}/${f.parcel_total}` : 'Importado via auditoria';
-
-            // For parcel N/M, backtrack to the original purchase date
-            let expenseDate = f.date;
-            if (isParc && f.parcel_num > 1) {
-                const d = new Date(f.date + 'T00:00:00');
-                d.setMonth(d.getMonth() - (f.parcel_num - 1));
-                expenseDate = d.toISOString().slice(0, 10);
-            }
+            const expenseDate = f.date;
 
             try {
                 const token = localStorage.getItem('token');
@@ -9171,7 +9165,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({
                         description:      f.description,
-                        total_amount:     parseFloat(total),
+                        total_amount:     isIncome ? -parseFloat(total) : parseFloat(total),
                         category_id:      catId,
                         split_profile_id: profId,
                         paid_by_user_id:  userId,
