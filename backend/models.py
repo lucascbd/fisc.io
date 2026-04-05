@@ -107,6 +107,7 @@ class Expense(Base):
     notes = Column(String)
     payment_method_id = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
     original_date = Column(Date, nullable=True)                    # data real de lançamento (antes do ajuste de cartão)
+    is_recurring = Column(Boolean, default=False, nullable=True)   # gerada por despesa recorrente
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_user_id = Column(Integer, ForeignKey("users.id"))
 

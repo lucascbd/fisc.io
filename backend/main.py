@@ -28,6 +28,21 @@ Base.metadata.create_all(bind=engine)
 
 # NOTA: Schema gerenciado via migrações manuais. Ver README para histórico de migrações.
 
+# Safe column migrations (ignored if column already exists)
+def _safe_add_column(sql: str):
+    from sqlalchemy import text
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        db.execute(text(sql))
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+_safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
+
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
     import os
@@ -1625,6 +1640,7 @@ async def list_expenses(
         "installments": e.installments,
         "expense_date": str(e.expense_date),
         "original_date": str(e.original_date) if e.original_date else str(e.expense_date),
+        "is_recurring": bool(e.is_recurring),
         **_expense_pm_fields(e),
         "paid_by_user_id": e.paid_by_user_id,
         "paid_by_name": e.paid_by.name,

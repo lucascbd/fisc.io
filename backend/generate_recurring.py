@@ -57,7 +57,7 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
             insert_day = max(1, min(31, r.insert_day or 1))
             last_day = calendar.monthrange(target_date.year, target_date.month)[1]
             expense_date = target_date.replace(day=min(insert_day, last_day))
-            ExpenseService.create_expense(
+            exp = ExpenseService.create_expense(
                 db=db,
                 description=r.description,
                 total_amount=Decimal(str(r.total_amount)),
@@ -70,6 +70,8 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
                 payment_method_id=r.payment_method_id,
                 created_by_user_id=r.created_by_user_id,
             )
+            if exp:
+                exp.is_recurring = True
             r.last_generated_month = current_month_str
 
         generated += 1
