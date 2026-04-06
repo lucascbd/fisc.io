@@ -3154,7 +3154,7 @@
                         <div class="text-right ml-4">
                             ${e.installments > 1
                                 ? `<p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount / e.installments)} ${pmIconHtml}</p>
-                               <p class="text-xs text-gray-400">${e.installments}x · Total R$ ${formatBRL(e.total_amount)}</p>`
+                               <p class="text-xs text-gray-400">R$ ${formatBRL(e.total_amount)} · ${e.installments}x</p>`
                                 : `<p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIconHtml}</p>`
                             }
                             <div class="flex gap-2 mt-2 justify-end">
