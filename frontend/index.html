@@ -6675,15 +6675,25 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         const shared=isSharedExp(ex,year,mon);
                         if(shared&&!showShared)continue;
                         if(!shared&&!showIndividual)continue;
-                        // effective PM para o usuário logado
-                        const pmId=ex.paid_by_user_id===user.id?ex.payment_method_id:null;
-                        if(pmId==null)continue;
-                        if(!(pmId in monthlyByPm[month]))monthlyByPm[month][pmId]=0;
-                        for(const s of ex.splits){
-                            if(s.user_id!==user.id)continue;
-                            const d=new Date(s.due_date+'T00:00:00');
-                            if(d.getFullYear()!==year||d.getMonth()+1!==mon)continue;
-                            monthlyByPm[month][pmId]+=parseFloat(s.user_amount);
+                        const balPmId=user.preferred_balance_method||null;
+                        if(ex.paid_by_user_id===user.id){
+                            const pmId=ex.payment_method_id;
+                            if(!(pmId in monthlyByPm[month]))monthlyByPm[month][pmId]=0;
+                            const seenInst=new Set();
+                            for(const s of ex.splits){
+                                const d=new Date(s.due_date+'T00:00:00');
+                                if(d.getFullYear()!==year||d.getMonth()+1!==mon)continue;
+                                if(!seenInst.has(s.installment_number)){seenInst.add(s.installment_number);monthlyByPm[month][pmId]+=parseFloat(s.installment_amount);}
+                                if(s.user_id!==user.id&&balPmId){if(!(balPmId in monthlyByPm[month]))monthlyByPm[month][balPmId]=0;monthlyByPm[month][balPmId]-=parseFloat(s.user_amount);}
+                            }
+                        }else if(balPmId){
+                            if(!(balPmId in monthlyByPm[month]))monthlyByPm[month][balPmId]=0;
+                            for(const s of ex.splits){
+                                if(s.user_id!==user.id)continue;
+                                const d=new Date(s.due_date+'T00:00:00');
+                                if(d.getFullYear()!==year||d.getMonth()+1!==mon)continue;
+                                monthlyByPm[month][balPmId]+=parseFloat(s.user_amount);
+                            }
                         }
                     }
                 }
