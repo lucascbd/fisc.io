@@ -1722,7 +1722,12 @@
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
-                    <p class="text-gray-600 text-sm">Total de despesas no período</p>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <p class="text-gray-600 text-sm">Total de despesas no período</p>
+                        <button onclick="_toggleTotalVisibility()" style="background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;">
+                            <img id="totalVisibilityIcon" src="" style="width:20px;height:20px;opacity:0.6;">
+                        </button>
+                    </div>
                     <p id="totalExpenses" class="text-3xl font-bold mt-2 text-blue-600">R$ 0,00</p>
                 </div>
                 <!-- Seção pessoal: targets + despesas individuais -->
@@ -2292,6 +2297,32 @@
         }
 
         // ✅ 7️⃣ Formato brasileiro para números
+        // ── Total expenses visibility toggle ──────────────────────────────────
+        let _totalExpensesValue = 'R$ 0,00';
+        function _updateTotalVisibilityIcon() {
+            const visible = localStorage.getItem('totalExpensesVisible') !== 'false';
+            const dark = document.body.classList.contains('dark-mode');
+            const icon = document.getElementById('totalVisibilityIcon');
+            if (icon) icon.src = visible
+                ? (dark ? '/icons/system/seen-white.png'   : '/icons/system/seen-black.png')
+                : (dark ? '/icons/system/unseen-white.png' : '/icons/system/unseen-black.png');
+        }
+        function _setTotalExpenses(val) {
+            _totalExpensesValue = val;
+            const visible = localStorage.getItem('totalExpensesVisible') !== 'false';
+            const el = document.getElementById('totalExpenses');
+            if (el) el.textContent = visible ? val : '••••••';
+            _updateTotalVisibilityIcon();
+        }
+        window._toggleTotalVisibility = function() {
+            const visible = localStorage.getItem('totalExpensesVisible') !== 'false';
+            localStorage.setItem('totalExpensesVisible', visible ? 'false' : 'true');
+            _setTotalExpenses(_totalExpensesValue);
+        };
+        // Init icon on load
+        document.addEventListener('DOMContentLoaded', _updateTotalVisibilityIcon);
+        // ──────────────────────────────────────────────────────────────────────
+
         function formatBRL(value) {
             return parseFloat(value).toLocaleString('pt-BR', {
                 minimumFractionDigits: 2,
@@ -2645,8 +2676,9 @@
                             if(s.user_id!==user.id)continue;
                             const d=new Date(s.due_date+'T00:00:00');
                             if(d.getFullYear()===year&&d.getMonth()+1===mon){ft+=parseFloat(s.user_amount);}}}
-                    document.getElementById('totalExpenses').textContent=`R$ ${formatBRL(ft)}`;
-                }else{document.getElementById('totalExpenses').textContent=`R$ ${formatBRL(myBalance?(myBalance.total_owed||0):totalPeriod)}`;}
+                    _setTotalExpenses(`R$ ${formatBRL(ft)}`);
+                }else{_setTotalExpenses(`R$ ${formatBRL(myBalance?(myBalance.total_owed||0):totalPeriod)}`);}
+
 
                 // Classify: shared = another user also has splits in this month
                 const isSharedExpense = (expense) => {
@@ -7778,6 +7810,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (themeColor) themeColor.setAttribute('content', '#1f1f1f');
             }
             invalidateCache();
+            _updateTotalVisibilityIcon();
             loadDashboardData();
             const chartsTabEl = document.getElementById('chartsTab');
             const inflTabEl = document.getElementById('inflationTab');
