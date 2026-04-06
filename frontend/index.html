@@ -764,6 +764,7 @@
         .dark-mode .sidebar-divider {
             background: #3c4043;
         }
+        .dark-mode .dark-invert-icon { filter: invert(1); }
         .dark-mode .theme-toggle-label {
             color: #e8eaed;
         }
@@ -7621,7 +7622,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div style="width: 20px; height: 20px; border-radius: 4px; background: ${c.color};"></div>
                         <button onclick="toggleCatVisibility(${c.id})" title="${hidden ? 'Mostrar categoria' : 'Ocultar categoria'}"
-                            style="background: none; border: none; cursor: pointer; font-size: 16px; opacity: ${hidden ? '0.5' : '1'}; line-height: 1;">${hidden ? '🙈' : '👁️'}</button>
+                            style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center; opacity: ${hidden ? '0.4' : '0.6'};">
+                            <img src="${hidden ? '/icons/system/unseen-black.png' : '/icons/system/seen-black.png'}" class="dark-invert-icon" style="width:18px;height:18px;"></button>
                         ${user.is_admin ? `
                             <button onclick="editCategory(${c.id})" style="background: none; border: none; cursor: pointer; font-size: 14px;">✏️</button>
                             <button onclick="deleteItem('categories', ${c.id})" style="background: none; border: none; cursor: pointer; font-size: 14px;">🗑️</button>
