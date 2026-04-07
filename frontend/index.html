@@ -6271,8 +6271,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (!origStr) continue;
                     const origDate = new Date(origStr + 'T00:00:00');
                     if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
-                    // Suprimir despesas que caem pro próximo mês (not in curExp = sem split no mês atual)
-                    if (!curExpIds.has(expense.id)) continue;
+                    // Suprimir despesas com ➡️ (original_date != expense_date = caem no próximo mês)
+                    if (expense.original_date && expense.original_date !== expense.expense_date) continue;
                     // Shared/individual baseado em todos os splits da despesa
                     const allUids = new Set(expense.splits.map(s => s.user_id));
                     const isShared = allUids.size > 1 || (allUids.size === 1 && !allUids.has(user.id));
