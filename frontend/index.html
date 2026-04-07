@@ -1851,9 +1851,8 @@
                     <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;">
                         <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Período</label><div style="position:relative;"><button type="button" id="barChartDropdownBtn" onclick="toggleBarChartDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="barChartSelectedText" class="truncate">12 meses</span><span>▼</span></button><div id="barChartDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:120px;"><div id="barChartMonthsContainer" class="p-2" style="max-height:230px;overflow-y:auto;white-space:nowrap;"></div></div></div></div>
                         <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Categoria</label><div style="position:relative;"><button type="button" id="catFilterDropdownBtn" onclick="toggleCatFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="catFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="catFilterDropdown" class="hidden absolute top-full left-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:160px;"><div id="catFilterContainer" class="p-2" style="max-height:230px;overflow-y:auto;"></div></div></div></div>
-                        <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Despesas</label><div style="position:relative;"><button type="button" id="userFilterDropdownBtn" onclick="toggleUserFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="userFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="userFilterDropdown" class="hidden absolute top-full right-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:100%;width:max-content;"><div id="userFilterContainer" class="p-2" style="white-space:nowrap;"><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" checked onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" checked onchange="updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label></div></div></div></div>
+                        <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Despesas</label><div style="position:relative;"><button type="button" id="userFilterDropdownBtn" onclick="toggleUserFilterDropdown()" class="filter-h w-full px-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color:#dadce0;"><span id="userFilterSelectedText" class="truncate">Todas</span><span>▼</span></button><div id="userFilterDropdown" class="hidden absolute top-full right-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden" style="border-color:#dadce0;box-shadow:0 1px 2px rgba(60,64,67,.3),0 1px 3px rgba(60,64,67,.15);min-width:100%;width:max-content;"><div id="userFilterContainer" class="p-2" style="white-space:nowrap;"><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" checked onchange="updateUserFilterSelectedText();updatePmBarChart();"> <span class="text-sm">Individuais</span></label><label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" checked onchange="updateUserFilterSelectedText();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label></div></div></div></div>
                     </div>
-                    <div class="bg-white rounded-lg shadow p-3 md:p-6 mb-4"><div class="relative h-[300px] md:h-[400px]"><canvas id="monthlyBarChart"></canvas></div></div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6"><div class="relative h-[300px] md:h-[400px]"><canvas id="pmBarChart"></canvas></div></div>
                 </div>
             </div>
@@ -1905,21 +1904,6 @@
                     </div>
 
                     <!-- Usuário (checkbox dropdown) -->
-                    <div style="flex: 1; min-width: 0;">
-                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Despesas</label>
-                        <div class="relative">
-                            <button type="button" id="inflUserDropdownBtn" onclick="toggleInflUserDropdown()"
-                                class="w-full px-2 py-2 text-sm bg-white flex items-center justify-between gap-1 border rounded-lg" style="border-color: #dadce0;">
-                                <span id="inflUserSelectedText" class="truncate">Todos</span>
-                                <span>▼</span>
-                            </button>
-                            <div id="inflUserDropdown" class="hidden absolute top-full right-0 mt-1 bg-white z-10 border rounded-lg overflow-hidden"
-                                style="border-color: #dadce0; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); min-width: 100%; width: max-content;">
-                                <div id="inflUserContainer" class="p-2" style="max-height: 230px; overflow-y: auto; white-space: nowrap;"></div>
-                            </div>
-                        </div>
-                    </div>
-
                 </div>
 
                 <!-- Gráfico 1: Minha Inflação vs IPCA Índice Geral -->
@@ -5100,7 +5084,6 @@
             }
             
             updateCatFilterText();
-            updateBarChart();
             updatePmBarChart?.();
         }
         
@@ -5117,7 +5100,6 @@
             });
             
             updateCatFilterText();
-            updateBarChart();
             updatePmBarChart?.();
         }
 
@@ -5433,12 +5415,6 @@
                     ).join('');
                 updateInflCatText();
 
-                // Despesas: apenas tipos presentes no período
-                const _prevUser = Array.from(document.querySelectorAll('.infl-user-cb:checked')).map(cb => cb.value);
-                document.getElementById('inflUserContainer').innerHTML =
-                    (_hasIndividual ? '<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="infl-user-cb" value="individual" ' + (_prevUser.includes('individual') || !_prevUser.length ? 'checked' : '') + ' onchange="updateInflUserText(); loadInflation();"><span class="text-sm">Individuais</span></label>' : '') +
-                    (_hasShared  ? '<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="infl-user-cb" value="compartilhada" ' + (_prevUser.includes('compartilhada') || !_prevUser.length ? 'checked' : '') + ' onchange="updateInflUserText(); loadInflation();"><span class="text-sm">Compartilhadas</span></label>' : '');
-                updateInflUserText();
             }
 
             // ── Build query params from filters ──
@@ -5446,17 +5422,9 @@
             const checkedMonths = Array.from(document.querySelectorAll('.infl-month-cb:checked')).map(cb => cb.value);
 const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpcaMonths || []);
 
-            const expTypeVals = Array.from(document.querySelectorAll('.infl-user-cb:checked')).map(cb => cb.value);
-            const inflShowIndividual = expTypeVals.includes('individual');
-            const inflShowShared = expTypeVals.includes('compartilhada');
-
             const params = new URLSearchParams({ d1c });
             if (monthsToSend.length) params.set('months', monthsToSend.join(','));
             if (inflSelectedCatIds.length) params.set('category_ids', inflSelectedCatIds.join(','));
-            if (inflShowIndividual && !inflShowShared) params.set('expense_type', 'individual');
-            else if (inflShowShared && !inflShowIndividual) params.set('expense_type', 'shared');
-            if (inflShowIndividual && !inflShowShared) params.set('expense_type', 'individual');
-            else if (inflShowShared && !inflShowIndividual) params.set('expense_type', 'shared');
 
             try {
                 const data = await api(`${API}/inflation/data?${params}`);
@@ -5619,15 +5587,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     showInflMsg('categoryInflation', 'Associe categorias IPCA às suas categorias para ver este gráfico.');
                 }
 
-                // ── Chart 2: Total ajustado — Individuais / Compartilhadas ──
-                const inflExpTypes = Array.from(document.querySelectorAll('.infl-user-cb:checked')).map(cb => cb.value);
-                const inflShowIndividual = inflExpTypes.includes('individual');
-                const inflShowShared = inflExpTypes.includes('compartilhada');
-                const adjDatasets = [];
-                if (inflShowIndividual) adjDatasets.push({ label: 'Individuais', data: data.adjusted_by_month.map(d => d.individual || 0), backgroundColor: 'rgba(26,115,232,0.75)', borderColor: '#1a73e8', borderRadius: 0, borderSkipped: false });
-                if (inflShowShared)    adjDatasets.push({ label: 'Compartilhadas', data: data.adjusted_by_month.map(d => d.shared || 0), backgroundColor: 'rgba(52,168,83,0.75)', borderColor: '#34a853', borderRadius: 0, borderSkipped: false });
-                if (!adjDatasets.length) adjDatasets.push({ label: 'Total', data: data.adjusted_by_month.map(d => d.adjusted || 0), backgroundColor: 'rgba(26,115,232,0.75)', borderColor: '#1a73e8', borderRadius: 0, borderSkipped: false });
-                const adjTotals = data.adjusted_by_month.map((_, i) => adjDatasets.reduce((s, ds) => s + (ds.data[i] || 0), 0));
+                // ── Chart 2: Total ajustado ──
+                const adjDatasets = [{ label: 'Total', data: data.adjusted_by_month.map(d => d.adjusted || 0), backgroundColor: 'rgba(26,115,232,0.75)', borderColor: '#1a73e8', borderRadius: 0, borderSkipped: false }];
+                const adjTotals = data.adjusted_by_month.map(d => d.adjusted || 0);
 
                 if (adjustedBarChart) adjustedBarChart.destroy();
                 showInflMsg('adjustedBar', '');
@@ -5637,7 +5599,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         plugins: {
-                            legend: { display: adjDatasets.length > 1, position: 'top', labels: { color: textColor, font: { size: 13 } } },
+                            legend: { display: false },
                             tooltip: { callbacks: { label: ctx => { const t = adjTotals[ctx.dataIndex]||1; return `${ctx.dataset.label}: R$ ${formatBRL(ctx.parsed.y)} (${t>0?((ctx.parsed.y/t)*100).toFixed(1):0}%)`; } } },
                             datalabels: { display: false }
                         },
@@ -5986,7 +5948,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const checkboxes = document.querySelectorAll('.bar-chart-month:checked');
             const selectedMonths = Array.from(checkboxes).map(cb => cb.value);
 
-            if (selectedMonths.length === 0) { await updateBarChart(); return; }
+            if (selectedMonths.length === 0) { await updatePmBarChart(); return; }
 
             // Construir sets de user_ids e category_ids presentes EXATAMENTE nos meses selecionados
             const userIdSet = new Set();
@@ -6049,12 +6011,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
                 }
                 ufContainer.innerHTML=`
-                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${barExpTypeFilter.includes('individual')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
-                    ${hasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" ${barExpTypeFilter.includes('compartilhada')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updateBarChart();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}
+                    <label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="individual" ${barExpTypeFilter.includes('individual')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updatePmBarChart();"> <span class="text-sm">Individuais</span></label>
+                    ${hasShared?`<label class="flex items-center gap-2 py-1 hover:bg-gray-100 cursor-pointer px-2 rounded"><input type="checkbox" class="expense-type-filter" value="compartilhada" ${barExpTypeFilter.includes('compartilhada')?'checked':''} onchange="barExpTypeFilter=Array.from(document.querySelectorAll('.expense-type-filter:checked')).map(cb=>cb.value);updateUserFilterSelectedText();updatePmBarChart();"> <span class="text-sm">Compartilhadas</span></label>`:''}
                 `;
                 updateUserFilterSelectedText();
             }
-            await Promise.all([updateBarChart(), updatePmBarChart()]);
+            await updatePmBarChart();
         }
 
         async function updatePieChart() {
@@ -7827,7 +7789,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const chartsTabEl = document.getElementById('chartsTab');
             const inflTabEl = document.getElementById('inflationTab');
             if (chartsTabEl && !chartsTabEl.classList.contains('hidden')) {
-                updatePieChart?.(); updateDailyChart?.(); updateBarChart?.(); updatePmBarChart?.();
+                updatePieChart?.(); updateDailyChart?.(); updatePmBarChart?.();
             }
             if (inflTabEl && !inflTabEl.classList.contains('hidden')) {
                 inflLoaded = false; loadInflation?.();
