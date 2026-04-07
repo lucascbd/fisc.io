@@ -6270,6 +6270,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (!origStr) continue;
                     const origDate = new Date(origStr + 'T00:00:00');
                     if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
+                    // Suprimir despesas que caem pro próximo mês (todos splits do usuário com due_date fora do mês)
+                    const userHasSplits = expense.splits.some(s => s.user_id === user.id);
+                    const userHasSplitThisMonth = expense.splits.some(s => {
+                        if (s.user_id !== user.id) return false;
+                        const dd = new Date(s.due_date + 'T00:00:00');
+                        return dd.getFullYear() === year && dd.getMonth() + 1 === mon;
+                    });
+                    if (userHasSplits && !userHasSplitThisMonth) continue;
                     // Shared/individual baseado em todos os splits da despesa
                     const allUids = new Set(expense.splits.map(s => s.user_id));
                     const isShared = allUids.size > 1 || (allUids.size === 1 && !allUids.has(user.id));
@@ -8584,16 +8592,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
             const pmHtml = (paymentMethods || []).filter(pm => pm.user_id === window._myUserId).map(pm => {
                 const img = pm.icon_path
-                    ? `<img src="${pm.icon_path}" style="width:24px;height:24px;object-fit:contain;">`
-                    : `<span style="font-size:1.1rem;">💳</span>`;
-                return `<div onclick="selectAuditPm(${pm.id})" id="audit_pm_${pm.id}" data-pm-id="${pm.id}"
-                    class="pm-option flex flex-col items-center justify-center cursor-pointer"
-                    style="width:56px;height:52px;gap:4px;flex-shrink:0;border:2px solid transparent;
-                           border-radius:12px;background:${isDark?'#3c4043':'#f8f9fa'};transition:.15s;">
-                    ${img}
-                    <span style="font-size:8px;line-height:1;color:${sub};max-width:52px;overflow:hidden;
-                                 text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
-                </div>`;
+                    ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">`
+                    : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
+                return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation();selectAuditPm(${pm.id})">
+                    <div class="pm-option" id="audit_pm_${pm.id}" data-pm-id="${pm.id}"
+                         style="width:44px;height:44px;border-radius:12px;border:2px solid transparent;display:flex;align-items:center;justify-content:center;background:${isDark?'#3c4043':'#f8f9fa'};box-shadow:none;transition:.15s;">
+                        ${img}
+                    </div>
+                    <span class="text-xs" style="max-width:48px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.description}</span>
+                </label>`;
             }).join('');
 
             document.getElementById('modalContainer').innerHTML = `
