@@ -6368,6 +6368,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         const day = origDate.getDate();
                         for (const split of expense.splits) {
                             if (split.user_id !== user.id) continue;
+                            const splitDue = new Date(split.due_date + 'T00:00:00');
+                            if (splitDue.getFullYear() !== year || splitDue.getMonth() + 1 !== mon) continue;
                             tgtDisplayDayTotals[day] += parseFloat(split.user_amount);
                         }
                     }
