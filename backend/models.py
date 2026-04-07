@@ -215,6 +215,7 @@ class RecurringExpense(Base):
     payment_method_id = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
     notes           = Column(String, nullable=True)
     insert_day      = Column(Integer, nullable=True, default=1)   # dia do mês para gerar a despesa
+    interval        = Column(Numeric(4, 2), nullable=False, default=0)  # 0=mensal, 0.5=45dias, N=pula N meses
     is_active       = Column(Boolean, nullable=False, default=True)
     last_generated_month = Column(String(7), nullable=True)   # "YYYY-MM" do último mês gerado
     created_by_user_id   = Column(Integer, ForeignKey("users.id"), nullable=True)

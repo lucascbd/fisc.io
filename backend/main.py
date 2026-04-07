@@ -42,6 +42,7 @@ def _safe_add_column(sql: str):
         db.close()
 
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
+_safe_add_column("ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS interval NUMERIC(4,2) NOT NULL DEFAULT 0")
 
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
@@ -195,6 +196,7 @@ class RecurringExpenseCreate(BaseModel):
     payment_method_id: Optional[int] = None
     notes: Optional[str] = None
     insert_day: Optional[int] = 1
+    interval: Optional[float] = 0.0
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -663,6 +665,7 @@ def _recurring_dict(r: RecurringExpense) -> dict:
         "payment_method": _pm_dict(pm),
         "notes": r.notes,
         "insert_day": r.insert_day or 1,
+        "interval": float(r.interval) if r.interval is not None else 0.0,
         "is_active": r.is_active,
         "last_generated_month": r.last_generated_month,
         "created_by_user_id": r.created_by_user_id,
@@ -686,6 +689,7 @@ async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(g
         payment_method_id=data.payment_method_id,
         notes=data.notes,
         insert_day=max(1, min(31, data.insert_day or 1)),
+        interval=Decimal(str(data.interval or 0)),
         created_by_user_id=current_user.id,
     )
     db.add(r); db.commit(); db.refresh(r)
@@ -705,6 +709,7 @@ async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: 
     r.payment_method_id = data.payment_method_id
     r.notes = data.notes
     r.insert_day = max(1, min(31, data.insert_day or 1))
+    r.interval = Decimal(str(data.interval or 0))
     db.commit()
     return _recurring_dict(r)
 

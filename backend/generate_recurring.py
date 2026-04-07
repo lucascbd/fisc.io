@@ -15,7 +15,7 @@ python generate_recurring.py --force   # regera mesmo que já tenha sido gerado 
 import sys
 import os
 import argparse
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import calendar
 from decimal import Decimal
 
@@ -46,8 +46,31 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
     skipped = 0
 
     for r in items:
-        if not force and r.last_generated_month == current_month_str:
-            print(f"  ↷  Já gerada em {current_month_str}: {r.description}")
+        interval = float(r.interval) if r.interval is not None else 0.0
+
+        # Verificar se deve gerar neste mês com base no interval
+        if not force:
+            if r.last_generated_month is None:
+                should_generate = True
+            elif interval == 0.0:
+                # Mensal: gera todo mês
+                should_generate = r.last_generated_month != current_month_str
+            elif interval == 0.5:
+                # A cada 45 dias: calcula pela data do último insert_day no last_generated_month
+                last_yr, last_mn = map(int, r.last_generated_month.split('-'))
+                last_day = min(r.insert_day or 1, calendar.monthrange(last_yr, last_mn)[1])
+                last_gen_date = date(last_yr, last_mn, last_day)
+                should_generate = target_date >= last_gen_date + timedelta(days=45)
+            else:
+                # Pula N meses inteiros: gera quando diff >= N+1
+                last_yr, last_mn = map(int, r.last_generated_month.split('-'))
+                months_diff = (target_date.year - last_yr) * 12 + (target_date.month - last_mn)
+                should_generate = months_diff > interval
+        else:
+            should_generate = True
+
+        if not should_generate:
+            print(f"  ↷  Pulada (interval={interval}): {r.description}")
             skipped += 1
             continue
 

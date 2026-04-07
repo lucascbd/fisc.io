@@ -7045,6 +7045,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     <p class="text-xs mt-1" style="color:#5f6368;">Se o dia não existir no mês, usa o último dia disponível</p>
                                 </div>
                                 <div>
+                                    <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Frequência</label>
+                                    <select id="rec_interval" class="w-full px-4 py-2 border rounded-lg" style="border-color:#dadce0;">
+                                        <option value="0"   ${(rec?.interval||0)==0    ? 'selected':''}>Mensal</option>
+                                        <option value="0.5" ${(rec?.interval||0)==0.5  ? 'selected':''}>A cada 45 dias</option>
+                                        <option value="1"   ${(rec?.interval||0)==1    ? 'selected':''}>Bimestral (pula 1 mês)</option>
+                                        <option value="2"   ${(rec?.interval||0)==2    ? 'selected':''}>Trimestral (pula 2 meses)</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label class="block text-sm font-medium mb-2" style="color:${optionTextColor};">Método de pagamento</label>
                                     <div class="flex gap-3 justify-start">${pmRow}</div>
                                 </div>
@@ -7073,6 +7082,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     paid_by_user_id: parseInt(document.getElementById('rec_paid_by').value),
                     payment_method_id: parseInt(document.querySelector('input[name=rec_pm]:checked')?.value) || null,
                     insert_day: parseInt(document.getElementById('rec_insert_day').value) || 1,
+                    interval: parseFloat(document.getElementById('rec_interval').value) || 0,
                 };
                 try {
                     if (rec) {
