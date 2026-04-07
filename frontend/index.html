@@ -6271,8 +6271,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (!origStr) continue;
                     const origDate = new Date(origStr + 'T00:00:00');
                     if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
-                    // Suprimir despesas com ➡️ (original_date != expense_date = caem no próximo mês)
-                    if (expense.original_date && expense.original_date !== expense.expense_date) continue;
                     // Shared/individual baseado em todos os splits da despesa
                     const allUids = new Set(expense.splits.map(s => s.user_id));
                     const isShared = allUids.size > 1 || (allUids.size === 1 && !allUids.has(user.id));
@@ -6287,9 +6285,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const catName = expense.category_name;
                     const emoji = cat?.icon || '📁';
                     const color = cat?.color || '#999';
-                    // Usa todos os splits do usuário (independente do mês do due_date)
+                    // Só conta splits com due_date no mês atual (exclui despesas que caem no próximo mês)
                     for (const split of expense.splits) {
                         if (split.user_id !== user.id) continue;
+                        const splitDue = new Date(split.due_date + 'T00:00:00');
+                        if (splitDue.getFullYear() !== year || splitDue.getMonth() + 1 !== mon) continue;
                         const amt = parseFloat(split.user_amount);
                         if (amt === 0) continue;
                         dailyData[day].total += amt;
