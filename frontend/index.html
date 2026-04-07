@@ -6210,7 +6210,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     fetchExpensesWithCache(selectedMonth),
                     fetchExpensesWithCache(nextMon)
                 ]);
-                // Combina e deduplica por id
+                // Combina e deduplica por id; registra quais estão no mês atual (curExp)
+                const curExpIds = new Set(curExp.map(e => e.id));
                 const seenIds = new Set();
                 const expenses = [...curExp, ...nextExp].filter(e => {
                     if (seenIds.has(e.id)) return false;
@@ -6270,14 +6271,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     if (!origStr) continue;
                     const origDate = new Date(origStr + 'T00:00:00');
                     if (origDate.getFullYear() !== year || origDate.getMonth() + 1 !== mon) continue;
-                    // Suprimir despesas que caem pro próximo mês (todos splits do usuário com due_date fora do mês)
-                    const userHasSplits = expense.splits.some(s => s.user_id === user.id);
-                    const userHasSplitThisMonth = expense.splits.some(s => {
-                        if (s.user_id !== user.id) return false;
-                        const dd = new Date(s.due_date + 'T00:00:00');
-                        return dd.getFullYear() === year && dd.getMonth() + 1 === mon;
-                    });
-                    if (userHasSplits && !userHasSplitThisMonth) continue;
+                    // Suprimir despesas que caem pro próximo mês (not in curExp = sem split no mês atual)
+                    if (!curExpIds.has(expense.id)) continue;
                     // Shared/individual baseado em todos os splits da despesa
                     const allUids = new Set(expense.splits.map(s => s.user_id));
                     const isShared = allUids.size > 1 || (allUids.size === 1 && !allUids.has(user.id));
