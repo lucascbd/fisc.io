@@ -3165,7 +3165,7 @@
                     <div class="flex justify-between items-stretch">
                         <div class="flex-1">
                             <p class="font-bold text-lg">${emoji} ${e.description}</p>
-                            <p class="text-sm text-gray-600">${new Date((e.original_date || e.expense_date) + 'T12:00:00').toLocaleDateString('pt-BR')}${e.is_recurring ? ' <span style="font-size:11px;">🔁</span>' : (e.original_date && e.original_date !== e.expense_date ? ' <span style="font-size:11px;">➡️</span>' : '')}</p>
+                            <p class="text-sm text-gray-600">${new Date((e.original_date || e.expense_date) + 'T12:00:00').toLocaleDateString('pt-BR')}${e.is_recurring ? ' <span style="font-size:11px;">🔁</span>' : ''}${e.original_date && e.original_date !== e.expense_date ? ' <span style="font-size:11px;">➡️</span>' : ''}</p>
                             <p class="text-sm text-gray-600">Pago por: <span class="font-bold">${e.paid_by_name}</span></p>
                             <p class="text-sm text-gray-600">⚖️ ${profileName}</p>
                             ${e.notes ? `<p class="text-sm text-gray-500 mt-2">${e.notes}</p>` : ''}
