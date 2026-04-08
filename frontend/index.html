@@ -6433,11 +6433,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
                 const activeTotals = tgtDisplayTotals ?? totals;
 
-                // Determina min do eixo Y: 0 se não há negativos reais, senão auto-escala
+                // Determina min do eixo Y: 0 se não há negativos reais; se há negativo pequeno
+                // arredonda para baixo na dezena mais próxima para evitar que Chart.js escolha -500
                 const _allChartVals = [...activeTotals, ...(targetLineData || [])].filter(v => v != null && isFinite(v));
                 const _dataMin = _allChartVals.length ? Math.min(..._allChartVals) : 0;
-                const yAxisMin = _dataMin >= 0 ? 0 : undefined;
-                if (_dataMin < 0) console.log('[DailyChart] valores negativos detectados:', {dataMin: _dataMin, negativosActiveTotals: activeTotals.map((v,i)=>({dia:i+1,v})).filter(({v})=>v<0), negativosTarget: (targetLineData||[]).map((v,i)=>({dia:i+1,v})).filter(({v})=>v<0)});
+                const yAxisMin = _dataMin >= 0 ? 0 : Math.floor(_dataMin / 10) * 10;
 
                 const datasets = [{
                     data: activeTotals,
@@ -6530,7 +6530,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 }
                             },
                             y: {
-                                ...(yAxisMin !== undefined ? { min: yAxisMin } : {}),
+                                min: yAxisMin,
                                 grid: { color: gridColor },
                                 ticks: {
                                     color: textColor, font: { size: 11 },
