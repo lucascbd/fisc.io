@@ -6433,6 +6433,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
                 const activeTotals = tgtDisplayTotals ?? totals;
 
+                // Determina min do eixo Y: 0 se não há negativos reais, senão auto-escala
+                const _allChartVals = [...activeTotals, ...(targetLineData || [])].filter(v => v != null && isFinite(v));
+                const _dataMin = _allChartVals.length ? Math.min(..._allChartVals) : 0;
+                const yAxisMin = _dataMin >= 0 ? 0 : undefined;
+
                 const datasets = [{
                     data: activeTotals,
                     borderColor: '#1a73e8',
@@ -6524,7 +6529,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 }
                             },
                             y: {
-                                suggestedMin: 0,
+                                ...(yAxisMin !== undefined ? { min: yAxisMin } : {}),
                                 grid: { color: gridColor },
                                 ticks: {
                                     color: textColor, font: { size: 11 },
