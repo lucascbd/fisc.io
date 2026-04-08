@@ -25,8 +25,25 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from config import settings
-from models import RecurringExpense
+from models import RecurringExpense, PaymentMethod
 from expense_service import ExpenseService
+
+
+def _shift_card_date(expense_date: date, pm) -> date:
+    """If expense date is past the card closing window, shift to next billing month."""
+    if not (pm and pm.is_card and pm.due_day):
+        return expense_date
+    due_day = pm.due_day
+    if expense_date.month == 12:
+        next_due = expense_date.replace(year=expense_date.year + 1, month=1, day=due_day)
+    else:
+        max_next = calendar.monthrange(expense_date.year, expense_date.month + 1)[1]
+        next_due = expense_date.replace(month=expense_date.month + 1, day=min(due_day, max_next))
+    closing = next_due - timedelta(days=7)
+    if expense_date > closing:
+        max_day = calendar.monthrange(next_due.year, next_due.month)[1]
+        return expense_date.replace(year=next_due.year, month=next_due.month, day=min(expense_date.day, max_day))
+    return expense_date
 
 
 def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool = False):
@@ -80,6 +97,8 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
             insert_day = max(1, min(31, r.insert_day or 1))
             last_day = calendar.monthrange(target_date.year, target_date.month)[1]
             expense_date = target_date.replace(day=min(insert_day, last_day))
+            pm = db.query(PaymentMethod).filter(PaymentMethod.id == r.payment_method_id).first() if r.payment_method_id else None
+            expense_date = _shift_card_date(expense_date, pm)
             exp = ExpenseService.create_expense(
                 db=db,
                 description=r.description,
