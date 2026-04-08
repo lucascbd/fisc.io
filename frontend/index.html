@@ -6473,7 +6473,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         tension: 0,
                         spanGaps: true,
                         segment: {
-                            borderColor: ctx => targetLineData[ctx.p1DataIndex] <= 0 ? '#ef4444' : '#f59e0b'
+                            borderColor: ctx => targetLineData[ctx.p0DataIndex] <= 0 ? '#ef4444' : '#f59e0b'
                         }
                     });
                 }
