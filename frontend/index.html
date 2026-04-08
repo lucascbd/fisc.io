@@ -6942,7 +6942,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <p style="font-weight:600;font-size:14px;color:${textColor};margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.category_emoji||'📁'} ${r.description}: <span style="color:${isDark?'#8ab4f8':'#1a73e8'} !important;">R$ ${formatBRL(r.total_amount)}</span></p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${profLabel}</p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${paidLabel}</p>
-                            <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${freqLabel}</p>
+                            <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">🗓️ ${freqLabel}</p>
                         </div>
                         <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">
                             ${canEdit ? `<button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">🗑️</button>` : ''}
