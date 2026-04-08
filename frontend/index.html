@@ -6442,7 +6442,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         above: isDark ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.18)',
                         below: isDark ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.18)'
                     } : true,
-                    tension: 0.35,
+                    cubicInterpolationMode: 'monotone',
                     borderWidth: 2,
                     pointRadius: activeTotals.map(v => v !== 0 ? 2.5 : 0),
                     pointHoverRadius: 4,
