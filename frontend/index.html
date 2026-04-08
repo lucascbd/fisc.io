@@ -6416,13 +6416,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         const d = days[i];
                         if (d > todayDay) {
                             futureCumulative += gasto ?? 0;
-                            return (saldoHoje - futureCumulative) / denominadorFuturo;
+                            return Math.max((saldoHoje - futureCumulative) / denominadorFuturo, 0);
                         }
                         runningAcumulado += gasto ?? 0;
                         const dias_restantes = daysInMonth - i;
                         const teto = dias_restantes > 0 ? (saldoInicial - runningAcumulado) / dias_restantes : 0;
                         if (d === todayDay) saldoHoje = saldoInicial - runningAcumulado;
-                        return teto;
+                        return Math.max(teto, 0);
                     });
                     // labelLimit: saldoInicial menos todos os gastos do mês
                     const sumAllGastos = gastosDayArray.reduce((s, v) => s + v, 0);
