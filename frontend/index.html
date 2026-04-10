@@ -6439,20 +6439,23 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     let saldoHoje = saldoInicial;
                     const denominadorFuturo = todayDay > 0 ? daysInMonth - todayDay + 1 : daysInMonth;
                     let futureCumulative = 0;
-                    targetRawData = []; // valores sem clamp — usados no tooltip "Estourou"
+                    targetRawData = []; // saldo acumulado por dia — negativo = quanto estourou no total
                     targetLineData = gastos.map((gasto, i) => {
                         const d = days[i];
                         let raw;
                         if (d > todayDay) {
                             futureCumulative += gasto ?? 0;
                             raw = (saldoHoje - futureCumulative) / denominadorFuturo;
+                            // Para dias futuros: saldo projetado total (não por dia)
+                            targetRawData.push(saldoHoje - futureCumulative);
                         } else {
                             runningAcumulado += gasto ?? 0;
                             const dias_restantes = daysInMonth - i;
                             raw = dias_restantes > 0 ? (saldoInicial - runningAcumulado) / dias_restantes : 0;
                             if (d === todayDay) saldoHoje = saldoInicial - runningAcumulado;
+                            // Para dias passados: saldo acumulado total (negativo = estouro total até esse dia)
+                            targetRawData.push(saldoInicial - runningAcumulado);
                         }
-                        targetRawData.push(raw);
                         return Math.max(raw, 0);
                     });
                     // labelLimit: saldoInicial menos todos os gastos do mês
