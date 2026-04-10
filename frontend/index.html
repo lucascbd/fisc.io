@@ -6371,6 +6371,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 let tgtDisplayTotals = null;
                 let targetLineData = null;
+                let targetRawData = [];
                 let labelLimit = fixedDailyLimit; // valor exibido no label do gráfico
                 if (selTarget) {
                     const now = new Date();
@@ -6438,7 +6439,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     let saldoHoje = saldoInicial;
                     const denominadorFuturo = todayDay > 0 ? daysInMonth - todayDay + 1 : daysInMonth;
                     let futureCumulative = 0;
-                    const targetRawData = []; // valores sem clamp — usados no tooltip "Estourou"
+                    targetRawData = []; // valores sem clamp — usados no tooltip "Estourou"
                     targetLineData = gastos.map((gasto, i) => {
                         const d = days[i];
                         let raw;
