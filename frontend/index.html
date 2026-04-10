@@ -5922,7 +5922,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         function initMvMSelectors() {
             const months = (window._allIpcaMonths || []).slice().sort();
             if (months.length < 2) return;
-            const fmt = m => { const [y, mo] = m.split('-'); return `${mo}/${y}`; };
+            const fmt = m => m;
             const opts = months.map(m => `<option value="${m}">${fmt(m)}</option>`).join('');
             const selA = document.getElementById('mvmMonthA');
             const selB = document.getElementById('mvmMonthB');
@@ -6012,7 +6012,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const mvmWrap = document.getElementById('mvmWrap');
                 if (mvmWrap) mvmWrap.style.height = Math.max(200, rows.length * 36 + 60) + 'px';
 
-                const fmtMonthLabel = m => { const [y,mo] = m.split('-'); return `${mo}/${y}`; };
+                const fmtMonthLabel = m => m;
                 mvmBarChart = new Chart(document.getElementById('mvmChart').getContext('2d'), {
                     type: 'bar',
                     data: {
