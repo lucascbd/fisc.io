@@ -793,6 +793,7 @@ async def get_inflation_data(
     category_ids: Optional[str] = Query(None, description="Comma-separated category IDs"),
     user_ids: Optional[str] = Query(None, description="Comma-separated user IDs"),
     expense_type: Optional[str] = Query(None, description="Filter: 'individual', 'shared', or None for all"),
+    no_adjust: bool = Query(False, description="If true, use raw amounts (no inflation adjustment) in price_volume"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -899,6 +900,7 @@ async def get_inflation_data(
     cat_monthly_num = defaultdict(lambda: defaultdict(float))
     cat_monthly_den = defaultdict(lambda: defaultdict(float))
     cat_monthly_adj = defaultdict(lambda: defaultdict(float))   # adj valor per cat/month
+    cat_monthly_raw = defaultdict(lambda: defaultdict(float))   # raw (non-adj) valor per cat/month
     cat_monthly_count = defaultdict(lambda: defaultdict(float))   # weighted volume per cat/month
     cat_info = {}
     # Shared-by-user: only include splits from shared expenses (>1 user in same month)
@@ -933,6 +935,7 @@ async def get_inflation_data(
                 else:
                     monthly_adj_individual[month_str] += user_amount_adj
                 cat_monthly_adj[category_id][month_str] += user_amount_adj
+                cat_monthly_raw[category_id][month_str] += user_amount
                 cat_monthly_count[category_id][month_str] += user_pct
         cat_info[category_id] = (cat_name, cat_icon)
 
@@ -1003,19 +1006,20 @@ async def get_inflation_data(
         prev_months = sorted_months[:-1]
         n_prev = len(prev_months)
 
+        cat_monthly_val = cat_monthly_raw if no_adjust else cat_monthly_adj
         price_volume = []
         for cat_id in cat_monthly_count:
             name, icon = cat_info.get(cat_id, ('?', '📁'))
             # P: avg monthly count in prev months
             p = sum(cat_monthly_count[cat_id].get(m, 0) for m in prev_months) / n_prev if n_prev > 0 else 0.0
-            # Q: avg adj valor in prev months (total adj / n_prev months)
-            q = sum(cat_monthly_adj[cat_id].get(m, 0.0) for m in prev_months) / n_prev if n_prev > 0 else 0.0
-            # S: adj avg price (ticket médio) in prev months — sem round para preservar precisão
+            # Q: avg valor in prev months
+            q = sum(cat_monthly_val[cat_id].get(m, 0.0) for m in prev_months) / n_prev if n_prev > 0 else 0.0
+            # S: avg price (ticket médio) in prev months
             s = q / p if p > 0 else 0.0
             # N: count last month
             n_last = cat_monthly_count[cat_id].get(last_month, 0)
-            # T: adj avg price last month — sem round para preservar precisão
-            valor_last_adj = cat_monthly_adj[cat_id].get(last_month, 0.0)
+            # T: avg price last month
+            valor_last_adj = cat_monthly_val[cat_id].get(last_month, 0.0)
             t = valor_last_adj / n_last if n_last > 0 else 0.0
             # Effects (in R$)
             preco = round((t - s) * n_last, 2)

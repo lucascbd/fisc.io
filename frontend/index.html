@@ -5966,12 +5966,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const isMobile = window.innerWidth < 640;
 
             try {
-                // Enviar [B, A] — B é referência (prev), A é comparação (last)
-                const [older, newer] = [monthA, monthB].sort();
-                const params = new URLSearchParams({ d1c: '1', months: `${older},${newer === older ? monthA : newer}` });
-                // Garante B como prev e A como last
+                // Enviar [B, A] ordenado — B é referência (prev), A é comparação (last)
                 const orderedMonths = [monthB, monthA].sort((a,b) => a.localeCompare(b));
-                params.set('months', orderedMonths.join(','));
+                const params = new URLSearchParams({ d1c: '1', no_adjust: 'true', months: orderedMonths.join(',') });
                 const data = await api(`${API}/inflation/data?${params}`);
 
                 if (mvmBarChart) { mvmBarChart.destroy(); mvmBarChart = null; }
