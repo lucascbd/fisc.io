@@ -5204,7 +5204,13 @@
             await loadAvailableMonths();
             await updatePieChartFilters();
             await updateBarChartFilters();
-            if (window._allIpcaMonths) initMvMSelectors();
+            if (!window._allIpcaMonths?.length) {
+                try {
+                    const r = await api(`${API}/inflation/months`).catch(() => ({months:[]}));
+                    window._allIpcaMonths = r.months || [];
+                } catch(e) { window._allIpcaMonths = []; }
+            }
+            initMvMSelectors();
             updateMvMChart();
         }
 
