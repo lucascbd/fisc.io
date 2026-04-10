@@ -2565,8 +2565,18 @@
                     const iconHtml = pm.icon_path
                         ? `<img src="${pm.icon_path}" style="width:20px;height:20px;object-fit:contain;">`
                         : `<span style="font-size:12px;">💳</span>`;
-                    return `<button onclick="togglePmFilter(${pm.id})" id="pmFilter_${pm.id}" title="${pm.description}"
-                        style="width:38px;height:38px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                    const lockIcon = pm.is_card
+                        ? `<img src="/icons/system/${pm.is_closed ? 'lock' : 'unlock'}.png" style="width:12px;height:12px;object-fit:contain;opacity:0.75;">`
+                        : '';
+                    const lockBtn = pm.is_card
+                        ? `<button onclick="event.stopPropagation();togglePmClosed(${pm.id})" title="${pm.is_closed ? 'Fatura fechada — clique para abrir' : 'Fatura aberta — clique para fechar'}"
+                            style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;border:none;background:${isDark?'#3c4043':'#e8eaed'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,0.3);">${lockIcon}</button>`
+                        : '';
+                    return `<div style="position:relative;flex-shrink:0;">
+                        <button onclick="togglePmFilter(${pm.id})" id="pmFilter_${pm.id}" title="${pm.description}"
+                            style="width:38px;height:38px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>
+                        ${lockBtn}
+                    </div>`;
                 }).join('');
             }
 
@@ -7461,6 +7471,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         </div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
+                        ${pm.is_card ? `<button onclick="togglePmClosed(${pm.id})" title="${pm.is_closed ? 'Fatura fechada — clique para abrir' : 'Fatura aberta — clique para fechar'}"
+                            style="background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;">
+                            <img src="/icons/system/${pm.is_closed ? 'lock' : 'unlock'}.png" style="width:18px;height:18px;object-fit:contain;opacity:0.7;">
+                        </button>` : ''}
                         ${pm.color ? `<div style="width:20px;height:20px;border-radius:4px;background:${pm.color};"></div>` : ''}
                         <button onclick="showPaymentMethodModal(${pm.id})" style="background:none;border:none;cursor:pointer;font-size:14px;">✏️</button>
                         <button onclick="deleteItem('payment-methods',${pm.id})" style="background:none;border:none;cursor:pointer;font-size:14px;">🗑️</button>
@@ -7480,6 +7494,26 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         catch(e) { console.error('reorder pm:', e); }
                     }
                 });
+            }
+        }
+
+        async function togglePmClosed(pmId) {
+            const pm = paymentMethods.find(p => p.id === pmId);
+            if (!pm) return;
+            const action = pm.is_closed ? 'abrir' : 'fechar';
+            const actionLabel = pm.is_closed ? 'Abrir fatura' : 'Fechar fatura';
+            const msg = pm.is_closed
+                ? `Deseja abrir a fatura de "${pm.description}"?\nNovos lançamentos de hoje voltarão para o mês corrente.`
+                : `Deseja fechar a fatura de "${pm.description}"?\nNovos lançamentos de hoje serão direcionados para o próximo mês.`;
+            if (!confirm(msg)) return;
+            try {
+                const updated = await api(`${API}/payment-methods/${pmId}/toggle-closed`, { method: 'POST' });
+                const idx = paymentMethods.findIndex(p => p.id === pmId);
+                if (idx !== -1) paymentMethods[idx] = updated;
+                loadSidebarPaymentMethods();
+                renderPmFilterButtons();
+            } catch(e) {
+                alert('Erro ao alterar fatura: ' + e.message);
             }
         }
 

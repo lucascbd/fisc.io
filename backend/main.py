@@ -43,6 +43,7 @@ def _safe_add_column(sql: str):
 
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
 _safe_add_column("ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS interval NUMERIC(4,2) NOT NULL DEFAULT 0")
+_safe_add_column("ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT FALSE")
 
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
@@ -627,13 +628,20 @@ def _pm_dict(pm: "PaymentMethod | None") -> dict:
         "is_card": pm.is_card,
         "icon_path": pm.icon_path,
         "due_day": pm.due_day,
+        "is_closed": bool(pm.is_closed) if pm.is_closed is not None else False,
         "user_id": pm.user_id,
         "display_order": pm.display_order,
     }
 
 
-def _shift_card_date(expense_date: date, pm: "PaymentMethod") -> date:
-    """If expense date is past the card closing window, shift it to next billing month."""
+def _shift_card_date(expense_date: date, pm: "PaymentMethod", today: "date | None" = None) -> date:
+    """
+    Shift expense_date to next billing month when applicable.
+    Normal rule: if expense_date > closing (next_due - 7 days), always shift.
+    is_closed rule: if pm.is_closed and expense_date == today, also shift.
+                    is_closed only affects expenses being saved *today* —
+                    it never retroactively shifts dates in the past/future.
+    """
     if not (pm and pm.is_card and pm.due_day):
         return expense_date
     due_day = pm.due_day
@@ -643,7 +651,10 @@ def _shift_card_date(expense_date: date, pm: "PaymentMethod") -> date:
         max_next = calendar.monthrange(expense_date.year, expense_date.month + 1)[1]
         next_due = expense_date.replace(month=expense_date.month + 1, day=min(due_day, max_next))
     closing = next_due - timedelta(days=7)
-    if expense_date > closing:
+    should_shift = expense_date > closing
+    if not should_shift and pm.is_closed and today is not None and expense_date == today:
+        should_shift = True
+    if should_shift:
         max_day = calendar.monthrange(next_due.year, next_due.month)[1]
         return expense_date.replace(year=next_due.year, month=next_due.month, day=min(expense_date.day, max_day))
     return expense_date
@@ -1245,6 +1256,25 @@ async def update_payment_method(
     db.refresh(pm)
     return _pm_dict(pm)
 
+@app.post(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}/toggle-closed")
+async def toggle_payment_method_closed(
+    pm_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Toggle is_closed flag for a card payment method (owner only)."""
+    pm = db.query(PaymentMethod).filter(
+        PaymentMethod.id == pm_id, PaymentMethod.user_id == current_user.id
+    ).first()
+    if not pm:
+        raise HTTPException(status_code=404, detail="Payment method not found")
+    if not pm.is_card:
+        raise HTTPException(status_code=400, detail="Apenas cartões podem ser fechados")
+    pm.is_closed = not pm.is_closed
+    db.commit()
+    db.refresh(pm)
+    return _pm_dict(pm)
+
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
 async def delete_payment_method(
     pm_id: int,
@@ -1763,7 +1793,7 @@ async def create_expense(
 
     original_date = expense_date_obj
     pm_record = db.query(PaymentMethod).filter(PaymentMethod.id == data.payment_method_id).first() if data.payment_method_id else None
-    expense_date_obj = _shift_card_date(expense_date_obj, pm_record)
+    expense_date_obj = _shift_card_date(expense_date_obj, pm_record, today=date.today())
 
     expense = ExpenseService.create_expense(
         db=db,
@@ -1814,7 +1844,7 @@ async def update_expense(
 
     original_date = expense_date_obj
     pm_record = db.query(PaymentMethod).filter(PaymentMethod.id == data.payment_method_id).first() if data.payment_method_id else None
-    expense_date_obj = _shift_card_date(expense_date_obj, pm_record)
+    expense_date_obj = _shift_card_date(expense_date_obj, pm_record, today=date.today())
 
     # UPDATE real - mantém o ID
     expense = ExpenseService.update_expense(
