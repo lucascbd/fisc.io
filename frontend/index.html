@@ -6438,17 +6438,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     let saldoHoje = saldoInicial;
                     const denominadorFuturo = todayDay > 0 ? daysInMonth - todayDay + 1 : daysInMonth;
                     let futureCumulative = 0;
+                    const targetRawData = []; // valores sem clamp — usados no tooltip "Estourou"
                     targetLineData = gastos.map((gasto, i) => {
                         const d = days[i];
+                        let raw;
                         if (d > todayDay) {
                             futureCumulative += gasto ?? 0;
-                            return Math.max((saldoHoje - futureCumulative) / denominadorFuturo, 0);
+                            raw = (saldoHoje - futureCumulative) / denominadorFuturo;
+                        } else {
+                            runningAcumulado += gasto ?? 0;
+                            const dias_restantes = daysInMonth - i;
+                            raw = dias_restantes > 0 ? (saldoInicial - runningAcumulado) / dias_restantes : 0;
+                            if (d === todayDay) saldoHoje = saldoInicial - runningAcumulado;
                         }
-                        runningAcumulado += gasto ?? 0;
-                        const dias_restantes = daysInMonth - i;
-                        const teto = dias_restantes > 0 ? (saldoInicial - runningAcumulado) / dias_restantes : 0;
-                        if (d === todayDay) saldoHoje = saldoInicial - runningAcumulado;
-                        return Math.max(teto, 0);
+                        targetRawData.push(raw);
+                        return Math.max(raw, 0);
                     });
                     // labelLimit: saldoInicial menos todos os gastos do mês
                     const sumAllGastos = gastosDayArray.reduce((s, v) => s + v, 0);
@@ -6513,8 +6517,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 datasets.push({
                     data: nextMonthTotals,
                     showLine: false,
-                    pointRadius: nextMonthTotals.map(v => v != null ? 5 : 0),
-                    pointHoverRadius: nextMonthTotals.map(v => v != null ? 6 : 0),
+                    pointRadius: nextMonthTotals.map(v => v != null ? 2.5 : 0),
+                    pointHoverRadius: nextMonthTotals.map(v => v != null ? 4 : 0),
                     pointBackgroundColor: 'transparent',
                     pointBorderColor: nmColor,
                     pointBorderWidth: 2,
@@ -6553,10 +6557,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const tetoItem = targetLineData ? items.find(i => i.datasetIndex === 1) : null;
                                         if (!tetoItem) return [];
                                         const spendItem = items.find(i => i.datasetIndex === 0 && i.raw > 0);
-                                        const label = tetoItem.raw <= 0
+                                        const rawVal = targetRawData[tetoItem.dataIndex] ?? tetoItem.raw;
+                                        const label = rawVal <= 0
                                             ? '🔴 Estourou'
                                             : `${selTarget.emoji || '🎯'} Target`;
-                                        const lines = [`${label}: R$ ${formatBRL(tetoItem.raw)}`];
+                                        const displayVal = rawVal <= 0 ? Math.abs(rawVal) : tetoItem.raw;
+                                        const lines = [`${label}: R$ ${formatBRL(displayVal)}`];
                                         if (spendItem) lines.push('──────────────');
                                         return lines;
                                     },
