@@ -2565,17 +2565,16 @@
                     const iconHtml = pm.icon_path
                         ? `<img src="${pm.icon_path}" style="width:20px;height:20px;object-fit:contain;">`
                         : `<span style="font-size:12px;">💳</span>`;
-                    const lockIcon = pm.is_card
-                        ? `<img src="/icons/system/${pm.is_closed ? 'lock' : 'unlock'}.png" style="width:12px;height:12px;object-fit:contain;opacity:0.75;">`
-                        : '';
                     const lockBtn = pm.is_card
-                        ? `<button onclick="event.stopPropagation();togglePmClosed(${pm.id})" title="${pm.is_closed ? 'Fatura fechada — clique para abrir' : 'Fatura aberta — clique para fechar'}"
-                            style="position:absolute;top:-2px;right:-2px;width:16px;height:16px;border-radius:50%;border:none;background:${isDark?'#3c4043':'#e8eaed'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 1px 3px rgba(0,0,0,0.3);">${lockIcon}</button>`
-                        : '';
-                    return `<div style="position:relative;flex-shrink:0;">
+                        ? `<button onclick="togglePmClosed(${pm.id})" title="${pm.is_closed ? 'Fatura fechada — clique para abrir' : 'Fatura aberta — clique para fechar'}"
+                            style="width:20px;height:20px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;">
+                            <img src="/icons/system/${pm.is_closed ? 'lock' : 'unlock'}.png" style="width:16px;height:16px;object-fit:contain;opacity:0.65;">
+                          </button>`
+                        : `<div style="width:20px;height:20px;"></div>`;
+                    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;">
+                        ${lockBtn}
                         <button onclick="togglePmFilter(${pm.id})" id="pmFilter_${pm.id}" title="${pm.description}"
                             style="width:38px;height:38px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>
-                        ${lockBtn}
                     </div>`;
                 }).join('');
             }
