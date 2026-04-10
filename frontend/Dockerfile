@@ -6,8 +6,9 @@ RUN rm /etc/nginx/conf.d/default.conf
 # Copiar config customizado
 COPY nginx.conf /etc/nginx/conf.d/fiscio.conf
 
-# Copiar arquivos estáticos (ícones de app ficam em icons/system, servidos pelo backend via proxy)
+# Copiar arquivos estáticos
 COPY index.html manifest.json firebase-messaging-sw.js \
+     icon-32.png icon-192.png icon-512.png \
      /usr/share/nginx/html/
 
 EXPOSE 80
