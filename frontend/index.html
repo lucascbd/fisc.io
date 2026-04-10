@@ -6299,6 +6299,32 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 }
                 const totals = days.map(d => dailyData[d].total);
 
+                // Bolinhas vazadas: despesas com original_date neste mês mas due_date no próximo
+                const nextMonthDayTotals = {};
+                for (let d = 1; d <= daysInMonth; d++) nextMonthDayTotals[d] = 0;
+                for (const expense of expenses) {
+                    const origStr2 = expense.original_date || expense.expense_date;
+                    if (!origStr2) continue;
+                    const origDate2 = new Date(origStr2 + 'T00:00:00');
+                    if (origDate2.getFullYear() !== year || origDate2.getMonth() + 1 !== mon) continue;
+                    const allUids2 = new Set(expense.splits.map(s => s.user_id));
+                    const isShared2 = allUids2.size > 1 || (allUids2.size === 1 && !allUids2.has(user.id));
+                    if (isShared2 && !showShared) continue;
+                    if (!isShared2 && !showIndividual) continue;
+                    if (activeDailyPmFilter.length > 0 && !activeDailyPmFilter.includes(expense.payment_method_id)) continue;
+                    if (selectedDailyCatIds !== null && !selectedDailyCatIds.includes(expense.category_id)) continue;
+                    const day2 = origDate2.getDate();
+                    for (const split of expense.splits) {
+                        if (split.user_id !== user.id) continue;
+                        const splitDue2 = new Date(split.due_date + 'T00:00:00');
+                        if (splitDue2.getFullYear() === year && splitDue2.getMonth() + 1 === mon) continue;
+                        const amt2 = parseFloat(split.user_amount);
+                        if (amt2 === 0) continue;
+                        nextMonthDayTotals[day2] += amt2;
+                    }
+                }
+                const nextMonthTotals = days.map(d => nextMonthDayTotals[d] > 0 ? nextMonthDayTotals[d] : null);
+
                 // Totais por due_date para cálculo de orçamento (igual ao valor de fechamento da aba Início)
                 const dueDateDayTotals = {};
                 for (let d = 1; d <= daysInMonth; d++) dueDateDayTotals[d] = 0;
@@ -6433,11 +6459,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
                 const activeTotals = tgtDisplayTotals ?? totals;
 
-                // Determina min do eixo Y: 0 se não há negativos reais; se há negativo pequeno
-                // arredonda para baixo na dezena mais próxima para evitar que Chart.js escolha -500
-                const _allChartVals = [...activeTotals, ...(targetLineData || [])].filter(v => v != null && isFinite(v));
+                // Determina min do eixo Y
+                const _allChartVals = [...activeTotals, ...(targetLineData || []), ...nextMonthTotals.filter(v => v != null)].filter(v => v != null && isFinite(v));
                 const _dataMin = _allChartVals.length ? Math.min(..._allChartVals) : 0;
                 const yAxisMin = _dataMin >= 0 ? 0 : Math.floor(_dataMin / 10) * 10;
+
+                // Índice do dataset de bolinhas do próximo mês (após azul + eventual target)
+                const nextMonthDsIdx = targetLineData !== null ? 2 : 1;
+                const nmColor = isDark ? '#90caf9' : '#64b5f6';
 
                 const datasets = [{
                     data: activeTotals,
@@ -6451,7 +6480,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     cubicInterpolationMode: 'monotone',
                     borderWidth: 2,
                     pointRadius: activeTotals.map(v => v !== 0 ? 2.5 : 0),
-                    pointHoverRadius: 4,
+                    pointHoverRadius: activeTotals.map(v => v !== 0 ? 6 : 4),
+                    pointHoverBackgroundColor: activeTotals.map(v => v !== 0 ? '#1a73e8' : 'transparent'),
+                    pointHoverBorderColor: '#1a73e8',
+                    pointHoverBorderWidth: 1.5,
                     pointBackgroundColor: '#1a73e8',
                     pointBorderColor: '#1a73e8',
                     spanGaps: true
@@ -6477,6 +6509,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         }
                     });
                 }
+                // Bolinhas vazadas (➡️ próximo mês)
+                datasets.push({
+                    data: nextMonthTotals,
+                    showLine: false,
+                    pointRadius: nextMonthTotals.map(v => v != null ? 5 : 0),
+                    pointHoverRadius: nextMonthTotals.map(v => v != null ? 6 : 0),
+                    pointBackgroundColor: 'transparent',
+                    pointBorderColor: nmColor,
+                    pointBorderWidth: 2,
+                    pointHoverBackgroundColor: 'transparent',
+                    pointHoverBorderColor: nmColor,
+                    pointHoverBorderWidth: 2,
+                    fill: false,
+                    spanGaps: false
+                });
 
                 const ctx = document.getElementById('dailyLineChart').getContext('2d');
                 dailyLineChart = new Chart(ctx, {
@@ -6493,7 +6540,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         plugins: {
                             legend: { display: false },
                             tooltip: {
-                                filter: item => item.datasetIndex === 1 ? true : item.raw !== 0,
+                                filter: item => {
+                                    if (item.datasetIndex === 0) return item.raw !== 0;
+                                    if (targetLineData && item.datasetIndex === 1) return true;
+                                    if (item.datasetIndex === nextMonthDsIdx) return item.raw != null;
+                                    return false;
+                                },
                                 callbacks: {
                                     title: items => `Dia ${items[0].label}`,
                                     label: () => null,
@@ -6501,20 +6553,30 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const tetoItem = targetLineData ? items.find(i => i.datasetIndex === 1) : null;
                                         if (!tetoItem) return [];
                                         const spendItem = items.find(i => i.datasetIndex === 0 && i.raw > 0);
-                                        const lines = [`${selTarget.emoji || '🎯'} Target: R$ ${formatBRL(tetoItem.raw)}`];
+                                        const label = tetoItem.raw <= 0
+                                            ? '🔴 Estourou'
+                                            : `${selTarget.emoji || '🎯'} Target`;
+                                        const lines = [`${label}: R$ ${formatBRL(tetoItem.raw)}`];
                                         if (spendItem) lines.push('──────────────');
                                         return lines;
                                     },
                                     afterBody: items => {
                                         const spendItem = items.find(i => i.datasetIndex === 0);
-                                        if (!spendItem || !spendItem.raw) return [];
-                                        const d = parseInt(spendItem.label);
-                                        const cats = dailyData[d]?.cats || {};
-                                        const sorted = Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
-                                        const lines = sorted.map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`);
-                                        if (sorted.length > 1) {
-                                            lines.push('──────────────');
-                                            lines.push(`Total: R$ ${formatBRL(dailyData[d].total)}`);
+                                        const nextItem = items.find(i => i.datasetIndex === nextMonthDsIdx && i.raw != null);
+                                        const lines = [];
+                                        if (spendItem && spendItem.raw) {
+                                            const d = parseInt(spendItem.label);
+                                            const cats = dailyData[d]?.cats || {};
+                                            const sorted = Object.entries(cats).sort((a, b) => b[1].total - a[1].total);
+                                            lines.push(...sorted.map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`));
+                                            if (sorted.length > 1) {
+                                                lines.push('──────────────');
+                                                lines.push(`Total: R$ ${formatBRL(dailyData[d].total)}`);
+                                            }
+                                        }
+                                        if (nextItem) {
+                                            if (lines.length) lines.push('──────────────');
+                                            lines.push(`➡️ Próx. mês: R$ ${formatBRL(nextItem.raw)}`);
                                         }
                                         return lines;
                                     }
