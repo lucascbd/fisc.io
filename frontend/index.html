@@ -1857,6 +1857,25 @@
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6"><div class="relative h-[300px] md:h-[400px]"><canvas id="pmBarChart"></canvas></div></div>
                 </div>
+
+                <!-- Gráfico Mês A × Mês B — Preço e Volume -->
+                <div class="mb-6">
+                    <div class="mb-3"><h3 class="text-lg md:text-xl font-bold">Mês A × Mês B — Preço e Volume</h3></div>
+                    <div class="flex gap-2 mb-3">
+                        <div style="flex:1;min-width:0;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Mês B (referência)</label>
+                            <select id="mvmMonthB" class="filter-h w-full px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;" onchange="updateMvMChart()"></select>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Mês A (comparação)</label>
+                            <select id="mvmMonthA" class="filter-h w-full px-2 text-sm bg-white border rounded-lg" style="border-color:#dadce0;" onchange="updateMvMChart()"></select>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3 md:p-6">
+                        <p id="mvmMsg" class="text-sm text-gray-500 text-center py-4 hidden"></p>
+                        <div id="mvmWrap" class="relative" style="min-height:200px;"><canvas id="mvmChart"></canvas></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Inflation Tab -->
@@ -5041,6 +5060,7 @@
         let adjustedDonutChart = null;
         let categoryInflationChart = null;
         let priceVolumeChart = null;
+        let mvmBarChart = null;
 
         function toggleBarChartDropdown() {
             const dropdown = document.getElementById('barChartDropdown');
@@ -5184,6 +5204,8 @@
             await loadAvailableMonths();
             await updatePieChartFilters();
             await updateBarChartFilters();
+            if (window._allIpcaMonths) initMvMSelectors();
+            updateMvMChart();
         }
 
         // ── Inflation filter state ──
@@ -5342,6 +5364,7 @@
                 const ipcaMonthsResp = await api(`${API}/inflation/months`).catch(() => ({months:[], latest: null}));
                 const allIpcaMonths = ipcaMonthsResp.months; // ["2026-03","2026-02",...]
                 window._allIpcaMonths = allIpcaMonths; // persist for fallback in loadInflation
+                initMvMSelectors();
                 // Group months by year
                 const byYear = {};
                 allIpcaMonths.forEach(m => {
@@ -5886,6 +5909,193 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
             } catch (err) {
                 console.error('Erro ao carregar inflação:', err);
+            }
+        }
+
+        function initMvMSelectors() {
+            const months = (window._allIpcaMonths || []).slice().sort();
+            if (months.length < 2) return;
+            const fmt = m => { const [y, mo] = m.split('-'); return `${mo}/${y}`; };
+            const opts = months.map(m => `<option value="${m}">${fmt(m)}</option>`).join('');
+            const selA = document.getElementById('mvmMonthA');
+            const selB = document.getElementById('mvmMonthB');
+            if (!selA || !selB) return;
+            selA.innerHTML = opts;
+            selB.innerHTML = opts;
+            // Default: A = mês vigente-1, B = mês vigente-2
+            const now = new Date();
+            const pad = n => String(n).padStart(2,'0');
+            const prevA = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const prevB = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+            const mA = `${prevA.getFullYear()}-${pad(prevA.getMonth()+1)}`;
+            const mB = `${prevB.getFullYear()}-${pad(prevB.getMonth()+1)}`;
+            if (months.includes(mA)) selA.value = mA;
+            else selA.value = months[months.length - 1];
+            if (months.includes(mB)) selB.value = mB;
+            else selB.value = months[months.length - 2] ?? months[0];
+        }
+
+        async function updateMvMChart() {
+            const selA = document.getElementById('mvmMonthA');
+            const selB = document.getElementById('mvmMonthB');
+            const msgEl = document.getElementById('mvmMsg');
+            const wrap = document.getElementById('mvmWrap');
+            if (!selA || !selB) return;
+            const monthA = selA.value;
+            const monthB = selB.value;
+            const showMsg = (txt) => {
+                if (msgEl) { msgEl.textContent = txt; msgEl.classList.remove('hidden'); }
+                if (wrap) wrap.style.display = 'none';
+            };
+            if (!monthA || !monthB || monthA === monthB) {
+                showMsg('Selecione dois meses diferentes.');
+                return;
+            }
+            if (msgEl) msgEl.classList.add('hidden');
+            if (wrap) wrap.style.display = '';
+
+            const isDark = document.body.classList.contains('dark-mode');
+            const textColor = isDark ? '#e8eaed' : '#202124';
+            const gridColor = isDark ? '#3c4043' : '#e0e0e0';
+            const isMobile = window.innerWidth < 640;
+
+            try {
+                // Enviar [B, A] — B é referência (prev), A é comparação (last)
+                const [older, newer] = [monthA, monthB].sort();
+                const params = new URLSearchParams({ d1c: '1', months: `${older},${newer === older ? monthA : newer}` });
+                // Garante B como prev e A como last
+                const orderedMonths = [monthB, monthA].sort((a,b) => a.localeCompare(b));
+                params.set('months', orderedMonths.join(','));
+                const data = await api(`${API}/inflation/data?${params}`);
+
+                if (mvmBarChart) { mvmBarChart.destroy(); mvmBarChart = null; }
+
+                if (!data.price_volume?.length || data.months?.length < 2) {
+                    showMsg('Sem dados suficientes para os meses selecionados.');
+                    return;
+                }
+
+                const pvData = data.price_volume.filter(d => d.efeito_preco !== 0 || d.efeito_volume !== 0);
+                if (!pvData.length) { showMsg('Sem variação detectada entre os meses.'); return; }
+
+                const totalPreco   = pvData.reduce((s,d) => s + d.efeito_preco, 0);
+                const totalVolume  = pvData.reduce((s,d) => s + d.efeito_volume, 0);
+                const totalBase    = pvData.reduce((s,d) => s + d.avg_spend_prev, 0);
+                const totalLast    = pvData.reduce((s,d) => s + d.avg_spend_last, 0);
+                const totalPrecoPct  = totalBase > 0 ? Math.round(totalPreco  / totalBase * 1000) / 10 : 0;
+                const totalVolumePct = totalBase > 0 ? Math.round(totalVolume / totalBase * 1000) / 10 : 0;
+
+                const totalRow = {
+                    name: 'Total', icon: '💸',
+                    efeito_preco: totalPreco, efeito_volume: totalVolume,
+                    efeito_preco_pct: totalPrecoPct, efeito_volume_pct: totalVolumePct,
+                    avg_price_prev: null, avg_price_last: null,
+                    vol_prev: null, vol_last: null,
+                    avg_spend_prev: totalBase, avg_spend_last: totalLast
+                };
+
+                const rows = [totalRow, ...pvData.slice().sort((a,b) => Math.abs(b.efeito_preco+b.efeito_volume) - Math.abs(a.efeito_preco+a.efeito_volume))];
+                const labels = rows.map(d => `${d.icon} ${d.name}`);
+                const totals = rows.map(d => d.efeito_preco + d.efeito_volume);
+                const bgColors = totals.map(v => v >= 0 ? '#ea4335' : '#34a853');
+                const totalPcts = rows.map(d => Math.round((d.efeito_preco_pct + d.efeito_volume_pct) * 10) / 10);
+
+                const maxAbs = Math.max(...totals.map(Math.abs));
+                const xPad = Math.ceil(maxAbs * (isMobile ? 1.7 : 1.55));
+
+                const mvmWrap = document.getElementById('mvmWrap');
+                if (mvmWrap) mvmWrap.style.height = Math.max(200, rows.length * 36 + 60) + 'px';
+
+                const fmtMonthLabel = m => { const [y,mo] = m.split('-'); return `${mo}/${y}`; };
+                mvmBarChart = new Chart(document.getElementById('mvmChart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: `${fmtMonthLabel(monthA)} vs ${fmtMonthLabel(monthB)} (R$)`,
+                            data: totals,
+                            backgroundColor: bgColors,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: { right: 0, left: 0 } },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                enabled: false,
+                                external: ctx => {
+                                    const d = rows[ctx.tooltip.dataPoints?.[0]?.dataIndex];
+                                    if (!d) return;
+                                    showChartTooltip('mvmTooltip', ctx.chart, ctx.tooltip, dark => {
+                                        const fmtSign = v => v >= 0 ? '+' : '-';
+                                        const numColor = dark ? '#9aa0a6' : '#5f6368';
+                                        const precoCor = d.efeito_preco === 0 ? numColor : (d.efeito_preco < 0 ? '#34a853' : '#ea4335');
+                                        const volumeCor = d.efeito_volume === 0 ? numColor : (d.efeito_volume < 0 ? '#34a853' : '#ea4335');
+                                        const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:5px 0;"></div>`;
+                                        let html = `<div style="font-weight:600;margin-bottom:4px;">${ctx.tooltip.title?.[0] ?? ''}</div>`;
+                                        html += `<div style="font-size:11px;color:${numColor};margin-bottom:4px;">${fmtMonthLabel(monthB)} → ${fmtMonthLabel(monthA)}</div>`;
+                                        html += `<div><b>Preço:</b> <span style="color:${precoCor}">${fmtSign(d.efeito_preco)}R$ ${formatBRL(Math.abs(d.efeito_preco))} (${fmtSign(d.efeito_preco)}${fmtPct(Math.abs(d.efeito_preco_pct),1)}%)</span></div>`;
+                                        html += `<div><b>Volume:</b> <span style="color:${volumeCor}">${fmtSign(d.efeito_volume)}R$ ${formatBRL(Math.abs(d.efeito_volume))} (${fmtSign(d.efeito_volume)}${fmtPct(Math.abs(d.efeito_volume_pct),1)}%)</span></div>`;
+                                        if (d.avg_spend_last != null) {
+                                            html += hr;
+                                            html += `<div><b>Total:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_prev)}</span> → <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_last)}</span></div>`;
+                                        }
+                                        if (d.avg_price_last != null) {
+                                            const fmtVol = v => v == null ? '—' : (v % 1 === 0 ? String(v) : Number(v).toFixed(1).replace('.', ','));
+                                            html += `<div><b>Ticket:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_prev)}</span> → <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_last)}</span></div>`;
+                                            html += `<div><b>Qtd:</b> <span style="color:${numColor}">${fmtVol(d.vol_prev)}</span> → <span style="color:${numColor}">${fmtVol(d.vol_last)}</span></div>`;
+                                        }
+                                        return html;
+                                    });
+                                }
+                            },
+                            datalabels: {
+                                display: true,
+                                anchor: 'end',
+                                align: 'end',
+                                offset: 2,
+                                clip: false,
+                                color: textColor,
+                                font: { size: 11, weight: '600' },
+                                formatter: (v, ctx) => {
+                                    if (Math.abs(v) < 0.5) return '';
+                                    const pct = totalPcts[ctx.dataIndex] ?? 0;
+                                    const sign = v >= 0 ? '+' : '-';
+                                    return isMobile
+                                        ? `${sign}${fmtPct(Math.abs(pct),1)}%`
+                                        : `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct),1)}%)`;
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                min: -xPad, max: xPad,
+                                ticks: {
+                                    color: textColor,
+                                    maxTicksLimit: isMobile ? 4 : 8,
+                                    callback: v => (v > 0 ? '+' : '') + 'R$ ' + Math.round(v).toLocaleString('pt-BR')
+                                },
+                                grid: { color: gridColor }
+                            },
+                            y: {
+                                ticks: {
+                                    color: textColor,
+                                    font: { size: isMobile ? 14 : 16 },
+                                    callback: (val, idx) => rows[idx]?.icon ?? ''
+                                },
+                                grid: { color: gridColor }
+                            }
+                        }
+                    },
+                    plugins: [window.ChartDataLabels].filter(Boolean)
+                });
+            } catch (err) {
+                console.error('Erro ao carregar gráfico MvM:', err);
+                showMsg('Erro ao carregar dados.');
             }
         }
 
@@ -7896,7 +8106,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const chartsTabEl = document.getElementById('chartsTab');
             const inflTabEl = document.getElementById('inflationTab');
             if (chartsTabEl && !chartsTabEl.classList.contains('hidden')) {
-                updatePieChart?.(); updateDailyChart?.(); updatePmBarChart?.();
+                updatePieChart?.(); updateDailyChart?.(); updatePmBarChart?.(); updateMvMChart?.();
             }
             if (inflTabEl && !inflTabEl.classList.contains('hidden')) {
                 inflLoaded = false; loadInflation?.();
