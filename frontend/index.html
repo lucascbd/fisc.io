@@ -5784,10 +5784,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         showInflMsg('priceVolume', '');
 
                         // Calcular total geral com base real
-                        const totalPreco   = pvData.reduce((s, d) => s + d.efeito_preco, 0);
-                        const totalVolume  = pvData.reduce((s, d) => s + d.efeito_volume, 0);
-                        const totalBase    = pvData.reduce((s, d) => s + d.avg_spend_prev, 0);
-                        const totalLast    = pvData.reduce((s, d) => s + d.avg_spend_last, 0);
+                        const _allPv = data.price_volume;
+                        const totalPreco   = _allPv.reduce((s, d) => s + d.efeito_preco, 0);
+                        const totalVolume  = _allPv.reduce((s, d) => s + d.efeito_volume, 0);
+                        const totalBase    = _allPv.reduce((s, d) => s + d.avg_spend_prev, 0);
+                        const totalLast    = _allPv.reduce((s, d) => s + d.avg_spend_last, 0);
                         const totalPrecoPct  = totalBase > 0 ? Math.round(totalPreco  / totalBase * 1000) / 10 : 0;
                         const totalVolumePct = totalBase > 0 ? Math.round(totalVolume / totalBase * 1000) / 10 : 0;
 
@@ -5981,10 +5982,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const pvData = data.price_volume.filter(d => d.efeito_preco !== 0 || d.efeito_volume !== 0);
                 if (!pvData.length) { showMsg('Sem variação detectada entre os meses.'); return; }
 
-                const totalPreco   = pvData.reduce((s,d) => s + d.efeito_preco, 0);
-                const totalVolume  = pvData.reduce((s,d) => s + d.efeito_volume, 0);
-                const totalBase    = pvData.reduce((s,d) => s + d.avg_spend_prev, 0);
-                const totalLast    = pvData.reduce((s,d) => s + d.avg_spend_last, 0);
+                // Totais baseados em TODOS os dados — incluindo categorias sem variação (efeitos zero)
+                const allPv = data.price_volume;
+                const totalPreco   = allPv.reduce((s,d) => s + d.efeito_preco, 0);
+                const totalVolume  = allPv.reduce((s,d) => s + d.efeito_volume, 0);
+                const totalBase    = allPv.reduce((s,d) => s + d.avg_spend_prev, 0);
+                const totalLast    = allPv.reduce((s,d) => s + d.avg_spend_last, 0);
                 const totalPrecoPct  = totalBase > 0 ? Math.round(totalPreco  / totalBase * 1000) / 10 : 0;
                 const totalVolumePct = totalBase > 0 ? Math.round(totalVolume / totalBase * 1000) / 10 : 0;
 
