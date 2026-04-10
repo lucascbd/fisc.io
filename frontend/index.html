@@ -6071,9 +6071,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     if (Math.abs(v) < 0.5) return '';
                                     const pct = totalPcts[ctx.dataIndex] ?? 0;
                                     const sign = v >= 0 ? '+' : '-';
-                                    return isMobile
-                                        ? `${sign}${fmtPct(Math.abs(pct),1)}%`
-                                        : `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct),1)}%)`;
+                                    return `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct),1)}%)`;
                                 }
                             }
                         },
