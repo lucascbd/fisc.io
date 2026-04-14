@@ -2557,10 +2557,11 @@
             const db = isDark ? '#3c4043' : '#f1f3f4';
             const sg = isDark ? '#1e3a5f' : '#e8f0fe';
 
-            // Botões principais
+            // Botões principais (só PMs com despesas no mês atual)
             const cont = document.getElementById('pmFiltersContainer');
             if (cont) {
-                cont.innerHTML = myPms.map(pm => {
+                const visiblePms = window._pmIdsInicio ? myPms.filter(pm => window._pmIdsInicio.has(pm.id)) : myPms;
+                cont.innerHTML = visiblePms.map(pm => {
                     const on = activePmFilter.length > 0 && activePmFilter.includes(pm.id);
                     const iconHtml = pm.icon_path
                         ? `<img src="${pm.icon_path}" style="width:20px;height:20px;object-fit:contain;">`
@@ -2579,10 +2580,11 @@
                 }).join('');
             }
 
-            // Botões daily chart
+            // Botões daily chart (só PMs com despesas no mês atual)
             const dcont = document.getElementById('dailyPmFiltersContainer');
             if (dcont) {
-                dcont.innerHTML = myPms.map(pm => {
+                const visibleDiaryPms = window._pmIdsDiary ? myPms.filter(pm => window._pmIdsDiary.has(pm.id)) : myPms;
+                dcont.innerHTML = visibleDiaryPms.map(pm => {
                     const on = activeDailyPmFilter.length > 0 && activeDailyPmFilter.includes(pm.id);
                     const iconHtml = pm.icon_path
                         ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
@@ -2597,8 +2599,8 @@
             id = parseInt(id);
             const idx=activeDailyPmFilter.indexOf(id);
             if(idx>-1) activeDailyPmFilter.splice(idx,1); else activeDailyPmFilter.push(id);
-            const myPms = userPms(user.id);
-            if(activeDailyPmFilter.length === myPms.length) activeDailyPmFilter=[];
+            const visibleCount = window._pmIdsDiary ? userPms(user.id).filter(pm => window._pmIdsDiary.has(pm.id)).length : userPms(user.id).length;
+            if(activeDailyPmFilter.length === visibleCount) activeDailyPmFilter=[];
             applyDailyPmFilterStyles();
             updateDailyChart();
         }
@@ -2629,8 +2631,8 @@
             id = parseInt(id);
             const idx=activePmFilter.indexOf(id);
             if(idx>-1) activePmFilter.splice(idx,1); else activePmFilter.push(id);
-            const myPms = userPms(user.id);
-            if(activePmFilter.length === myPms.length) activePmFilter=[];
+            const visibleCount = window._pmIdsInicio ? userPms(user.id).filter(pm => window._pmIdsInicio.has(pm.id)).length : userPms(user.id).length;
+            if(activePmFilter.length === visibleCount) activePmFilter=[];
             applyPmFilterStyles();
             loadDashboardData();
         }
@@ -2681,6 +2683,21 @@
                 const effectivePm = (e) => e.paid_by_user_id === user.id
                     ? e.payment_method_id
                     : (user.preferred_balance_method || null);
+
+                // PMs com despesas neste mês (para filtrar os botões exibidos)
+                const _pmSetInicio = new Set();
+                for (const e of expenses) {
+                    const pmId = effectivePm(e);
+                    if (pmId == null) continue;
+                    const hasSplit = e.splits.some(s => {
+                        const d = new Date(s.due_date + 'T00:00:00');
+                        return d.getFullYear() === year && d.getMonth() + 1 === mon;
+                    });
+                    if (hasSplit) _pmSetInicio.add(pmId);
+                }
+                window._pmIdsInicio = _pmSetInicio.size > 0 ? _pmSetInicio : null;
+                // Remove filtros ativos de PMs que não existem neste mês
+                if (window._pmIdsInicio) activePmFilter = activePmFilter.filter(id => window._pmIdsInicio.has(id));
 
                 renderPmFilterButtons();
                 if(activePmFilter.length>0){
@@ -6441,6 +6458,20 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     seenIds.add(e.id);
                     return true;
                 });
+                // PMs com despesas neste mês (original_date) — para filtrar os botões exibidos
+                const _pmSetDiary = new Set();
+                for (const e of expenses) {
+                    if (e.payment_method_id == null) continue;
+                    const origStr = e.original_date || e.expense_date;
+                    if (!origStr) continue;
+                    const d = new Date(origStr + 'T00:00:00');
+                    if (d.getFullYear() === year && d.getMonth() + 1 === mon) _pmSetDiary.add(e.payment_method_id);
+                }
+                window._pmIdsDiary = _pmSetDiary.size > 0 ? _pmSetDiary : null;
+                // Remove filtros ativos de PMs que não existem neste mês
+                if (window._pmIdsDiary) activeDailyPmFilter = activeDailyPmFilter.filter(id => window._pmIdsDiary.has(id));
+                renderPmFilterButtons();
+
                 // Popular filtro de categorias com as disponíveis no mês
                 const dailyCatContainer = document.getElementById('dailyCatFilterContainer');
                 if (dailyCatContainer) {
