@@ -5241,7 +5241,7 @@
         }
 
         // ── Inflation filter state ──
-        let inflSelectedCatIds = [];
+        let inflSelectedCatIds = null;  // null = all; [] = none explicitly selected
         let inflLoaded = false;
 
         function toggleInflMonthDropdown() {
@@ -5308,6 +5308,7 @@
             if (el) el.textContent = text;
         }
         function toggleInflCat(catId) {
+            if (inflSelectedCatIds === null) inflSelectedCatIds = Array.from(document.querySelectorAll('.infl-cat-cb')).map(cb => parseInt(cb.value));
             const idx = inflSelectedCatIds.indexOf(catId);
             if (idx > -1) inflSelectedCatIds.splice(idx, 1); else inflSelectedCatIds.push(catId);
             const allCb = document.getElementById('inflCatAll');
@@ -5468,10 +5469,16 @@
 
                 // Categorias disponíveis no período
                 const _availCats = categories.filter(c => _catSet.has(c.id));
-                const _prevCatIds = new Set(inflSelectedCatIds);
-                // Preservar seleção anterior; se não havia nada selecionado, selecionar tudo
-                const _newCatIds = _availCats.map(c => c.id).filter(id => !_prevCatIds.size || _prevCatIds.has(id));
-                inflSelectedCatIds = _newCatIds.length ? _newCatIds : _availCats.map(c => c.id);
+                if (inflSelectedCatIds === null) {
+                    // Primeira carga: selecionar todas
+                    inflSelectedCatIds = _availCats.map(c => c.id);
+                } else if (inflSelectedCatIds.length > 0) {
+                    // Preservar apenas as que ainda existem no período
+                    const _prevCatIds = new Set(inflSelectedCatIds);
+                    const _kept = _availCats.map(c => c.id).filter(id => _prevCatIds.has(id));
+                    inflSelectedCatIds = _kept.length ? _kept : _availCats.map(c => c.id);
+                }
+                // inflSelectedCatIds === [] → manter vazio (usuário desmarcou tudo)
                 const _allCatSel = inflSelectedCatIds.length >= _availCats.length;
                 document.getElementById('inflCatContainer').innerHTML =
                     '<label class="flex items-center gap-2 py-1 hover:bg-blue-50 cursor-pointer px-2 rounded font-medium border-b mb-1 pb-2"><input type="checkbox" id="inflCatAll" ' + (_allCatSel ? 'checked' : '') + ' onchange="toggleAllInflCats(this.checked)"><span>📋</span><span class="text-sm">Todas</span></label>' +
@@ -5489,7 +5496,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
             const params = new URLSearchParams({ d1c });
             if (monthsToSend.length) params.set('months', monthsToSend.join(','));
-            if (inflSelectedCatIds.length) params.set('category_ids', inflSelectedCatIds.join(','));
+            if (inflSelectedCatIds !== null && inflSelectedCatIds.length > 0) params.set('category_ids', inflSelectedCatIds.join(','));
+            if (inflSelectedCatIds !== null && inflSelectedCatIds.length === 0) { showInflMsg('myInflation',''); showInflMsg('categoryInflation',''); showInflMsg('adjustedBar',''); showInflMsg('priceVolume',''); return; }
 
             try {
                 const data = await api(`${API}/inflation/data?${params}`);
