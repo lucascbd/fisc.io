@@ -5391,6 +5391,9 @@
                     const locs = await api(`${API}/inflation/locations`);
                     const sel = document.getElementById('inflLocationFilter');
                     sel.innerHTML = locs.map(l => `<option value="${l.code}">${l.name}</option>`).join('');
+                    // Pre-select user's preferred IPCA location
+                    const prefLoc = user?.preferred_ipca_location || 1;
+                    sel.value = String(prefLoc);
                 } catch(e) {}
 
                 // Months from IPCA table (grouped by year)
