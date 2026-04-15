@@ -1717,7 +1717,7 @@
                 <div class="mb-4 flex items-end gap-2" style="flex-wrap:nowrap;">
                     <div style="flex-shrink:0;">
                         <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Mês</label>
-                        <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('homeMonthFilter',-1)" ontouchstart="event.preventDefault();stepMonth('homeMonthFilter',-1);">◄</button><select id="homeMonthFilter" onchange="loadDashboardData()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('homeMonthFilter',1)" ontouchstart="event.preventDefault();stepMonth('homeMonthFilter',1);">►</button></div>
+                        <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('homeMonthFilter',-1)" ontouchstart="event.preventDefault();stepMonth('homeMonthFilter',-1);">⯇</button><select id="homeMonthFilter" onchange="loadDashboardData()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('homeMonthFilter',1)" ontouchstart="event.preventDefault();stepMonth('homeMonthFilter',1);">⯈</button></div>
                     </div>
                     <div style="flex:1;"></div>
                     <div style="display:flex;align-items:flex-end;gap:6px;height:38px;">
@@ -1755,7 +1755,7 @@
                 <div class="mb-2 flex items-end gap-2" style="flex-wrap:nowrap;">
                     <div style="flex-shrink:0;">
                         <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Mês</label>
-                        <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('expenseMonthFilter',-1)" ontouchstart="event.preventDefault();stepMonth('expenseMonthFilter',-1);">◄</button><select id="expenseMonthFilter" onchange="updateExpenseFilters()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('expenseMonthFilter',1)" ontouchstart="event.preventDefault();stepMonth('expenseMonthFilter',1);">►</button></div>
+                        <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('expenseMonthFilter',-1)" ontouchstart="event.preventDefault();stepMonth('expenseMonthFilter',-1);">⯇</button><select id="expenseMonthFilter" onchange="updateExpenseFilters()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('expenseMonthFilter',1)" ontouchstart="event.preventDefault();stepMonth('expenseMonthFilter',1);">⯈</button></div>
                     </div>
                     <div style="flex:1;min-width:0;">
                         <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Buscar</label>
@@ -1783,7 +1783,7 @@
                     <div class="flex gap-2 mb-3" style="flex-wrap: nowrap;">
                         <div style="flex:1;min-width:0;">
                             <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Mês</label>
-                            <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('pieChartMonths',-1)" ontouchstart="event.preventDefault();stepMonth('pieChartMonths',-1);">◄</button><select id="pieChartMonths" onchange="updatePieChartFilters()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('pieChartMonths',1)" ontouchstart="event.preventDefault();stepMonth('pieChartMonths',1);">►</button></div>
+                            <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('pieChartMonths',-1)" ontouchstart="event.preventDefault();stepMonth('pieChartMonths',-1);">⯇</button><select id="pieChartMonths" onchange="updatePieChartFilters()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('pieChartMonths',1)" ontouchstart="event.preventDefault();stepMonth('pieChartMonths',1);">⯈</button></div>
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Despesas</label>
@@ -9043,11 +9043,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     <div style="font-size:0.82rem;font-weight:500;color:${sub};margin-bottom:10px;">
                       Mês de referência:</div>
                     <div class="ms-wrap" style="width:100%;">
-                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">◄</button>
+                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">⯇</button>
                       <select id="auditMonthSelect" class="ms-select"
                         onchange="window._auditMonth=this.value;_auditCheckReady()"
                         style="flex:1;text-align:center;"></select>
-                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',-1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">►</button>
+                      <button type="button" class="ms-btn" onclick="stepMonth('auditMonthSelect',-1);window._auditMonth=document.getElementById('auditMonthSelect').value;_auditCheckReady()">⯈</button>
                     </div>
                   </div>
 
