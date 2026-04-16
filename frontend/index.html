@@ -1335,7 +1335,7 @@
             background-color: #ffffff;
         }
 
-        /* Dark mode: summary bg-gray-100 → #1f1f1f (igual ao header da categoria no dark) */
+        /* Dark mode: summary bg-gray-100  #1f1f1f (igual ao header da categoria no dark) */
         .dark-mode details summary.bg-gray-100,
         .dark-mode details summary.bg-gray-100:hover,
         .dark-mode details summary.bg-gray-100:focus,
@@ -1350,7 +1350,7 @@
             outline: none !important;
             box-shadow: none !important;
         }
-        /* Dark mode: div expandida bg-gray-100 → #1f1f1f (mesma cor) */
+        /* Dark mode: div expandida bg-gray-100  #1f1f1f (mesma cor) */
         .dark-mode details > div.bg-gray-100 {
             background-color: #1f1f1f !important;
         }
@@ -2678,8 +2678,8 @@
                 }
                 
                 const myBalance=balances.find(b=>b.user_id===user.id);
-                // effectivePm: se o usuário logado pagou → método da despesa
-                //              se outro usuário pagou  → método preferencial de balanço do usuário logado
+                // effectivePm: se o usuário logado pagou  método da despesa
+                //              se outro usuário pagou   método preferencial de balanço do usuário logado
                 const effectivePm = (e) => e.paid_by_user_id === user.id
                     ? e.payment_method_id
                     : (user.preferred_balance_method || null);
@@ -4976,10 +4976,10 @@
         let lastChartsMonth = ''; // Último mês carregado
         let monthlyBarChart = null;
 
-        // Plugin: faixas de semana no gráfico diário (bandas alternadas Seg→Dom, rótulos no topo)
+        // Plugin: faixas de semana no gráfico diário (bandas alternadas SegDom, rótulos no topo)
         const weekBandsPlugin = {
             id: 'weekBands',
-            // Calcula semanas: Seg→Dom. Semana 1 começa na primeira segunda do mês.
+            // Calcula semanas: SegDom. Semana 1 começa na primeira segunda do mês.
             // Dias antes da primeira segunda pertencem à "Sem 0" (semana do mês anterior).
             _getWeeks(yr, mn, N) {
                 let firstMon = null;
@@ -5481,7 +5481,7 @@
                     const _kept = _availCats.map(c => c.id).filter(id => _prevCatIds.has(id));
                     inflSelectedCatIds = _kept.length ? _kept : _availCats.map(c => c.id);
                 }
-                // inflSelectedCatIds === [] → manter vazio (usuário desmarcou tudo)
+                // inflSelectedCatIds === []  manter vazio (usuário desmarcou tudo)
                 const _allCatSel = inflSelectedCatIds.length >= _availCats.length;
                 document.getElementById('inflCatContainer').innerHTML =
                     '<label class="flex items-center gap-2 py-1 hover:bg-blue-50 cursor-pointer px-2 rounded font-medium border-b mb-1 pb-2"><input type="checkbox" id="inflCatAll" ' + (_allCatSel ? 'checked' : '') + ' onchange="toggleAllInflCats(this.checked)"><span>📋</span><span class="text-sm">Todas</span></label>' +
@@ -6080,17 +6080,17 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         const volumeCor = d.efeito_volume === 0 ? numColor : (d.efeito_volume < 0 ? '#34a853' : '#ea4335');
                                         const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:5px 0;"></div>`;
                                         let html = `<div style="font-weight:600;margin-bottom:4px;">${ctx.tooltip.title?.[0] ?? ''}</div>`;
-                                        html += `<div style="font-size:11px;color:${numColor};margin-bottom:4px;">${fmtMonthLabel(monthB)} → ${fmtMonthLabel(monthA)}</div>`;
+                                        html += `<div style="font-size:11px;color:${numColor};margin-bottom:4px;">${fmtMonthLabel(monthB)} ➔ ${fmtMonthLabel(monthA)}</div>`;
                                         html += `<div><b>Preço:</b> <span style="color:${precoCor}">${fmtSign(d.efeito_preco)}R$ ${formatBRL(Math.abs(d.efeito_preco))} (${fmtSign(d.efeito_preco)}${fmtPct(Math.abs(d.efeito_preco_pct),1)}%)</span></div>`;
                                         html += `<div><b>Volume:</b> <span style="color:${volumeCor}">${fmtSign(d.efeito_volume)}R$ ${formatBRL(Math.abs(d.efeito_volume))} (${fmtSign(d.efeito_volume)}${fmtPct(Math.abs(d.efeito_volume_pct),1)}%)</span></div>`;
                                         if (d.avg_spend_last != null) {
                                             html += hr;
-                                            html += `<div><b>Total:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_prev)}</span> → <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_last)}</span></div>`;
+                                            html += `<div><b>Total:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_prev)}</span> ➔ <span style="color:${numColor}">R$ ${formatBRL(d.avg_spend_last)}</span></div>`;
                                         }
                                         if (d.avg_price_last != null) {
                                             const fmtVol = v => v == null ? '—' : (v % 1 === 0 ? String(v) : Number(v).toFixed(1).replace('.', ','));
-                                            html += `<div><b>Ticket:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_prev)}</span> → <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_last)}</span></div>`;
-                                            html += `<div><b>Qtd:</b> <span style="color:${numColor}">${fmtVol(d.vol_prev)}</span> → <span style="color:${numColor}">${fmtVol(d.vol_last)}</span></div>`;
+                                            html += `<div><b>Ticket:</b> <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_prev)}</span> ➔ <span style="color:${numColor}">R$ ${formatBRL(d.avg_price_last)}</span></div>`;
+                                            html += `<div><b>Qtd:</b> <span style="color:${numColor}">${fmtVol(d.vol_prev)}</span> ➔ <span style="color:${numColor}">${fmtVol(d.vol_last)}</span></div>`;
                                         }
                                         return html;
                                     });
@@ -6511,7 +6511,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         activeDailyPmFilter = tgt?.payment_methods?.length ? [...tgt.payment_methods] : [];
                         applyDailyPmFilterStyles();
                     }
-                    // [] = usuário desmarcou tudo dentro do mesmo mês → manter vazio
+                    // [] = usuário desmarcou tudo dentro do mesmo mês ➔ manter vazio
                     const allSel = availableCats.length > 0 && (selectedDailyCatIds === null || selectedDailyCatIds.length >= availableCats.length);
                     dailyCatContainer.innerHTML = `
                         <label class="flex items-center gap-2 py-1 hover:bg-blue-50 cursor-pointer px-2 rounded font-medium border-b mb-1 pb-2">
@@ -6629,7 +6629,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
                 }
 
-                // Target selecionado → linha tracejada (adaptativa ou fixa)
+                // Target selecionado ➔ linha tracejada (adaptativa ou fixa)
                 const selTargetId = targetSel ? parseInt(targetSel.value) : NaN;
                 const selTarget = !isNaN(selTargetId) && selTargetId ? (targets||[]).find(t=>t.id===selTargetId) : null;
                 const fixedDailyLimit = selTarget ? selTarget.monthly_amount / daysInMonth : null;
@@ -7679,7 +7679,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     </div>
                 </div>`;
 
-            // File input change → preview + filename
+            // File input change ➔ preview + filename
             document.getElementById('pm_icon_file').onchange = function() {
                 const file = this.files[0];
                 if (!file) return;
@@ -9412,7 +9412,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                       <span style="margin-left:6px;">${item.file.description}</span>${parc}
                     </div>
                     <div style="font-size:0.75rem;color:${sub};margin-top:2px;">
-                      → ${item.expense?.description || '?'} · ${item.reason}
+                      ➔ ${item.expense?.description || '?'} · ${item.reason}
                     </div>
                   </div>
                   <div style="font-size:0.88rem;font-weight:600;white-space:nowrap;">
@@ -9459,7 +9459,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                        <input type="radio" name="ambig_${idx}" value="none"
                               style="accent-color:#ea4335;flex-shrink:0;">
                        <span style="font-size:0.8rem;color:${sub};">
-                         Nenhum desses → mover para ❌</span>
+                         Nenhum desses ➔ mover para ❌</span>
                      </label>`;
 
                 return `
