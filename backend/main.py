@@ -533,10 +533,14 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Dep
             names = ', '.join([p.name for p in active_profiles])
             raise HTTPException(status_code=400, detail=f"Remova o usuário dos perfis primeiro: {names}")
     
-    # Verificar se tem expense_splits
-    has_splits = db.query(ExpenseSplit).filter(ExpenseSplit.user_id == user_id).first()
-    
-    if has_splits:
+    # Soft delete se tiver qualquer referência em expenses ou splits
+    has_any_ref = (
+        db.query(ExpenseSplit).filter(ExpenseSplit.user_id == user_id).first() or
+        db.query(Expense).filter(Expense.paid_by_user_id == user_id).first() or
+        db.query(RecurringExpense).filter(RecurringExpense.paid_by_user_id == user_id).first()
+    )
+
+    if has_any_ref:
         user.is_active = False
         db.commit()
         return {"message": "User deactivated", "soft_delete": True}
