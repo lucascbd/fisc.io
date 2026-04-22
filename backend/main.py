@@ -546,6 +546,8 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Dep
         return {"message": "User deactivated", "soft_delete": True}
     else:
         db.query(SplitProfileUser).filter(SplitProfileUser.user_id == user_id).delete()
+        db.query(Expense).filter(Expense.created_by_user_id == user_id).update({"created_by_user_id": None})
+        db.query(RecurringExpense).filter(RecurringExpense.created_by_user_id == user_id).update({"created_by_user_id": None})
         db.delete(user)
         db.commit()
         return {"message": "User deleted", "soft_delete": False}
