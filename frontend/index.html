@@ -1765,6 +1765,9 @@
                 <div class="mb-4 flex items-end gap-2" style="flex-wrap:nowrap;">
                     <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Pago por</label><select id="expensePaidByFilter" onchange="loadExpenses()" class="filter-h w-full px-2 border rounded-lg text-sm"><option value="">Todos</option></select></div>
                     <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Perfil</label><select id="expenseProfileFilter" onchange="loadExpenses()" class="filter-h w-full px-2 border rounded-lg text-sm"><option value="">Todos</option></select></div>
+                    <div style="flex-shrink:0;padding-bottom:1px;display:flex;align-items:flex-end;">
+                        <div id="expensePmFiltersContainer" style="display:flex;gap:4px;"></div>
+                    </div>
                 </div>
                 <div id="expensesList"></div>
             </div>
@@ -2515,6 +2518,7 @@
         let paymentMethods = []; // todos os métodos de pagamento de todos os usuários
         let activePmFilter=[]; // [] = all selected (IDs inteiros)
         let activeDailyPmFilter=[]; // [] = all selected (IDs inteiros)
+        let activeExpensePmFilter=[]; // [] = all selected (IDs inteiros)
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
         let dailyCatMonth='';
@@ -2593,6 +2597,39 @@
                         style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
             }
+
+            // Botões aba Despesas
+            const econt = document.getElementById('expensePmFiltersContainer');
+            if (econt) {
+                econt.innerHTML = myPms.map(pm => {
+                    const on = activeExpensePmFilter.length > 0 && activeExpensePmFilter.includes(pm.id);
+                    const iconHtml = pm.icon_path
+                        ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
+                        : `<span style="font-size:11px;">💳</span>`;
+                    return `<button onclick="toggleExpensePmFilter(${pm.id})" id="expensePmFilter_${pm.id}" title="${pm.description}"
+                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                }).join('');
+            }
+        }
+
+        function toggleExpensePmFilter(id) {
+            id = parseInt(id);
+            const idx = activeExpensePmFilter.indexOf(id);
+            if (idx > -1) activeExpensePmFilter.splice(idx, 1); else activeExpensePmFilter.push(id);
+            if (activeExpensePmFilter.length === userPms(user.id).length) activeExpensePmFilter = [];
+            applyExpensePmFilterStyles();
+            loadExpenses();
+        }
+        function applyExpensePmFilterStyles() {
+            const isDark = document.body.classList.contains('dark-mode');
+            const sb = '#1a73e8', sg = isDark ? '#1e3a5f' : '#e8f0fe', db = isDark ? '#3c4043' : '#f1f3f4';
+            userPms(user.id).forEach(pm => {
+                const btn = document.getElementById('expensePmFilter_' + pm.id);
+                if (!btn) return;
+                const on = activeExpensePmFilter.length > 0 && activeExpensePmFilter.includes(pm.id);
+                btn.style.borderColor = on ? sb : 'transparent';
+                btn.style.background = on ? sg : db;
+            });
         }
 
         function toggleDailyPmFilter(id){
@@ -3182,6 +3219,14 @@
             if(paidByFilter)list=list.filter(e=>e.paid_by_user_id===parseInt(paidByFilter));
             if(profileFilter)list=list.filter(e=>e.split_profile_id===parseInt(profileFilter));
             if(searchQ)list=list.filter(e=>e.description?.toLowerCase().includes(searchQ));
+            if(activeExpensePmFilter.length>0){
+                list=list.filter(e=>{
+                    const effectivePmId=e.paid_by_user_id===user.id
+                        ?e.payment_method_id
+                        :user.preferred_balance_method;
+                    return activeExpensePmFilter.includes(effectivePmId);
+                });
+            }
             
             // Ordenar por data (mais recentes primeiro) e depois por ID (mais recentes primeiro)
             list.sort((a, b) => {
