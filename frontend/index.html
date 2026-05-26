@@ -3839,19 +3839,24 @@
                                         </div>
                                     </div>
                                     <!-- 5. Perfil - Seletor visual (logo abaixo da Categoria) -->
-                                    <div>
+                                    ${(() => {
+                                        const visibleProfs = user.is_admin ? profiles : profiles.filter(p => p.users?.some(u => u.user_id === user.id));
+                                        const defaultProfId = expense?.split_profile_id || user.preferred_split_profile_id || (visibleProfs.length === 1 ? visibleProfs[0].id : null) || '';
+                                        if (visibleProfs.length <= 1) {
+                                            return `<input type="hidden" id="exp_prof" value="${defaultProfId}" required>`;
+                                        }
+                                        return `<div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Perfil *</label>
-                                        <input type="hidden" id="exp_prof" value="${expense?.split_profile_id || user.preferred_split_profile_id || ''}" required>
+                                        <input type="hidden" id="exp_prof" value="${defaultProfId}" required>
                                         <div class="flex flex-wrap gap-2 justify-center">
-                                            ${(user.is_admin ? profiles : profiles.filter(p => p.users?.some(u => u.user_id === user.id))).map(p => {
-                                                const _defaultProfId = expense?.split_profile_id || user.preferred_split_profile_id || null;
-                                const isSelected = _defaultProfId === p.id;
+                                            ${visibleProfs.map(p => {
+                                                const isSelected = defaultProfId === p.id;
                                                 const textColor = isSelected && isDark ? '#202124' : optionTextColor;
                                                 return `
-                                                <div onclick="selectProfile(${p.id})" 
+                                                <div onclick="selectProfile(${p.id})"
                                                      class="prof-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all ${isSelected ? 'selected' : ''}"
                                                      data-prof-id="${p.id}"
-                                                     style="background: ${isSelected ? optionSelectedBg : optionBg}; 
+                                                     style="background: ${isSelected ? optionSelectedBg : optionBg};
                                                             border: 2px solid ${isSelected ? optionBorder : 'transparent'};
                                                             ${isSelected && isDark ? 'box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.3);' : ''}
                                                             width: 60px; height: 55px; flex-shrink: 0;">
@@ -3860,20 +3865,27 @@
                                                 </div>`;
                                             }).join('')}
                                         </div>
-                                    </div>
+                                    </div>`;
+                                    })()}
                                     <!-- 6. Quem Pagou - apenas usuário logado (não-admin) ou todos (admin) -->
-                                    <div>
+                                    ${(() => {
+                                        const visibleUsers = user.is_admin ? users : users.filter(u => u.id === user.id);
+                                        const defaultPaidId = expense?.paid_by_user_id || user.id;
+                                        if (visibleUsers.length <= 1) {
+                                            return `<input type="hidden" id="exp_paid" value="${defaultPaidId}" required>`;
+                                        }
+                                        return `<div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Quem pagou *</label>
-                                        <input type="hidden" id="exp_paid" value="${expense?.paid_by_user_id || user.id}" required>
+                                        <input type="hidden" id="exp_paid" value="${defaultPaidId}" required>
                                         <div class="flex flex-wrap gap-2 justify-center">
-                                            ${(user.is_admin ? users : users.filter(u => u.id === user.id)).map(u => {
+                                            ${visibleUsers.map(u => {
                                                 const isSelected = expense ? expense.paid_by_user_id === u.id : u.id === user.id;
                                                 const textColor = isSelected && isDark ? '#202124' : optionTextColor;
                                                 return `
                                                 <div onclick="selectPaidBy(${u.id})"
                                                      class="paid-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all ${isSelected ? 'selected' : ''}"
                                                      data-user-id="${u.id}"
-                                                     style="background: ${isSelected ? optionSelectedBg : optionBg}; 
+                                                     style="background: ${isSelected ? optionSelectedBg : optionBg};
                                                             border: 2px solid ${isSelected ? optionBorder : 'transparent'};
                                                             ${isSelected && isDark ? 'box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.3);' : ''}
                                                             width: 60px; height: 55px; flex-shrink: 0;">
@@ -3882,7 +3894,8 @@
                                                 </div>`;
                                             }).join('')}
                                         </div>
-                                    </div>
+                                    </div>`;
+                                    })()}
                                     <!-- 7. Método de Pagamento -->
                                     <div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Método de pagamento</label>
