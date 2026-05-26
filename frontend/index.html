@@ -1136,8 +1136,10 @@
         .dark-mode .ipca-opt:hover {
             background: #4a4f52 !important;
         }
-        .dark-mode .ipca-opt[style*="background: #e8f0fe"],
-        .dark-mode .ipca-opt[style*="background:#e8f0fe"] {
+        .ipca-opt.ipca-selected {
+            background: #e8f0fe;
+        }
+        .dark-mode .ipca-opt.ipca-selected {
             background: #1a4b8c !important;
         }
         
@@ -3837,19 +3839,24 @@
                                         </div>
                                     </div>
                                     <!-- 5. Perfil - Seletor visual (logo abaixo da Categoria) -->
-                                    <div>
+                                    ${(() => {
+                                        const visibleProfs = user.is_admin ? profiles : profiles.filter(p => p.users?.some(u => u.user_id === user.id));
+                                        const defaultProfId = expense?.split_profile_id || user.preferred_split_profile_id || (visibleProfs.length === 1 ? visibleProfs[0].id : null) || '';
+                                        if (visibleProfs.length <= 1) {
+                                            return `<input type="hidden" id="exp_prof" value="${defaultProfId}" required>`;
+                                        }
+                                        return `<div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Perfil *</label>
-                                        <input type="hidden" id="exp_prof" value="${expense?.split_profile_id || user.preferred_split_profile_id || ''}" required>
+                                        <input type="hidden" id="exp_prof" value="${defaultProfId}" required>
                                         <div class="flex flex-wrap gap-2 justify-center">
-                                            ${(user.is_admin ? profiles : profiles.filter(p => p.users?.some(u => u.user_id === user.id))).map(p => {
-                                                const _defaultProfId = expense?.split_profile_id || user.preferred_split_profile_id || null;
-                                const isSelected = _defaultProfId === p.id;
+                                            ${visibleProfs.map(p => {
+                                                const isSelected = defaultProfId === p.id;
                                                 const textColor = isSelected && isDark ? '#202124' : optionTextColor;
                                                 return `
-                                                <div onclick="selectProfile(${p.id})" 
+                                                <div onclick="selectProfile(${p.id})"
                                                      class="prof-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all ${isSelected ? 'selected' : ''}"
                                                      data-prof-id="${p.id}"
-                                                     style="background: ${isSelected ? optionSelectedBg : optionBg}; 
+                                                     style="background: ${isSelected ? optionSelectedBg : optionBg};
                                                             border: 2px solid ${isSelected ? optionBorder : 'transparent'};
                                                             ${isSelected && isDark ? 'box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.3);' : ''}
                                                             width: 60px; height: 55px; flex-shrink: 0;">
@@ -3858,20 +3865,27 @@
                                                 </div>`;
                                             }).join('')}
                                         </div>
-                                    </div>
+                                    </div>`;
+                                    })()}
                                     <!-- 6. Quem Pagou - apenas usuário logado (não-admin) ou todos (admin) -->
-                                    <div>
+                                    ${(() => {
+                                        const visibleUsers = user.is_admin ? users : users.filter(u => u.id === user.id);
+                                        const defaultPaidId = expense?.paid_by_user_id || user.id;
+                                        if (visibleUsers.length <= 1) {
+                                            return `<input type="hidden" id="exp_paid" value="${defaultPaidId}" required>`;
+                                        }
+                                        return `<div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Quem pagou *</label>
-                                        <input type="hidden" id="exp_paid" value="${expense?.paid_by_user_id || user.id}" required>
+                                        <input type="hidden" id="exp_paid" value="${defaultPaidId}" required>
                                         <div class="flex flex-wrap gap-2 justify-center">
-                                            ${(user.is_admin ? users : users.filter(u => u.id === user.id)).map(u => {
+                                            ${visibleUsers.map(u => {
                                                 const isSelected = expense ? expense.paid_by_user_id === u.id : u.id === user.id;
                                                 const textColor = isSelected && isDark ? '#202124' : optionTextColor;
                                                 return `
                                                 <div onclick="selectPaidBy(${u.id})"
                                                      class="paid-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all ${isSelected ? 'selected' : ''}"
                                                      data-user-id="${u.id}"
-                                                     style="background: ${isSelected ? optionSelectedBg : optionBg}; 
+                                                     style="background: ${isSelected ? optionSelectedBg : optionBg};
                                                             border: 2px solid ${isSelected ? optionBorder : 'transparent'};
                                                             ${isSelected && isDark ? 'box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.3);' : ''}
                                                             width: 60px; height: 55px; flex-shrink: 0;">
@@ -3880,7 +3894,8 @@
                                                 </div>`;
                                             }).join('')}
                                         </div>
-                                    </div>
+                                    </div>`;
+                                    })()}
                                     <!-- 7. Método de Pagamento -->
                                     <div>
                                         <label class="block text-sm font-medium mb-2" style="color: ${optionTextColor};">Método de pagamento</label>
@@ -4131,11 +4146,11 @@
                                                     const indent = level * 12;
                                                     const isHeader = level <= 2;
                                                     const isSelected = category?.ipca_category_code === opt.code;
-                                                    return `<div class="ipca-opt"
+                                                    return `<div class="ipca-opt${isSelected ? ' ipca-selected' : ''}"
                                                         data-code="${opt.code}"
                                                         data-name="${opt.name.replace(/"/g, '&quot;')}"
                                                         onclick="selectIpcaOption(${opt.code}, '${opt.name.replace(/'/g, "\\'")}')"
-                                                        style="padding: 7px 12px 7px ${12 + indent}px; cursor: pointer; font-size: 13px; font-weight: ${isHeader ? '600' : '400'}; background: ${isSelected ? '#e8f0fe' : 'transparent'}; display: flex; align-items: center; gap: 6px;">
+                                                        style="padding: 7px 12px 7px ${12 + indent}px; cursor: pointer; font-size: 13px; font-weight: ${isHeader ? '600' : '400'}; display: flex; align-items: center; gap: 6px;">
                                                         ${isSelected ? '<span style="color:#1a73e8;font-size:11px;">✓</span>' : '<span style="width:17px;display:inline-block;"></span>'}
                                                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${opt.name}</span>
                                                     </div>`;
@@ -4239,7 +4254,7 @@
             // Atualizar checked visual
             document.querySelectorAll('.ipca-opt').forEach(el => {
                 const isThis = parseInt(el.dataset.code) === code;
-                el.style.background = isThis ? '#e8f0fe' : '';
+                el.classList.toggle('ipca-selected', isThis);
                 const tick = el.querySelector('span:first-child');
                 if (tick) { tick.textContent = isThis ? '✓' : ''; tick.style.color = '#1a73e8'; }
             });
@@ -4257,7 +4272,7 @@
             if (btn) { btn.textContent = 'Selecionar categoria IPCA...'; btn.style.color = '#9aa0a6'; }
             document.getElementById('ipcaClearOpt')?.classList.add('hidden');
             document.querySelectorAll('.ipca-opt').forEach(el => {
-                el.style.background = '';
+                el.classList.remove('ipca-selected');
                 const tick = el.querySelector('span:first-child');
                 if (tick) tick.textContent = '';
             });
@@ -5597,24 +5612,30 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         layout: { padding: { top: 20, bottom: 20 } },
+                        interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { position: 'top', labels: { color: textColor, font: { size: 13 } } },
                             tooltip: {
                                 enabled: false,
                                 external: ctx => {
-                                    const idx = ctx.tooltip.dataPoints?.[0]?.dataIndex;
-                                    const dsIdx = ctx.tooltip.dataPoints?.[0]?.datasetIndex;
-                                    if (idx == null) return;
-                                    const isMyInfl = dsIdx === 0;
-                                    const label = isMyInfl ? 'Minha inflação' : 'IPCA Índice Geral';
-                                    const acum = ctx.tooltip.dataPoints?.[0]?.parsed?.y;
-                                    const monthly = isMyInfl ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
+                                    if (!ctx.tooltip.dataPoints?.length) { showChartTooltip('inflTooltip', ctx.chart, ctx.tooltip, () => ''); return; }
+                                    const idx = ctx.tooltip.dataPoints[0].dataIndex;
+                                    const month = labels[idx] || '';
+                                    const dsColors = ['#1a73e8', '#ea4335'];
                                     showChartTooltip('inflTooltip', ctx.chart, ctx.tooltip, dark => {
                                         const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
                                         const nc = dark ? '#9aa0a6' : '#5f6368';
-                                        return `<div style="font-weight:600;margin-bottom:2px;">${label}</div>${hr}`
-                                            + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(acum)}%</span></div>`
-                                            + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
+                                        let html = `<div style="font-weight:600;margin-bottom:4px;">${month}</div>`;
+                                        ctx.tooltip.dataPoints.forEach((dp, i) => {
+                                            const dsIdx = dp.datasetIndex;
+                                            const dsLabel = dsIdx === 0 ? 'Minha inflação' : 'IPCA Índice Geral';
+                                            const color = dsColors[dsIdx] || '#999';
+                                            const monthly = dsIdx === 0 ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
+                                            html += hr;
+                                            html += `<div style="display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>${dsLabel}</div>`;
+                                            html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span> &nbsp;<b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
+                                        });
+                                        return html;
                                     });
                                 }
                             },
@@ -5660,6 +5681,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             },
                             options: {
                                 responsive: true, maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
                                 plugins: {
                                     legend: {
                                         position: catChartIsMobile ? 'bottom' : 'right',
@@ -5682,16 +5704,20 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 tooltip: {
                                     enabled: false,
                                     external: ctx => {
-                                        const dp = ctx.tooltip.dataPoints?.[0];
-                                        if (!dp) return;
-                                        const ds = dp.dataset;
-                                        const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
+                                        if (!ctx.tooltip.dataPoints?.length) { showChartTooltip('catInflTooltip', ctx.chart, ctx.tooltip, () => ''); return; }
+                                        const idx = ctx.tooltip.dataPoints[0].dataIndex;
+                                        const month = labels[idx] || '';
+                                        // Ordenar por acumulado desc para o mês hovado
+                                        const sorted = ctx.tooltip.dataPoints.slice().sort((a, b) => b.parsed.y - a.parsed.y);
                                         showChartTooltip('catInflTooltip', ctx.chart, ctx.tooltip, dark => {
-                                            const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
                                             const nc = dark ? '#9aa0a6' : '#5f6368';
-                                            return `<div style="font-weight:600;margin-bottom:2px;">${ds.label}</div>${hr}`
-                                                + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`
-                                                + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
+                                            let html = `<div style="font-weight:600;margin-bottom:4px;">${month}</div>`;
+                                            sorted.forEach(dp => {
+                                                const ds = dp.dataset;
+                                                const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
+                                                html += `<div style="margin:1px 0;"><b>${ds.label}</b> - Acum.: <span style="color:${nc};">${fmtPct(dp.parsed.y)}%</span> Mês: <span style="color:${nc};">${fmtPct(rate)}%</span></div>`;
+                                            });
+                                            return html;
                                         });
                                     }
                                 },
@@ -5967,13 +5993,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 },
                                 scales: {
                                     x: {
+                                        display: false,
                                         min: -xPad,
                                         max: xPad,
-                                        ticks: {
-                                            color: textColor,
-                                            maxTicksLimit: isMobile ? 4 : 8,
-                                            callback: v => (v > 0 ? '+' : '') + 'R$ ' + Math.round(v).toLocaleString('pt-BR')
-                                        },
                                         grid: { color: gridColor }
                                     },
                                     y: {
@@ -6002,26 +6024,27 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         }
 
         function initMvMSelectors() {
-            const months = (window._allIpcaMonths || []).slice().sort();
+            // Usa meses de despesa como base; garante que o mês atual também aparece
+            const expenseMonths = (window._allExpenseMonths || []).slice();
+            const pad = n => String(n).padStart(2,'0');
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+            if (!expenseMonths.includes(currentMonth)) expenseMonths.push(currentMonth);
+            const months = [...new Set(expenseMonths)].sort();
             if (months.length < 2) return;
-            const fmt = m => m;
-            const opts = months.map(m => `<option value="${m}">${fmt(m)}</option>`).join('');
+            const opts = months.map(m => `<option value="${m}">${m}</option>`).join('');
             const selA = document.getElementById('mvmMonthA');
             const selB = document.getElementById('mvmMonthB');
             if (!selA || !selB) return;
             selA.innerHTML = opts;
             selB.innerHTML = opts;
-            // Default: A = mês vigente-1, B = mês vigente-2
-            const now = new Date();
-            const pad = n => String(n).padStart(2,'0');
+            // Default: A = último mês fechado (mês atual - 1), B = penúltimo fechado (mês atual - 2)
             const prevA = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const prevB = new Date(now.getFullYear(), now.getMonth() - 2, 1);
             const mA = `${prevA.getFullYear()}-${pad(prevA.getMonth()+1)}`;
             const mB = `${prevB.getFullYear()}-${pad(prevB.getMonth()+1)}`;
-            if (months.includes(mA)) selA.value = mA;
-            else selA.value = months[months.length - 1];
-            if (months.includes(mB)) selB.value = mB;
-            else selB.value = months[months.length - 2] ?? months[0];
+            selA.value = months.includes(mA) ? mA : months[months.length - 2] ?? months[0];
+            selB.value = months.includes(mB) ? mB : months[months.length - 3] ?? months[0];
         }
 
         async function updateMvMChart() {
@@ -6159,12 +6182,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         },
                         scales: {
                             x: {
+                                display: false,
                                 min: -xPad, max: xPad,
-                                ticks: {
-                                    color: textColor,
-                                    maxTicksLimit: isMobile ? 4 : 8,
-                                    callback: v => (v > 0 ? '+' : '') + 'R$ ' + Math.round(v).toLocaleString('pt-BR')
-                                },
                                 grid: { color: gridColor }
                             },
                             y: {
@@ -6190,6 +6209,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const _mdata=await api(`${API}/expenses/months`);
                 const months=_mdata.map(m=>m.value).reverse();
                 if(!months.length)return;
+                // Armazena globalmente para o seletor MvM
+                window._allExpenseMonths = months.slice();
                 const today=new Date();
                 const currentMonth=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
                 let selectedMonth=months.includes(currentMonth)?currentMonth:months[months.length-1];
@@ -7363,7 +7384,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const paidLabel  = paidUser ? (paidUser.emoji||'👤') + ' ' + paidUser.name : (r.paid_by_name||'');
                     const iv = r.interval ?? 0;
                     const freqLabel = iv === 0 ? 'Mensal' : iv === 0.5 ? 'A cada 45 dias' : iv === 1 ? 'Bimestral (pula 1 mês)' : iv === 2 ? 'Trimestral (pula 2 meses)' : `Pula ${iv} meses`;
-                    return `<div class="target-item" style="background: #f1f3f4;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                    const enabled = r.is_enabled !== false;
+                    const cardOpacity = enabled ? '1' : '0.45';
+                    const toggleTitle = enabled ? 'Pausar (não gera despesas)' : 'Ativar';
+                    const toggleIcon = enabled ? '⏸️' : '▶️';
+                    return `<div class="target-item" style="background: #f1f3f4;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);opacity:${cardOpacity};">
                         <div style="flex:1;min-width:0;">
                             <p style="font-weight:600;font-size:14px;color:${textColor};margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.category_emoji||'📁'} ${r.description}: <span style="color:${isDark?'#8ab4f8':'#1a73e8'} !important;">R$ ${formatBRL(r.total_amount)}</span></p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${profLabel}</p>
@@ -7371,7 +7396,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">🗓️ ${freqLabel}</p>
                         </div>
                         <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">
-                            ${canEdit ? `<button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">🗑️</button>` : ''}
+                            ${canEdit ? `<button onclick="toggleRecurringEnabled(${r.id})" title="${toggleTitle}" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">${toggleIcon}</button><button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">🗑️</button>` : ''}
                         </div>
                     </div>`;
                 }).join('');
@@ -7391,6 +7416,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (!confirm('Remover esta despesa recorrente?')) return;
             await api(`${API}/recurring/${id}`, { method: 'DELETE' });
             _recurringCache = null;
+            loadSidebarRecurring();
+        }
+
+        async function toggleRecurringEnabled(id) {
+            const updated = await api(`${API}/recurring/${id}/toggle-enabled`, { method: 'POST' });
+            if (_recurringCache) {
+                const idx = _recurringCache.findIndex(r => r.id === id);
+                if (idx !== -1) _recurringCache[idx] = updated;
+            }
             loadSidebarRecurring();
         }
 

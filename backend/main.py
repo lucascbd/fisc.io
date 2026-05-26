@@ -685,6 +685,7 @@ def _recurring_dict(r: RecurringExpense) -> dict:
         "insert_day": r.insert_day or 1,
         "interval": float(r.interval) if r.interval is not None else 0.0,
         "is_active": r.is_active,
+        "is_enabled": r.is_enabled if r.is_enabled is not None else True,
         "last_generated_month": r.last_generated_month,
         "created_by_user_id": r.created_by_user_id,
     }
@@ -741,6 +742,17 @@ async def delete_recurring(recurring_id: int, db: Session = Depends(get_db), cur
     db.commit()
     return {"message": "Deleted"}
 
+@app.post(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}/toggle-enabled")
+async def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Ativa ou pausa uma despesa recorrente sem excluí-la."""
+    r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id, RecurringExpense.is_active == True).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Recurring expense not found")
+    current = r.is_enabled if r.is_enabled is not None else True
+    r.is_enabled = not current
+    db.commit()
+    return _recurring_dict(r)
+
 @app.post(f"{settings.API_V1_PREFIX}/recurring/generate")
 async def generate_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
@@ -751,7 +763,10 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
     today = datetime.utcnow().date()
     current_month_str = today.strftime("%Y-%m")
 
-    items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).all()
+    items = db.query(RecurringExpense).filter(
+        RecurringExpense.is_active == True,
+        RecurringExpense.is_enabled != False,
+    ).all()
     created_ids = []
     skipped = 0
 
