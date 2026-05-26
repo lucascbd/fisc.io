@@ -1136,8 +1136,10 @@
         .dark-mode .ipca-opt:hover {
             background: #4a4f52 !important;
         }
-        .dark-mode .ipca-opt[style*="background: #e8f0fe"],
-        .dark-mode .ipca-opt[style*="background:#e8f0fe"] {
+        .ipca-opt.ipca-selected {
+            background: #e8f0fe;
+        }
+        .dark-mode .ipca-opt.ipca-selected {
             background: #1a4b8c !important;
         }
         
@@ -4131,11 +4133,11 @@
                                                     const indent = level * 12;
                                                     const isHeader = level <= 2;
                                                     const isSelected = category?.ipca_category_code === opt.code;
-                                                    return `<div class="ipca-opt"
+                                                    return `<div class="ipca-opt${isSelected ? ' ipca-selected' : ''}"
                                                         data-code="${opt.code}"
                                                         data-name="${opt.name.replace(/"/g, '&quot;')}"
                                                         onclick="selectIpcaOption(${opt.code}, '${opt.name.replace(/'/g, "\\'")}')"
-                                                        style="padding: 7px 12px 7px ${12 + indent}px; cursor: pointer; font-size: 13px; font-weight: ${isHeader ? '600' : '400'}; background: ${isSelected ? '#e8f0fe' : 'transparent'}; display: flex; align-items: center; gap: 6px;">
+                                                        style="padding: 7px 12px 7px ${12 + indent}px; cursor: pointer; font-size: 13px; font-weight: ${isHeader ? '600' : '400'}; display: flex; align-items: center; gap: 6px;">
                                                         ${isSelected ? '<span style="color:#1a73e8;font-size:11px;">✓</span>' : '<span style="width:17px;display:inline-block;"></span>'}
                                                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${opt.name}</span>
                                                     </div>`;
@@ -4239,7 +4241,7 @@
             // Atualizar checked visual
             document.querySelectorAll('.ipca-opt').forEach(el => {
                 const isThis = parseInt(el.dataset.code) === code;
-                el.style.background = isThis ? '#e8f0fe' : '';
+                el.classList.toggle('ipca-selected', isThis);
                 const tick = el.querySelector('span:first-child');
                 if (tick) { tick.textContent = isThis ? '✓' : ''; tick.style.color = '#1a73e8'; }
             });
@@ -4257,7 +4259,7 @@
             if (btn) { btn.textContent = 'Selecionar categoria IPCA...'; btn.style.color = '#9aa0a6'; }
             document.getElementById('ipcaClearOpt')?.classList.add('hidden');
             document.querySelectorAll('.ipca-opt').forEach(el => {
-                el.style.background = '';
+                el.classList.remove('ipca-selected');
                 const tick = el.querySelector('span:first-child');
                 if (tick) tick.textContent = '';
             });
@@ -6002,26 +6004,27 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         }
 
         function initMvMSelectors() {
-            const months = (window._allIpcaMonths || []).slice().sort();
+            // Usa meses de despesa como base; garante que o mês atual também aparece
+            const expenseMonths = (window._allExpenseMonths || []).slice();
+            const pad = n => String(n).padStart(2,'0');
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+            if (!expenseMonths.includes(currentMonth)) expenseMonths.push(currentMonth);
+            const months = [...new Set(expenseMonths)].sort();
             if (months.length < 2) return;
-            const fmt = m => m;
-            const opts = months.map(m => `<option value="${m}">${fmt(m)}</option>`).join('');
+            const opts = months.map(m => `<option value="${m}">${m}</option>`).join('');
             const selA = document.getElementById('mvmMonthA');
             const selB = document.getElementById('mvmMonthB');
             if (!selA || !selB) return;
             selA.innerHTML = opts;
             selB.innerHTML = opts;
-            // Default: A = mês vigente-1, B = mês vigente-2
-            const now = new Date();
-            const pad = n => String(n).padStart(2,'0');
+            // Default: A = último mês fechado (mês atual - 1), B = penúltimo fechado (mês atual - 2)
             const prevA = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const prevB = new Date(now.getFullYear(), now.getMonth() - 2, 1);
             const mA = `${prevA.getFullYear()}-${pad(prevA.getMonth()+1)}`;
             const mB = `${prevB.getFullYear()}-${pad(prevB.getMonth()+1)}`;
-            if (months.includes(mA)) selA.value = mA;
-            else selA.value = months[months.length - 1];
-            if (months.includes(mB)) selB.value = mB;
-            else selB.value = months[months.length - 2] ?? months[0];
+            selA.value = months.includes(mA) ? mA : months[months.length - 2] ?? months[0];
+            selB.value = months.includes(mB) ? mB : months[months.length - 3] ?? months[0];
         }
 
         async function updateMvMChart() {
@@ -6190,6 +6193,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const _mdata=await api(`${API}/expenses/months`);
                 const months=_mdata.map(m=>m.value).reverse();
                 if(!months.length)return;
+                // Armazena globalmente para o seletor MvM
+                window._allExpenseMonths = months.slice();
                 const today=new Date();
                 const currentMonth=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
                 let selectedMonth=months.includes(currentMonth)?currentMonth:months[months.length-1];
