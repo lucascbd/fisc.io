@@ -5993,13 +5993,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 },
                                 scales: {
                                     x: {
+                                        display: false,
                                         min: -xPad,
                                         max: xPad,
-                                        ticks: {
-                                            color: textColor,
-                                            maxTicksLimit: isMobile ? 4 : 8,
-                                            callback: v => (v > 0 ? '+' : '') + 'R$ ' + Math.round(v).toLocaleString('pt-BR')
-                                        },
                                         grid: { color: gridColor }
                                     },
                                     y: {
@@ -6186,12 +6182,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         },
                         scales: {
                             x: {
+                                display: false,
                                 min: -xPad, max: xPad,
-                                ticks: {
-                                    color: textColor,
-                                    maxTicksLimit: isMobile ? 4 : 8,
-                                    callback: v => (v > 0 ? '+' : '') + 'R$ ' + Math.round(v).toLocaleString('pt-BR')
-                                },
                                 grid: { color: gridColor }
                             },
                             y: {
