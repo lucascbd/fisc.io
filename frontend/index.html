@@ -5620,8 +5620,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                             const monthly = dsIdx === 0 ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
                                             html += hr;
                                             html += `<div style="display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>${dsLabel}</div>`;
-                                            html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`;
-                                            html += `<div style="padding-left:15px;"><b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
+                                            html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span> &nbsp;<b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
                                         });
                                         return html;
                                     });
@@ -5707,8 +5706,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                                 const color = ds.borderColor || '#999';
                                                 html += hr;
                                                 html += `<div style="display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>${ds.label}</div>`;
-                                                html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`;
-                                                html += `<div style="padding-left:15px;"><b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
+                                                html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span> &nbsp;<b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
                                             });
                                             return html;
                                         });
