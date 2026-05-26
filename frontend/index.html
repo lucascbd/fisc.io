@@ -5702,7 +5702,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                             sorted.forEach(dp => {
                                                 const ds = dp.dataset;
                                                 const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
-                                                html += `<div style="margin:1px 0;">${ds.label} <span style="color:${nc};">- Acum.: ${fmtPct(dp.parsed.y)}% | Mês: ${fmtPct(rate)}%</span></div>`;
+                                                html += `<div style="margin:1px 0;"><b>${ds.label}</b> - Acum.: <span style="color:${nc};">${fmtPct(dp.parsed.y)}%</span> | Mês: <span style="color:${nc};">${fmtPct(rate)}%</span></div>`;
                                             });
                                             return html;
                                         });
