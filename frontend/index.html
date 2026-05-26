@@ -5437,6 +5437,14 @@
             el.style.top  = y + 'px';
         }
 
+        // Oculta tooltips externos ao rolar a página (evita "tooltip voando")
+        window.addEventListener('scroll', () => {
+            ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.opacity = '0';
+            });
+        }, { passive: true });
+
         async function loadInflation() {
             const isDark = document.body.classList.contains('dark-mode');
             const textColor = isDark ? '#e8eaed' : '#202124';
