@@ -5599,24 +5599,31 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true, maintainAspectRatio: false,
                         layout: { padding: { top: 20, bottom: 20 } },
+                        interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { position: 'top', labels: { color: textColor, font: { size: 13 } } },
                             tooltip: {
                                 enabled: false,
                                 external: ctx => {
-                                    const idx = ctx.tooltip.dataPoints?.[0]?.dataIndex;
-                                    const dsIdx = ctx.tooltip.dataPoints?.[0]?.datasetIndex;
-                                    if (idx == null) return;
-                                    const isMyInfl = dsIdx === 0;
-                                    const label = isMyInfl ? 'Minha inflação' : 'IPCA Índice Geral';
-                                    const acum = ctx.tooltip.dataPoints?.[0]?.parsed?.y;
-                                    const monthly = isMyInfl ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
+                                    if (!ctx.tooltip.dataPoints?.length) { showChartTooltip('inflTooltip', ctx.chart, ctx.tooltip, () => ''); return; }
+                                    const idx = ctx.tooltip.dataPoints[0].dataIndex;
+                                    const month = labels[idx] || '';
+                                    const dsColors = ['#1a73e8', '#ea4335'];
                                     showChartTooltip('inflTooltip', ctx.chart, ctx.tooltip, dark => {
                                         const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
                                         const nc = dark ? '#9aa0a6' : '#5f6368';
-                                        return `<div style="font-weight:600;margin-bottom:2px;">${label}</div>${hr}`
-                                            + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(acum)}%</span></div>`
-                                            + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
+                                        let html = `<div style="font-weight:600;margin-bottom:4px;">${month}</div>`;
+                                        ctx.tooltip.dataPoints.forEach((dp, i) => {
+                                            const dsIdx = dp.datasetIndex;
+                                            const dsLabel = dsIdx === 0 ? 'Minha inflação' : 'IPCA Índice Geral';
+                                            const color = dsColors[dsIdx] || '#999';
+                                            const monthly = dsIdx === 0 ? data.my_inflation[idx]?.rate : data.ipca_geral[idx]?.rate;
+                                            html += hr;
+                                            html += `<div style="display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>${dsLabel}</div>`;
+                                            html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`;
+                                            html += `<div style="padding-left:15px;"><b>Mês:</b> <span style="color:${nc}">${fmtPct(monthly||0)}%</span></div>`;
+                                        });
+                                        return html;
                                     });
                                 }
                             },
@@ -5662,6 +5669,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             },
                             options: {
                                 responsive: true, maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
                                 plugins: {
                                     legend: {
                                         position: catChartIsMobile ? 'bottom' : 'right',
@@ -5684,16 +5692,25 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 tooltip: {
                                     enabled: false,
                                     external: ctx => {
-                                        const dp = ctx.tooltip.dataPoints?.[0];
-                                        if (!dp) return;
-                                        const ds = dp.dataset;
-                                        const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
+                                        if (!ctx.tooltip.dataPoints?.length) { showChartTooltip('catInflTooltip', ctx.chart, ctx.tooltip, () => ''); return; }
+                                        const idx = ctx.tooltip.dataPoints[0].dataIndex;
+                                        const month = labels[idx] || '';
+                                        // Ordenar por acumulado desc para o mês hovado
+                                        const sorted = ctx.tooltip.dataPoints.slice().sort((a, b) => b.parsed.y - a.parsed.y);
                                         showChartTooltip('catInflTooltip', ctx.chart, ctx.tooltip, dark => {
                                             const hr = `<div style="border-top:1px solid ${dark?'#5f6368':'#dadce0'};margin:4px 0;"></div>`;
                                             const nc = dark ? '#9aa0a6' : '#5f6368';
-                                            return `<div style="font-weight:600;margin-bottom:2px;">${ds.label}</div>${hr}`
-                                                + `<div><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`
-                                                + `<div><b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
+                                            let html = `<div style="font-weight:600;margin-bottom:4px;">${month}</div>`;
+                                            sorted.forEach((dp, i) => {
+                                                const ds = dp.dataset;
+                                                const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
+                                                const color = ds.borderColor || '#999';
+                                                html += hr;
+                                                html += `<div style="display:flex;align-items:center;gap:5px;font-weight:600;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>${ds.label}</div>`;
+                                                html += `<div style="padding-left:15px;"><b>Acum.:</b> <span style="color:${nc}">${fmtPct(dp.parsed.y)}%</span></div>`;
+                                                html += `<div style="padding-left:15px;"><b>Mês:</b> <span style="color:${nc}">${fmtPct(rate)}%</span></div>`;
+                                            });
+                                            return html;
                                         });
                                     }
                                 },
