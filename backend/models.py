@@ -218,6 +218,7 @@ class RecurringExpense(Base):
     insert_day      = Column(Integer, nullable=True, default=1)   # dia do mês para gerar a despesa
     interval        = Column(Numeric(4, 2), nullable=False, default=0)  # 0=mensal, 0.5=45dias, N=pula N meses
     is_active       = Column(Boolean, nullable=False, default=True)
+    is_enabled      = Column(Boolean, nullable=True, default=True)  # False = pausada, não gera despesas
     last_generated_month = Column(String(7), nullable=True)   # "YYYY-MM" do último mês gerado
     created_by_user_id   = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())

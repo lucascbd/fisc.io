@@ -53,7 +53,10 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
     """
     current_month_str = target_date.strftime("%Y-%m")
 
-    items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).all()
+    items = db.query(RecurringExpense).filter(
+        RecurringExpense.is_active == True,
+        RecurringExpense.is_enabled != False,
+    ).all()
 
     if not items:
         print("ℹ️  Nenhuma despesa recorrente cadastrada.")

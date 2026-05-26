@@ -5702,7 +5702,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                             sorted.forEach(dp => {
                                                 const ds = dp.dataset;
                                                 const rate = ds._monthlyRates?.[dp.dataIndex] ?? 0;
-                                                html += `<div style="margin:1px 0;"><b>${ds.label}</b> - Acum.: <span style="color:${nc};">${fmtPct(dp.parsed.y)}%</span> | Mês: <span style="color:${nc};">${fmtPct(rate)}%</span></div>`;
+                                                html += `<div style="margin:1px 0;"><b>${ds.label}</b> - Acum.: <span style="color:${nc};">${fmtPct(dp.parsed.y)}%</span> &nbsp; Mês: <span style="color:${nc};">${fmtPct(rate)}%</span></div>`;
                                             });
                                             return html;
                                         });
@@ -7379,7 +7379,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const paidLabel  = paidUser ? (paidUser.emoji||'👤') + ' ' + paidUser.name : (r.paid_by_name||'');
                     const iv = r.interval ?? 0;
                     const freqLabel = iv === 0 ? 'Mensal' : iv === 0.5 ? 'A cada 45 dias' : iv === 1 ? 'Bimestral (pula 1 mês)' : iv === 2 ? 'Trimestral (pula 2 meses)' : `Pula ${iv} meses`;
-                    return `<div class="target-item" style="background: #f1f3f4;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);">
+                    const enabled = r.is_enabled !== false;
+                    const cardOpacity = enabled ? '1' : '0.45';
+                    const toggleTitle = enabled ? 'Pausar (não gera despesas)' : 'Ativar';
+                    const toggleIcon = enabled ? '⏸️' : '▶️';
+                    return `<div class="target-item" style="background: #f1f3f4;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);opacity:${cardOpacity};">
                         <div style="flex:1;min-width:0;">
                             <p style="font-weight:600;font-size:14px;color:${textColor};margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.category_emoji||'📁'} ${r.description}: <span style="color:${isDark?'#8ab4f8':'#1a73e8'} !important;">R$ ${formatBRL(r.total_amount)}</span></p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${profLabel}</p>
@@ -7387,7 +7391,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">🗓️ ${freqLabel}</p>
                         </div>
                         <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">
-                            ${canEdit ? `<button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">🗑️</button>` : ''}
+                            ${canEdit ? `<button onclick="toggleRecurringEnabled(${r.id})" title="${toggleTitle}" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">${toggleIcon}</button><button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">🗑️</button>` : ''}
                         </div>
                     </div>`;
                 }).join('');
@@ -7407,6 +7411,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (!confirm('Remover esta despesa recorrente?')) return;
             await api(`${API}/recurring/${id}`, { method: 'DELETE' });
             _recurringCache = null;
+            loadSidebarRecurring();
+        }
+
+        async function toggleRecurringEnabled(id) {
+            const updated = await api(`${API}/recurring/${id}/toggle-enabled`, { method: 'POST' });
+            if (_recurringCache) {
+                const idx = _recurringCache.findIndex(r => r.id === id);
+                if (idx !== -1) _recurringCache[idx] = updated;
+            }
             loadSidebarRecurring();
         }
 
