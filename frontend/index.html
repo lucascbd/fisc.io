@@ -910,8 +910,8 @@
             background: #3c4043 !important;
         }
 
-        .recurring-amount { color: #1a73e8; }
-        .dark-mode .recurring-amount { color: #8ab4f8; }
+        .recurring-amount { color: #1a73e8 !important; }
+        .dark-mode .recurring-amount { color: #8ab4f8 !important; }
 
         /* Profile inner user list — lighter than parent tile to mirror light mode contrast */
         .dark-mode .sidebar-panel .profile-item .bg-gray-50 {
@@ -7415,8 +7415,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${paidLabel}</p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">🗓️ ${freqLabel}</p>
                         </div>
-                        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;align-items:center;margin-left:6px;">
-                            ${canEdit ? `<button onclick="toggleRecurringEnabled(${r.id})" title="${toggleTitle}" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">${toggleIcon}</button><button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">🗑️</button>` : ''}
+                        <div style="display:flex;flex-direction:column;justify-content:space-between;align-self:stretch;flex-shrink:0;align-items:center;margin-left:6px;">
+                            ${canEdit ? `<button onclick="toggleRecurringEnabled(${r.id})" title="${toggleTitle}" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px 4px;line-height:1;">${toggleIcon}</button><button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px 4px;line-height:1;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px 4px;line-height:1;">🗑️</button>` : ''}
                         </div>
                     </div>`;
                 }).join('');
