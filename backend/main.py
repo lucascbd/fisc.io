@@ -625,6 +625,19 @@ async def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(
 # RECURRING EXPENSES
 # ============================================================================
 
+def _is_fatura_closed(pm: PaymentMethod, today: date) -> bool:
+    """Retorna True se a fatura do cartão deve estar fechada hoje."""
+    if not (pm.is_card and pm.due_day):
+        return False
+    due_day = pm.due_day
+    if today.month == 12:
+        next_due = today.replace(year=today.year + 1, month=1, day=due_day)
+    else:
+        max_next = calendar.monthrange(today.year, today.month + 1)[1]
+        next_due = today.replace(month=today.month + 1, day=min(due_day, max_next))
+    closing = next_due - timedelta(days=7)
+    return today > closing
+
 def _pm_dict(pm: "PaymentMethod | None") -> dict:
     if not pm:
         return {"id": None, "description": None, "color": None, "is_card": False, "icon_path": None}
@@ -1213,6 +1226,17 @@ async def list_payment_methods(db: Session = Depends(get_db), current_user: User
     methods = db.query(PaymentMethod).filter(
         PaymentMethod.user_id == current_user.id
     ).order_by(PaymentMethod.display_order).all()
+    today = date.today()
+    dirty = False
+    for pm in methods:
+        if not (pm.is_card and pm.due_day):
+            continue
+        should_be_closed = _is_fatura_closed(pm, today)
+        if bool(pm.is_closed or False) != should_be_closed:
+            pm.is_closed = should_be_closed
+            dirty = True
+    if dirty:
+        db.commit()
     return [_pm_dict(pm) for pm in methods]
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods")
