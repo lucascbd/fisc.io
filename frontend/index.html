@@ -910,6 +910,9 @@
             background: #3c4043 !important;
         }
 
+        .recurring-amount { color: #1a73e8; }
+        .dark-mode .recurring-amount { color: #8ab4f8; }
+
         /* Profile inner user list — lighter than parent tile to mirror light mode contrast */
         .dark-mode .sidebar-panel .profile-item .bg-gray-50 {
             background: #525557 !important;
@@ -7406,7 +7409,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:baseline;gap:6px;min-width:0;">
                                 <p style="font-weight:600;font-size:14px;color:${textColor};margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${r.category_emoji||'📁'} ${r.description}</p>
-                                <p style="font-size:13px;color:${isDark?'#8ab4f8':'#1a73e8'};font-weight:600;margin:0;white-space:nowrap;flex-shrink:0;">R$ ${formatBRL(r.total_amount)}</p>
+                                <p class="recurring-amount" style="font-size:13px;font-weight:600;margin:0;white-space:nowrap;flex-shrink:0;">R$ ${formatBRL(r.total_amount)}</p>
                             </div>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${profLabel}</p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${paidLabel}</p>
