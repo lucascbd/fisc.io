@@ -641,6 +641,15 @@ def _is_fatura_closed(pm: PaymentMethod, today: date) -> bool:
 def _pm_dict(pm: "PaymentMethod | None") -> dict:
     if not pm:
         return {"id": None, "description": None, "color": None, "is_card": False, "icon_path": None}
+    closing_date = None
+    if pm.is_card and pm.due_day:
+        today = date.today()
+        if today.month == 12:
+            nd = today.replace(year=today.year + 1, month=1, day=pm.due_day)
+        else:
+            max_next = calendar.monthrange(today.year, today.month + 1)[1]
+            nd = today.replace(month=today.month + 1, day=min(pm.due_day, max_next))
+        closing_date = (nd - timedelta(days=7)).isoformat()
     return {
         "id": pm.id,
         "description": pm.description,
@@ -648,6 +657,7 @@ def _pm_dict(pm: "PaymentMethod | None") -> dict:
         "is_card": pm.is_card,
         "icon_path": pm.icon_path,
         "due_day": pm.due_day,
+        "closing_date": closing_date,
         "is_closed": bool(pm.is_closed) if pm.is_closed is not None else False,
         "user_id": pm.user_id,
         "display_order": pm.display_order,
