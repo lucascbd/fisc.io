@@ -7405,15 +7405,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     return `<div class="target-item" style="background: #f1f3f4;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.1);opacity:${cardOpacity};">
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:baseline;gap:6px;min-width:0;">
-                                <p style="font-weight:600;font-size:14px;color:${textColor};margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;">${r.category_emoji||'📁'} ${r.description}</p>
-                                <p style="font-size:13px;color:${isDark?'#8ab4f8':'#1a73e8'};font-weight:600;margin:0;flex-shrink:0;">R$ ${formatBRL(r.total_amount)}</p>
+                                <p style="font-weight:600;font-size:14px;color:${textColor};margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${r.category_emoji||'📁'} ${r.description}</p>
+                                <p style="font-size:13px;color:${isDark?'#8ab4f8':'#1a73e8'};font-weight:600;margin:0;white-space:nowrap;flex-shrink:0;">R$ ${formatBRL(r.total_amount)}</p>
                             </div>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${profLabel}</p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">${paidLabel}</p>
                             <p style="font-size:12px;color:${subColor};margin:1px 0 0 0;">🗓️ ${freqLabel}</p>
                         </div>
-                        <div style="display:flex;gap:4px;flex-shrink:0;align-items:center;">
-                            ${canEdit ? `<button onclick="toggleRecurringEnabled(${r.id})" title="${toggleTitle}" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">${toggleIcon}</button><button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:4px;">🗑️</button>` : ''}
+                        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;align-items:center;margin-left:6px;">
+                            ${canEdit ? `<button onclick="toggleRecurringEnabled(${r.id})" title="${toggleTitle}" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">${toggleIcon}</button><button onclick="showRecurringModal(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">✏️</button><button onclick="deleteRecurring(${r.id})" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;">🗑️</button>` : ''}
                         </div>
                     </div>`;
                 }).join('');
