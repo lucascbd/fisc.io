@@ -2003,8 +2003,7 @@ async def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: Us
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     expense.expense_date = _add_one_month(expense.expense_date)
-    if expense.original_date:
-        expense.original_date = _add_one_month(expense.original_date)
+    # original_date preserved intentionally — it reflects the real purchase date
     splits = db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
     for split in splits:
         split.due_date = _add_one_month(split.due_date)
