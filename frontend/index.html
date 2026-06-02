@@ -2040,15 +2040,15 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
                     <div class="bg-white rounded-lg shadow p-3">
                         <p class="text-xs" style="color:#5f6368;">💰 Receitas</p>
-                        <p id="incomeSumIncome" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">R$ 0,00</p>
+                        <p id="incomeSumIncome" class="font-bold mt-1" style="font-size:0.95rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">0,00</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3">
                         <p class="text-xs" style="color:#5f6368;">💸 Despesas</p>
-                        <p id="incomeSumExpenses" class="font-bold mt-1" style="font-size:1.1rem;color:#ea4335 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">R$ 0,00</p>
+                        <p id="incomeSumExpenses" class="font-bold mt-1" style="font-size:0.95rem;color:#ea4335 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">0,00</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3">
                         <p class="text-xs" style="color:#5f6368;">⚖️ Saldo</p>
-                        <p id="incomeSumBalance" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">R$ 0,00</p>
+                        <p id="incomeSumBalance" class="font-bold mt-1" style="font-size:0.95rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">0,00</p>
                     </div>
                 </div>
 
@@ -3384,7 +3384,7 @@
             } catch(_) {}
 
             const balance = totalIncome - totalExpenses;
-            const fmtG = v => `R$ ${formatBRL(Math.abs(v))}`;
+            const fmtG = v => formatBRL(Math.abs(v));
 
             const incEl = document.getElementById('incomeSumIncome');
             const expEl = document.getElementById('incomeSumExpenses');
@@ -3392,8 +3392,8 @@
             if (incEl) incEl.textContent = fmtG(totalIncome);
             if (expEl) expEl.textContent = fmtG(totalExpenses);
             if (balEl) {
-                balEl.textContent = (balance < 0 ? '- ' : '') + fmtG(balance);
-                balEl.style.cssText = `font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${balance >= 0 ? '#34a853' : '#ea4335'} !important;`;
+                balEl.textContent = (balance < 0 ? '-' : '') + fmtG(balance);
+                balEl.style.cssText = `font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${balance >= 0 ? '#34a853' : '#ea4335'} !important;`;
             }
 
             const isDark = document.body.classList.contains('dark-mode');
