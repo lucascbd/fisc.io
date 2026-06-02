@@ -9126,14 +9126,22 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             
             console.log('Swipe ativado');
 
-            // Hide tab bar scrollbar on initial load; only reveal it when user touches the bar
+            // Hide tab bar scrollbar on initial load; only reveal on actual horizontal drag
             (function() {
                 const bar = document.getElementById('tabsBar');
                 if (!bar) return;
                 bar.style.overflowX = 'hidden';
-                bar.addEventListener('touchstart', function() {
-                    bar.style.overflowX = '';
-                }, { once: true, passive: true });
+                let _tsX = 0;
+                function onTouchStart(e) { _tsX = e.touches[0].clientX; }
+                function onTouchMove(e) {
+                    if (Math.abs(e.touches[0].clientX - _tsX) > 8) {
+                        bar.style.overflowX = '';
+                        bar.removeEventListener('touchstart', onTouchStart);
+                        bar.removeEventListener('touchmove', onTouchMove);
+                    }
+                }
+                bar.addEventListener('touchstart', onTouchStart, { passive: true });
+                bar.addEventListener('touchmove', onTouchMove, { passive: true });
             })();
         })();
     </script>
