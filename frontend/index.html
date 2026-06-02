@@ -2047,7 +2047,7 @@
                         <p id="incomeSumExpenses" class="font-bold mt-1" style="font-size:0.95rem;color:#ea4335 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">0,00</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3">
-                        <p class="text-xs" style="color:#5f6368;">⚖️ Saldo</p>
+                        <p class="text-xs" style="color:#5f6368;">🏦 Saldo</p>
                         <p id="incomeSumBalance" class="font-bold mt-1" style="font-size:0.95rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">0,00</p>
                     </div>
                 </div>
@@ -3403,23 +3403,23 @@
             const borderColor = isDark ? '#5f6368' : '#e8eaed';
 
             document.getElementById('incomeList').innerHTML = list.length ? list.map(inc => `
-                <div class="rounded-lg shadow p-4 mb-3" style="background:${cardBg};">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-                        <div style="flex:1;min-width:0;">
-                            <p style="font-weight:700;font-size:1rem;color:${txtColor};margin:0;">${inc.description}</p>
-                            <p style="font-size:0.8rem;color:${subColor};margin:3px 0 0 0;">${new Date(inc.income_date+'T12:00:00').toLocaleDateString('pt-BR')} · ${inc.user_emoji} ${inc.user_name}</p>
-                            ${inc.notes ? `<p style="font-size:0.8rem;color:${subColor};margin:4px 0 0 0;">${inc.notes}</p>` : ''}
+                <div class="bg-white rounded-lg shadow p-4 mb-4">
+                    <div class="flex justify-between items-stretch">
+                        <div class="flex-1">
+                            <p class="font-bold text-lg">💰 ${inc.description}</p>
+                            <p class="text-sm text-gray-600">${new Date(inc.income_date+'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                            ${inc.notes ? `<p class="text-sm text-gray-500 mt-2">${inc.notes}</p>` : ''}
                         </div>
-                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
-                            <p style="font-size:1.3rem;font-weight:700;color:#34a853;margin:0;">R$ ${formatBRL(inc.amount)}</p>
-                            <div style="display:flex;gap:8px;">
-                                <button onclick="showIncomeModal(${inc.id})" style="background:none;border:none;cursor:pointer;font-size:14px;">✏️</button>
-                                <button onclick="deleteItem('income',${inc.id})" style="background:none;border:none;cursor:pointer;font-size:14px;">🗑️</button>
+                        <div class="text-right ml-4 flex flex-col justify-between">
+                            <p class="text-2xl font-bold" style="color:#34a853;">R$ ${formatBRL(inc.amount)}</p>
+                            <div class="flex gap-2 justify-end">
+                                <button onclick="showIncomeModal(${inc.id})" class="text-blue-600 text-sm">✏️</button>
+                                <button onclick="deleteItem('income',${inc.id})" class="text-red-600 text-sm">🗑️</button>
                             </div>
                         </div>
                     </div>
                 </div>
-            `).join('') : `<p style="text-align:center;padding:32px 0;color:${subColor};">Nenhuma receita neste mês</p>`;
+            `).join('') : '<p class="text-gray-500 text-center py-8">Nenhuma receita neste mês</p>';
         }
 
         window.showIncomeModal = async function showIncomeModal(incomeId = null) {
@@ -9123,6 +9123,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 
                 const idx = getActiveTabIndex();
                 switchToTab(dX < 0 ? idx + 1 : idx - 1);
+                // Hide any lingering chart tooltips after swipe (chart callbacks can re-show them)
+                const _hideIds = ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip'];
+                _hideIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = '0'; });
+                setTimeout(() => _hideIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = '0'; }), 200);
             }, {passive: true});
             
             console.log('Swipe ativado');
