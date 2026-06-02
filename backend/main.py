@@ -2863,9 +2863,9 @@ async def list_income_months(db: Session = Depends(get_db), _: User = Depends(ge
 async def list_income(
     month: Optional[str] = Query(None, description="YYYY-MM"),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    q = db.query(Income)
+    q = db.query(Income).filter(Income.user_id == current_user.id)
     if month:
         try:
             y, m = int(month[:4]), int(month[5:7])
