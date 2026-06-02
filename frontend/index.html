@@ -141,23 +141,12 @@
         /* ========================================
            TABS - Apenas scrollbar
            ======================================== */
+        #tabsBar {
+            scrollbar-width: none;       /* Firefox */
+            -ms-overflow-style: none;    /* IE/Edge */
+        }
         #tabsBar::-webkit-scrollbar {
-            height: 3px;
-        }
-
-        #tabsBar::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        #tabsBar::-webkit-scrollbar-thumb {
-            background: transparent;
-            border-radius: 2px;
-            transition: background 0.3s;
-        }
-
-        #tabsBar:active::-webkit-scrollbar-thumb,
-        #tabsBar:hover::-webkit-scrollbar-thumb {
-            background: #bdc1c6;
+            display: none;               /* Chrome/Safari/mobile */
         }
         
         /* ========================================
@@ -3458,7 +3447,7 @@
                       <div style="width:40px;height:40px;background:#d2e3fc;border-radius:50%;display:flex;align-items:center;justify-content:center;">
                         <span style="font-size:1.2rem;">💰</span>
                       </div>
-                      <h2 style="font-size:1.1rem;font-weight:500;color:#202124;margin:0;">${inc ? 'Editar receita' : 'Nova receita'}</h2>
+                      <h2 style="font-size:1.1rem;font-weight:500;color:#202124;margin:0;">${inc ? 'Editar receita' : 'Adicionar receita'}</h2>
                     </div>
                     <button onclick="closeModal()" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#5f6368;">✕</button>
                   </div>
