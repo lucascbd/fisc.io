@@ -2040,15 +2040,15 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
                     <div class="bg-white rounded-lg shadow p-3">
                         <p class="text-xs" style="color:#5f6368;">💰 Receitas</p>
-                        <p id="incomeSumIncome" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;">R$ 0,00</p>
+                        <p id="incomeSumIncome" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">R$ 0,00</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3">
                         <p class="text-xs" style="color:#5f6368;">💸 Despesas</p>
-                        <p id="incomeSumExpenses" class="font-bold mt-1" style="font-size:1.1rem;color:#ea4335 !important;">R$ 0,00</p>
+                        <p id="incomeSumExpenses" class="font-bold mt-1" style="font-size:1.1rem;color:#ea4335 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">R$ 0,00</p>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3">
                         <p class="text-xs" style="color:#5f6368;">⚖️ Saldo</p>
-                        <p id="incomeSumBalance" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;">R$ 0,00</p>
+                        <p id="incomeSumBalance" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">R$ 0,00</p>
                     </div>
                 </div>
 
@@ -3393,7 +3393,7 @@
             if (expEl) expEl.textContent = fmtG(totalExpenses);
             if (balEl) {
                 balEl.textContent = (balance < 0 ? '- ' : '') + fmtG(balance);
-                balEl.style.cssText = `font-size:1.1rem;color:${balance >= 0 ? '#34a853' : '#ea4335'} !important;`;
+                balEl.style.cssText = `font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${balance >= 0 ? '#34a853' : '#ea4335'} !important;`;
             }
 
             const isDark = document.body.classList.contains('dark-mode');
@@ -3423,8 +3423,11 @@
         }
 
         window.showIncomeModal = async function showIncomeModal(incomeId = null) {
+            const _savedScrollY = window.scrollY;
+            document.body.classList.add('modal-open');
+            document.body.style.top = `-${_savedScrollY}px`;
+
             const isDark = document.body.classList.contains('dark-mode');
-            const bg     = isDark ? '#2d2f31' : '#fff';
             const txt    = isDark ? '#e8eaed' : '#202124';
             const sub    = isDark ? '#9aa0a6' : '#5f6368';
             const border = isDark ? '#5f6368' : '#dadce0';
@@ -3436,52 +3439,49 @@
                 inc = cached || await api(`${API}/income/${incomeId}`).catch(() => null);
             }
 
-            const today = new Date().toISOString().slice(0, 10);
-            const userOpts = (users || []).filter(u => u.is_active !== false)
-                .map(u => `<option value="${u.id}" ${u.id === (inc?.user_id ?? user.id) ? 'selected' : ''}>${u.emoji||'👤'} ${u.name}</option>`).join('');
-
+            const now = new Date();
+            const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
             const inputStyle = `width:100%;padding:10px 14px;border:1px solid ${border};border-radius:10px;font-size:0.95rem;background:${inputBg};color:${txt};box-sizing:border-box;`;
 
             document.getElementById('modalContainer').innerHTML = `
-            <div class="modal-overlay" onclick="if(event.target===this)closeModal()" style="display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;padding:16px;">
-              <div style="background:${bg};border-radius:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;">
-                <div style="display:flex;align-items:center;gap:12px;padding:20px 20px 0;">
-                  <div style="width:40px;height:40px;background:#e6f4ea;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <span style="font-size:1.1rem;">💰</span>
+            <div id="incomeModalOverlay" class="modal-overlay fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:2rem 1rem;">
+              <div class="modal-content bg-white w-full max-w-lg overflow-hidden flex flex-col" style="border-radius:28px;box-shadow:0 4px 8px 3px rgba(60,64,67,0.15),0 1px 3px rgba(60,64,67,0.3);max-height:calc(100vh - 4rem);max-height:calc(100dvh - 4rem);">
+                <div style="background:#e8f0fe;padding:1.25rem 1.5rem;border-radius:28px 28px 0 0;flex-shrink:0;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                      <div style="width:40px;height:40px;background:#d2e3fc;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                        <span style="font-size:1.2rem;">💰</span>
+                      </div>
+                      <h2 style="font-size:1.1rem;font-weight:500;color:#202124;margin:0;">${inc ? 'Editar receita' : 'Nova receita'}</h2>
+                    </div>
+                    <button onclick="closeModal()" style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.08);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#5f6368;">✕</button>
                   </div>
-                  <h2 style="flex:1;font-size:1.1rem;font-weight:500;color:${txt};">${inc ? 'Editar receita' : 'Nova receita'}</h2>
-                  <button onclick="closeModal()" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;">
-                    <span style="font-size:1.5rem;color:${sub};">✕</span>
-                  </button>
                 </div>
-                <form onsubmit="saveIncome(event,${incomeId||'null'})" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-                  <div>
-                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Data</label>
-                    <input type="date" id="inc_date" value="${inc?.income_date || today}" required style="${inputStyle}">
-                  </div>
-                  <div>
-                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Descrição</label>
-                    <input type="text" id="inc_desc" value="${inc?.description || ''}" placeholder="Ex: Salário, Freelance..." required style="${inputStyle}">
-                  </div>
-                  <div>
-                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Valor (R$)</label>
-                    <input type="number" id="inc_amount" value="${inc?.amount || ''}" placeholder="0,00" step="0.01" min="0.01" required style="${inputStyle}">
-                  </div>
-                  <div>
-                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">De quem</label>
-                    <select id="inc_user" style="${inputStyle}">${userOpts}</select>
-                  </div>
-                  <div>
-                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Notas (opcional)</label>
-                    <textarea id="inc_notes" placeholder="Observações..." rows="2" style="${inputStyle};resize:vertical;">${inc?.notes || ''}</textarea>
-                  </div>
-                  <button type="submit" style="width:100%;padding:13px;border:none;border-radius:10px;background:#34a853;color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;margin-top:4px;">
-                    ${inc ? 'Salvar alterações' : 'Adicionar receita'}
-                  </button>
-                </form>
+                <div style="flex:1;overflow-y:auto;padding:1.5rem;">
+                  <form onsubmit="saveIncome(event,${incomeId||'null'})" style="display:flex;flex-direction:column;gap:16px;">
+                    <div>
+                      <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Data</label>
+                      <input type="date" id="inc_date" value="${inc?.income_date || today}" required style="${inputStyle}">
+                    </div>
+                    <div>
+                      <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Descrição</label>
+                      <input type="text" id="inc_desc" value="${inc?.description || ''}" placeholder="Ex: Salário, Freelance..." required style="${inputStyle}">
+                    </div>
+                    <div>
+                      <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Valor (R$)</label>
+                      <input type="number" id="inc_amount" value="${inc?.amount || ''}" placeholder="0,00" step="0.01" min="0.01" required style="${inputStyle}">
+                    </div>
+                    <div>
+                      <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Notas (opcional)</label>
+                      <textarea id="inc_notes" placeholder="Observações..." rows="2" style="${inputStyle};resize:vertical;">${inc?.notes || ''}</textarea>
+                    </div>
+                    <button type="submit" style="width:100%;padding:13px;border:none;border-radius:10px;background:#1a73e8;color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;margin-top:4px;">
+                      ${inc ? 'Salvar alterações' : 'Adicionar receita'}
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>`;
-            document.body.classList.add('modal-open');
         }
 
         window.saveIncome = async function saveIncome(event, incomeId) {
@@ -3491,7 +3491,7 @@
                 amount:      parseFloat(document.getElementById('inc_amount').value),
                 income_date: document.getElementById('inc_date').value,
                 notes:       document.getElementById('inc_notes').value.trim() || null,
-                user_id:     parseInt(document.getElementById('inc_user').value),
+                user_id:     user.id,
             };
             try {
                 if (incomeId) {
@@ -9051,7 +9051,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             
             // Função para obter tabs disponíveis dinamicamente
             function getAvailableTabs() {
-                const allTabs = ['home', 'expenses', 'charts', 'inflation'];
+                const allTabs = ['home', 'expenses', 'charts', 'inflation', 'income'];
                 const available = [];
                 for (const t of allTabs) {
                     const tab = document.getElementById(t + 'Tab');
