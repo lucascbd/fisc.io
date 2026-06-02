@@ -19,7 +19,7 @@ from decimal import Decimal
 
 from config import settings
 from database import Base, engine, get_db
-from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod
+from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income
 from expense_service import ExpenseService
 from firebase_service import FirebaseService
 
@@ -234,6 +234,20 @@ class TargetCreate(BaseModel):
     payment_methods: List[int] = []  # [] = todos os métodos; lista de IDs de payment_methods
     display_mode: str = "daily"   # 'daily' | 'ticket'
     ticket_months: int = 6
+
+class IncomeCreate(BaseModel):
+    description: str
+    amount: float
+    income_date: str
+    notes: Optional[str] = None
+    user_id: int
+
+class IncomeUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    income_date: Optional[str] = None
+    notes: Optional[str] = None
+    user_id: Optional[int] = None
 
 # ============================================================================
 # AUTH FUNCTIONS
@@ -2813,6 +2827,92 @@ async def get_target_stats(
         "spent": round(spent_nominal, 2),
     }
 
+
+# ============================================================================
+# INCOME ENDPOINTS
+# ============================================================================
+
+def _income_dict(inc: Income) -> dict:
+    return {
+        "id":          inc.id,
+        "description": inc.description,
+        "amount":      float(inc.amount),
+        "income_date": inc.income_date.isoformat(),
+        "notes":       inc.notes,
+        "user_id":     inc.user_id,
+        "user_name":   inc.user.name if inc.user else None,
+        "user_emoji":  inc.user.emoji if inc.user else "👤",
+        "created_at":  inc.created_at.isoformat() if inc.created_at else None,
+    }
+
+@app.get(f"{settings.API_V1_PREFIX}/income/months")
+async def list_income_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    from sqlalchemy import func as sqlfunc, extract
+    rows = db.query(
+        sqlfunc.to_char(Income.income_date, 'YYYY-MM').label('month')
+    ).distinct().order_by(sqlfunc.to_char(Income.income_date, 'YYYY-MM').desc()).all()
+    result = []
+    for r in rows:
+        y, m = r.month.split('-')
+        d = date(int(y), int(m), 1)
+        label = d.strftime('%b/%y').capitalize()
+        result.append({"value": r.month, "label": label})
+    return result
+
+@app.get(f"{settings.API_V1_PREFIX}/income")
+async def list_income(
+    month: Optional[str] = Query(None, description="YYYY-MM"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user)
+):
+    q = db.query(Income)
+    if month:
+        try:
+            y, m = int(month[:4]), int(month[5:7])
+            from sqlalchemy import extract
+            q = q.filter(extract('year', Income.income_date) == y,
+                         extract('month', Income.income_date) == m)
+        except Exception:
+            pass
+    items = q.order_by(Income.income_date.desc(), Income.id.desc()).all()
+    return [_income_dict(i) for i in items]
+
+@app.post(f"{settings.API_V1_PREFIX}/income", status_code=201)
+async def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    inc = Income(
+        description=data.description,
+        amount=data.amount,
+        income_date=date.fromisoformat(data.income_date),
+        notes=data.notes,
+        user_id=data.user_id,
+    )
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+    return _income_dict(inc)
+
+@app.put(f"{settings.API_V1_PREFIX}/income/{{income_id}}")
+async def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    inc = db.query(Income).filter(Income.id == income_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Income not found")
+    if data.description is not None: inc.description = data.description
+    if data.amount      is not None: inc.amount      = data.amount
+    if data.income_date is not None: inc.income_date = date.fromisoformat(data.income_date)
+    if data.notes       is not None: inc.notes       = data.notes
+    if data.user_id     is not None: inc.user_id     = data.user_id
+    db.commit()
+    db.refresh(inc)
+    return _income_dict(inc)
+
+@app.delete(f"{settings.API_V1_PREFIX}/income/{{income_id}}")
+async def delete_income(income_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    inc = db.query(Income).filter(Income.id == income_id).first()
+    if not inc:
+        raise HTTPException(status_code=404, detail="Income not found")
+    db.delete(inc)
+    db.commit()
+    return {"ok": True}
 
 # ============================================================================
 # AUDIT ENDPOINT — reconcile CSV/OFX bank files against DB expenses

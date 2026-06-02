@@ -227,3 +227,18 @@ class RecurringExpense(Base):
     split_profile  = relationship("SplitProfile", foreign_keys=[split_profile_id], lazy="joined")
     paid_by        = relationship("User",          foreign_keys=[paid_by_user_id],   lazy="joined")
     payment_method_rel = relationship("PaymentMethod", foreign_keys=[payment_method_id], lazy="joined")
+
+
+class Income(Base):
+    """Lançamentos de receita por usuário"""
+    __tablename__ = "incomes"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    description = Column(String, nullable=False)
+    amount      = Column(Numeric(12, 2), nullable=False)
+    income_date = Column(Date, nullable=False, index=True)
+    notes       = Column(String, nullable=True)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id], lazy="joined")

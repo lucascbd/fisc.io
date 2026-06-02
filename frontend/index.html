@@ -1712,6 +1712,21 @@
                     gap: 2px;
                     min-width: 70px;
                 "><span style="font-size: 20px;">📈</span><span>Inflação</span></button>
+                <button onclick="showTab('income', this)" id="tabIncome" style="
+                    background-color: transparent;
+                    color: #5f6368;
+                    font-weight: 400;
+                    border: none;
+                    border-radius: 16px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                    min-width: 70px;
+                "><span style="font-size: 20px;">💰</span><span>Receitas</span></button>
                 <div style="min-width: 8px; flex-shrink: 0;">&nbsp;</div>
             </div>
         </div>
@@ -2002,6 +2017,42 @@
                     </div>
                 </div>
 
+            </div>
+
+            <!-- Income Tab -->
+            <div id="incomeTab" class="tab-content hidden">
+                <!-- Filtros -->
+                <div class="mb-2 flex items-end gap-2" style="flex-wrap:nowrap;">
+                    <div style="flex-shrink:0;">
+                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Mês</label>
+                        <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('incomeMonthFilter',-1);loadIncome();" ontouchstart="event.preventDefault();stepMonth('incomeMonthFilter',-1);loadIncome();">❮</button><select id="incomeMonthFilter" onchange="loadIncome()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('incomeMonthFilter',1);loadIncome();" ontouchstart="event.preventDefault();stepMonth('incomeMonthFilter',1);loadIncome();">❯</button></div>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Buscar</label>
+                        <input type="search" id="incomeSearch" placeholder="Descrição..." oninput="loadIncome()" class="filter-h w-full px-3 border rounded-lg text-sm">
+                    </div>
+                    <div style="flex-shrink:0;padding-bottom:1px;">
+                        <button onclick="showIncomeModal()" style="background:#1a73e8;color:white;border:none;border-radius:10px;padding:7px 16px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;">+ Receita</button>
+                    </div>
+                </div>
+
+                <!-- Totalizador -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+                    <div class="bg-white rounded-lg shadow p-3">
+                        <p class="text-xs" style="color:#5f6368;">💰 Receitas</p>
+                        <p id="incomeSumIncome" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;">R$ 0,00</p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3">
+                        <p class="text-xs" style="color:#5f6368;">💸 Despesas</p>
+                        <p id="incomeSumExpenses" class="font-bold mt-1" style="font-size:1.1rem;color:#ea4335 !important;">R$ 0,00</p>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-3">
+                        <p class="text-xs" style="color:#5f6368;">⚖️ Saldo</p>
+                        <p id="incomeSumBalance" class="font-bold mt-1" style="font-size:1.1rem;color:#34a853 !important;">R$ 0,00</p>
+                    </div>
+                </div>
+
+                <div id="incomeList"></div>
             </div>
 
         </div>
@@ -2465,12 +2516,12 @@
             if (fab) {
                 fab.style.display = (tab === 'home' || tab === 'expenses') ? 'flex' : 'none';
             }
-            
+
             // Esconder todos os conteúdos
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-            
+
             // Resetar todos os botões para estilo não selecionado
-            const allTabs = ['tabHome', 'tabExpenses', 'tabCharts', 'tabInflation'];
+            const allTabs = ['tabHome', 'tabExpenses', 'tabCharts', 'tabInflation', 'tabIncome'];
             allTabs.forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -2495,6 +2546,7 @@
             else if (tab === 'expenses') loadExpenses();
             else if (tab === 'charts') loadCharts();
             else if (tab === 'inflation') loadInflation();
+            else if (tab === 'income') loadIncome();
         }
 
         // ✅ 8️⃣ Carregar meses e iniciar no mês vigente
@@ -2513,6 +2565,14 @@
                 const expenseTarget=prevExpense&&months.find(m=>m.value===prevExpense)?prevExpense:currentMonth;
                 homeSelect.value=homeTarget||(months.length>0?months[months.length-1].value:'');
                 expenseSelect.value=expenseTarget||(months.length>0?months[months.length-1].value:'');
+                // Populate income month filter with same list
+                const incomeSelect=document.getElementById('incomeMonthFilter');
+                if(incomeSelect){
+                    const prevIncome=incomeSelect.value;
+                    incomeSelect.innerHTML=options;
+                    const incomeTarget=prevIncome&&months.find(m=>m.value===prevIncome)?prevIncome:currentMonth;
+                    incomeSelect.value=incomeTarget||(months.length>0?months[months.length-1].value:'');
+                }
                 
                 // ✅ Atualizar filtros dependentes do mês
                 await updateExpenseFilters();
@@ -3295,6 +3355,156 @@
             `}).join('') : '<p class="text-gray-500 text-center py-8">Nenhuma despesa</p>';
         }
 
+        // ── Receitas ──────────────────────────────────────────────────────────
+
+        window._incomeCache = null;
+
+        async function loadIncome() {
+            const month = document.getElementById('incomeMonthFilter')?.value || '';
+            const searchQ = (document.getElementById('incomeSearch')?.value || '').trim().toLowerCase();
+
+            // Fetch income
+            if (!window._incomeCache || window._incomeCache.month !== month) {
+                window._incomeCache = { month, items: await api(`${API}/income?month=${month}`) };
+            }
+            let list = [...window._incomeCache.items];
+            if (searchQ) list = list.filter(i => i.description.toLowerCase().includes(searchQ));
+
+            // Totalizador — receitas
+            const totalIncome = window._incomeCache.items.reduce((s, i) => s + i.amount, 0);
+
+            // Totalizador — despesas do mês (from existing cache)
+            let totalExpenses = 0;
+            try {
+                const { expenses } = await fetchExpensesWithCache(month);
+                totalExpenses = expenses.reduce((s, e) => {
+                    const amt = e.installments > 1 ? e.total_amount / e.installments : e.total_amount;
+                    return s + amt;
+                }, 0);
+            } catch(_) {}
+
+            const balance = totalIncome - totalExpenses;
+            const fmtG = v => `R$ ${formatBRL(Math.abs(v))}`;
+
+            const incEl = document.getElementById('incomeSumIncome');
+            const expEl = document.getElementById('incomeSumExpenses');
+            const balEl = document.getElementById('incomeSumBalance');
+            if (incEl) incEl.textContent = fmtG(totalIncome);
+            if (expEl) expEl.textContent = fmtG(totalExpenses);
+            if (balEl) {
+                balEl.textContent = (balance < 0 ? '- ' : '') + fmtG(balance);
+                balEl.style.cssText = `font-size:1.1rem;color:${balance >= 0 ? '#34a853' : '#ea4335'} !important;`;
+            }
+
+            const isDark = document.body.classList.contains('dark-mode');
+            const cardBg = isDark ? '#3c4043' : '#fff';
+            const txtColor = isDark ? '#e8eaed' : '#202124';
+            const subColor = isDark ? '#9aa0a6' : '#5f6368';
+            const borderColor = isDark ? '#5f6368' : '#e8eaed';
+
+            document.getElementById('incomeList').innerHTML = list.length ? list.map(inc => `
+                <div class="rounded-lg shadow p-4 mb-3" style="background:${cardBg};">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+                        <div style="flex:1;min-width:0;">
+                            <p style="font-weight:700;font-size:1rem;color:${txtColor};margin:0;">${inc.description}</p>
+                            <p style="font-size:0.8rem;color:${subColor};margin:3px 0 0 0;">${new Date(inc.income_date+'T12:00:00').toLocaleDateString('pt-BR')} · ${inc.user_emoji} ${inc.user_name}</p>
+                            ${inc.notes ? `<p style="font-size:0.8rem;color:${subColor};margin:4px 0 0 0;">${inc.notes}</p>` : ''}
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
+                            <p style="font-size:1.3rem;font-weight:700;color:#34a853;margin:0;">R$ ${formatBRL(inc.amount)}</p>
+                            <div style="display:flex;gap:8px;">
+                                <button onclick="showIncomeModal(${inc.id})" style="background:none;border:none;cursor:pointer;font-size:14px;">✏️</button>
+                                <button onclick="deleteItem('income',${inc.id})" style="background:none;border:none;cursor:pointer;font-size:14px;">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : `<p style="text-align:center;padding:32px 0;color:${subColor};">Nenhuma receita neste mês</p>`;
+        }
+
+        window.showIncomeModal = async function showIncomeModal(incomeId = null) {
+            const isDark = document.body.classList.contains('dark-mode');
+            const bg     = isDark ? '#2d2f31' : '#fff';
+            const txt    = isDark ? '#e8eaed' : '#202124';
+            const sub    = isDark ? '#9aa0a6' : '#5f6368';
+            const border = isDark ? '#5f6368' : '#dadce0';
+            const inputBg= isDark ? '#3c4043' : '#fff';
+
+            let inc = null;
+            if (incomeId) {
+                const cached = window._incomeCache?.items?.find(i => i.id === incomeId);
+                inc = cached || await api(`${API}/income/${incomeId}`).catch(() => null);
+            }
+
+            const today = new Date().toISOString().slice(0, 10);
+            const userOpts = (users || []).filter(u => u.is_active !== false)
+                .map(u => `<option value="${u.id}" ${u.id === (inc?.user_id ?? user.id) ? 'selected' : ''}>${u.emoji||'👤'} ${u.name}</option>`).join('');
+
+            const inputStyle = `width:100%;padding:10px 14px;border:1px solid ${border};border-radius:10px;font-size:0.95rem;background:${inputBg};color:${txt};box-sizing:border-box;`;
+
+            document.getElementById('modalContainer').innerHTML = `
+            <div class="modal-overlay" onclick="if(event.target===this)closeModal()" style="display:flex;align-items:center;justify-content:center;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;padding:16px;">
+              <div style="background:${bg};border-radius:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;">
+                <div style="display:flex;align-items:center;gap:12px;padding:20px 20px 0;">
+                  <div style="width:40px;height:40px;background:#e6f4ea;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <span style="font-size:1.1rem;">💰</span>
+                  </div>
+                  <h2 style="flex:1;font-size:1.1rem;font-weight:500;color:${txt};">${inc ? 'Editar receita' : 'Nova receita'}</h2>
+                  <button onclick="closeModal()" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;border:none;cursor:pointer;">
+                    <span style="font-size:1.5rem;color:${sub};">✕</span>
+                  </button>
+                </div>
+                <form onsubmit="saveIncome(event,${incomeId||'null'})" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+                  <div>
+                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Data</label>
+                    <input type="date" id="inc_date" value="${inc?.income_date || today}" required style="${inputStyle}">
+                  </div>
+                  <div>
+                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Descrição</label>
+                    <input type="text" id="inc_desc" value="${inc?.description || ''}" placeholder="Ex: Salário, Freelance..." required style="${inputStyle}">
+                  </div>
+                  <div>
+                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Valor (R$)</label>
+                    <input type="number" id="inc_amount" value="${inc?.amount || ''}" placeholder="0,00" step="0.01" min="0.01" required style="${inputStyle}">
+                  </div>
+                  <div>
+                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">De quem</label>
+                    <select id="inc_user" style="${inputStyle}">${userOpts}</select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.82rem;color:${sub};display:block;margin-bottom:5px;">Notas (opcional)</label>
+                    <textarea id="inc_notes" placeholder="Observações..." rows="2" style="${inputStyle};resize:vertical;">${inc?.notes || ''}</textarea>
+                  </div>
+                  <button type="submit" style="width:100%;padding:13px;border:none;border-radius:10px;background:#34a853;color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;margin-top:4px;">
+                    ${inc ? 'Salvar alterações' : 'Adicionar receita'}
+                  </button>
+                </form>
+              </div>
+            </div>`;
+            document.body.classList.add('modal-open');
+        }
+
+        window.saveIncome = async function saveIncome(event, incomeId) {
+            event.preventDefault();
+            const body = {
+                description: document.getElementById('inc_desc').value.trim(),
+                amount:      parseFloat(document.getElementById('inc_amount').value),
+                income_date: document.getElementById('inc_date').value,
+                notes:       document.getElementById('inc_notes').value.trim() || null,
+                user_id:     parseInt(document.getElementById('inc_user').value),
+            };
+            try {
+                if (incomeId) {
+                    await api(`${API}/income/${incomeId}`, { method: 'PUT', body: JSON.stringify(body) });
+                } else {
+                    await api(`${API}/income`, { method: 'POST', body: JSON.stringify(body) });
+                }
+                window._incomeCache = null;
+                closeModal();
+                loadIncome();
+            } catch(e) { alert(e.message || 'Erro ao salvar'); }
+        }
+
         async function loadCategories() {
             // Usar cache se válido, senão buscar
             if (!isStaticCacheValid() || !categories.length) {
@@ -3497,7 +3707,12 @@
                     alert('Item desativado. Mantido no histórico pois possui despesas.');
                 }
                 
-                if (type === 'expenses') {
+                if (type === 'income') {
+                    window._incomeCache = null;
+                    loadIncome();
+                    return;
+                }
+                else if (type === 'expenses') {
                     invalidateCache();
                     if (typeof sendExpenseNotification === 'function') {
                         sendExpenseNotification('delete', { id });
