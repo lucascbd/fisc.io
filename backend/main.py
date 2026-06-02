@@ -2899,8 +2899,8 @@ async def update_income(income_id: int, data: IncomeUpdate, db: Session = Depend
     if data.description is not None: inc.description = data.description
     if data.amount      is not None: inc.amount      = data.amount
     if data.income_date is not None: inc.income_date = date.fromisoformat(data.income_date)
-    if data.notes       is not None: inc.notes       = data.notes
     if data.user_id     is not None: inc.user_id     = data.user_id
+    inc.notes = data.notes or None  # always update; empty string → None
     db.commit()
     db.refresh(inc)
     return _income_dict(inc)
