@@ -9629,6 +9629,30 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const selStyle = `flex:1;min-width:100px;padding:5px 8px;border:1px solid ${border};
                               border-radius:8px;font-size:0.8rem;background:${selBg};color:${txt};`;
 
+            // ── Bulk-apply bar ────────────────────────────────────────────────
+            const bulkBar = items.length < 2 ? '' : `
+            <div id="auditBulkBar" style="padding:12px 20px;background:${isDark?'#2d3748':'#f0f7ff'};
+                 border-bottom:2px solid ${isDark?'#4a5568':'#c3dafe'};">
+              <div style="font-size:0.78rem;font-weight:600;color:${isDark?'#8ab4f8':'#1a73e8'};
+                           margin-bottom:8px;">⚡ Aplicar a todos (${items.length} itens)</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <select id="bulk_cat" onchange="_auditBulkCheck()"
+                  style="${selStyle}">
+                  <option value="">Categoria...</option>${catOpts}</select>
+                <select id="bulk_prof" onchange="_auditBulkCheck()"
+                  style="${selStyle}">
+                  <option value="">Perfil...</option>${profOpts}</select>
+                <select id="bulk_user" onchange="_auditBulkCheck()"
+                  style="${selStyle}">
+                  <option value="">Quem pagou...</option>${userOpts}</select>
+                <button id="auditAddAllBtn" onclick="_auditAddAll()" disabled
+                  style="background:#ccc;color:#fff;border:none;border-radius:8px;
+                         padding:6px 14px;font-size:0.8rem;font-weight:600;
+                         cursor:not-allowed;white-space:nowrap;transition:.15s;">
+                  Adicionar todos</button>
+              </div>
+            </div>`;
+
             const itemsHtml = items.map((item, idx) => {
                 const parc = item.file.parcel_num
                     ? `<span style="font-size:0.73rem;color:${sub};margin-left:4px;">
@@ -9707,12 +9731,82 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 </div>`;
             }
 
-            return microHtml + itemsHtml;
+            return bulkBar + microHtml + itemsHtml;
         }
 
         window._auditIgnore = function _auditIgnore(idx) {
             const el = document.getElementById(`unmatch_${idx}`);
             if (el) el.style.display = 'none';
+        }
+
+        window._auditBulkCheck = function _auditBulkCheck() {
+            const ok = document.getElementById('bulk_cat')?.value &&
+                       document.getElementById('bulk_prof')?.value &&
+                       document.getElementById('bulk_user')?.value;
+            const btn = document.getElementById('auditAddAllBtn');
+            if (!btn) return;
+            btn.disabled = !ok;
+            btn.style.background = ok ? '#1a73e8' : '#ccc';
+            btn.style.cursor     = ok ? 'pointer'  : 'not-allowed';
+        }
+
+        window._auditAddAll = async function _auditAddAll() {
+            const catId  = parseInt(document.getElementById('bulk_cat')?.value);
+            const profId = parseInt(document.getElementById('bulk_prof')?.value);
+            const userId = parseInt(document.getElementById('bulk_user')?.value);
+            if (!catId || !profId || !userId) return;
+
+            // Collect visible (non-ignored) items
+            const pending = window._auditData.unmatched
+                .map((item, idx) => ({ item, idx }))
+                .filter(({ idx }) => {
+                    const el = document.getElementById(`unmatch_${idx}`);
+                    return el && el.style.display !== 'none';
+                });
+
+            if (!pending.length) return;
+            if (!confirm(`Adicionar ${pending.length} lançamento(s) com os valores selecionados?`)) return;
+
+            const btn = document.getElementById('auditAddAllBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Adicionando...'; btn.style.cursor = 'not-allowed'; }
+
+            let ok = 0, fail = 0;
+            for (const { item, idx } of pending) {
+                const f      = item.file;
+                const isParc = !!(f.parcel_num && f.parcel_total);
+                const inst   = isParc ? f.parcel_total : 1;
+                const rawAmt = isParc ? f.amount * f.parcel_total : f.amount;
+                const total  = Math.abs(rawAmt).toFixed(2);
+                const notes  = isParc
+                    ? `Importado via auditoria - parcela ${f.parcel_num}/${f.parcel_total}` : 'Importado via auditoria';
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API}/expenses`, {
+                        method: 'POST',
+                        headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+                        body: JSON.stringify({
+                            description:      f.description,
+                            total_amount:     f.amount < 0 ? -parseFloat(total) : parseFloat(total),
+                            category_id:      catId,
+                            split_profile_id: profId,
+                            paid_by_user_id:  userId,
+                            expense_date:     f.date,
+                            installments:     inst,
+                            payment_method_id: window._auditPmId,
+                            notes
+                        })
+                    });
+                    if (!res.ok) throw new Error();
+                    const el = document.getElementById(`unmatch_${idx}`);
+                    if (el) el.innerHTML = `<div style="padding:6px 0;color:#34a853;font-size:0.83rem;">
+                        ✅ ${f.description} — adicionado!</div>`;
+                    ok++;
+                } catch { fail++; }
+            }
+            invalidateCache();
+            const bar = document.getElementById('auditBulkBar');
+            if (bar) bar.innerHTML = `<div style="padding:4px 0;font-size:0.83rem;color:#34a853;font-weight:600;">
+                ✅ ${ok} adicionado(s)${fail ? ` · ⚠️ ${fail} erro(s)` : ''}</div>`;
         }
 
         window._auditAdd = async function _auditAdd(idx) {
