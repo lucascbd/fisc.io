@@ -1160,6 +1160,7 @@
         
         /* Sidebar Usuários - badge Admin azul */
         .dark-mode .admin-badge,
+        .dark-mode .sidebar-panel span.admin-badge,
         .dark-mode [style*="background: #e8f0fe"][style*="border-radius: 10px"],
         .dark-mode span[style*="background: #e8f0fe"] {
             background: #8ab4f8 !important;
@@ -7645,7 +7646,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         <span style="font-size:16px;color:#9aa0a6;cursor:grab;padding:4px;flex-shrink:0;">☰</span>
                         ${imgHtml}
                         <div style="min-width:0;">
-                            <p style="font-weight:500;margin:0;font-size:14px;display:flex;align-items:center;gap:4px;overflow:hidden;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${pm.description}</span>${badge}</p>
+                            <p style="font-weight:500;margin:0;font-size:14px;display:flex;align-items:center;gap:4px;overflow:hidden;"><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pm.description}</span>${badge}</p>
                             ${dueInfo}
                         </div>
                     </div>
