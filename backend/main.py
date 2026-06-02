@@ -1984,8 +1984,32 @@ async def delete_expense(expense_id: int, db: Session = Depends(get_db), current
             print(f"⚠️ Erro ao enviar push: {e}")
     else:
         ExpenseService.delete_expense(db, expense_id)
-    
+
     return {"message": "Expense deleted"}
+
+
+def _add_one_month(d: date) -> date:
+    month = d.month + 1
+    year = d.year
+    if month > 12:
+        month = 1
+        year += 1
+    max_day = calendar.monthrange(year, month)[1]
+    return d.replace(year=year, month=month, day=min(d.day, max_day))
+
+@app.post(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/postpone")
+async def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    expense.expense_date = _add_one_month(expense.expense_date)
+    if expense.original_date:
+        expense.original_date = _add_one_month(expense.original_date)
+    splits = db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
+    for split in splits:
+        split.due_date = _add_one_month(split.due_date)
+    db.commit()
+    return {"ok": True}
 
 
 # ============================================================================

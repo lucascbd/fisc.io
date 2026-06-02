@@ -3341,6 +3341,7 @@
                                 : `<p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIconHtml}</p>`
                             }
                             <div class="flex gap-2 justify-end">
+                                ${_ePm?.is_card ? `<button onclick="postponeExpense(${e.id})" class="text-gray-600 text-sm" title="Jogar pro próximo mês">➡️</button>` : ''}
                                 <button onclick="editExpense(${e.id})" class="text-blue-600 text-sm">✏️</button>
                                 <button onclick="deleteItem('expenses', ${e.id})" class="text-red-600 text-sm">🗑️</button>
                             </div>
@@ -3348,6 +3349,16 @@
                     </div>
                 </div>
             `}).join('') : '<p class="text-gray-500 text-center py-8">Nenhuma despesa</p>';
+        }
+
+        window.postponeExpense = async function postponeExpense(id) {
+            if (!confirm('Jogar essa despesa para o próximo mês?')) return;
+            try {
+                await api(`${API}/expenses/${id}/postpone`, { method: 'POST' });
+                invalidateCache();
+                await loadMonths();
+                loadExpenses();
+            } catch(e) { alert(e.message || 'Erro ao adiar despesa'); }
         }
 
         // ── Receitas ──────────────────────────────────────────────────────────
