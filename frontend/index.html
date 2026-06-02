@@ -9125,6 +9125,16 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             }, {passive: true});
             
             console.log('Swipe ativado');
+
+            // Hide tab bar scrollbar on initial load; only reveal it when user touches the bar
+            (function() {
+                const bar = document.getElementById('tabsBar');
+                if (!bar) return;
+                bar.style.overflowX = 'hidden';
+                bar.addEventListener('touchstart', function() {
+                    bar.style.overflowX = '';
+                }, { once: true, passive: true });
+            })();
         })();
     </script>
 
