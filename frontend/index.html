@@ -7635,7 +7635,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const imgHtml = pm.icon_path
                     ? `<img src="${pm.icon_path}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;">`
                     : `<span style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:14px;flex-shrink:0;">💳</span>`;
-                const badge = pm.is_card ? `<span class="admin-badge" style="font-size:10px;background: #e8f0fe;color:#1a73e8;border-radius:10px;padding:2px 6px;margin-left:4px;">Cartão</span>` : '';
+                const badge = pm.is_card ? `<span class="admin-badge" style="font-size:10px;background:#e8f0fe;color:#1a73e8;border-radius:10px;padding:2px 6px;flex-shrink:0;">Cartão</span>` : '';
                 const fmtClosing = d => { const p = d.split('-'); return `${p[2]}/${p[1]}`; };
                 const dueInfo = pm.is_card && pm.due_day
                     ? `<p style="font-size:12px;color:#5f6368;margin:2px 0 0 0;">Venc. dia ${pm.due_day}${pm.closing_date ? ` · Fecha ${fmtClosing(pm.closing_date)}` : ''}</p>`
@@ -7645,7 +7645,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         <span style="font-size:16px;color:#9aa0a6;cursor:grab;padding:4px;flex-shrink:0;">☰</span>
                         ${imgHtml}
                         <div style="min-width:0;">
-                            <p style="font-weight:500;margin:0;font-size:14px;display:flex;align-items:center;gap:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pm.description}${badge}</p>
+                            <p style="font-weight:500;margin:0;font-size:14px;display:flex;align-items:center;gap:4px;overflow:hidden;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${pm.description}</span>${badge}</p>
                             ${dueInfo}
                         </div>
                     </div>
