@@ -3064,7 +3064,7 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
     }).encode()
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     req = _urllib_req.Request(url, data=payload,
                               headers={"Content-Type": "application/json",
                                        "x-goog-api-key": settings.GEMINI_API_KEY},
