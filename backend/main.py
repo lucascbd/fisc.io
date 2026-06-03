@@ -3061,7 +3061,7 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
     payload = json.dumps({
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "contents": contents,
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096}
     }).encode()
 
     key = settings.GEMINI_API_KEY.strip()
