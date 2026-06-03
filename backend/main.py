@@ -2941,6 +2941,145 @@ async def delete_income(income_id: int, db: Session = Depends(get_db), _: User =
     return {"ok": True}
 
 # ============================================================================
+# AGENT ENDPOINT — Gemini AI financial assistant
+# ============================================================================
+
+class AgentMessage(BaseModel):
+    role: str   # "user" | "model"
+    text: str
+
+class AgentChatRequest(BaseModel):
+    message: str
+    history: List[AgentMessage] = []
+
+@app.post(f"{settings.API_V1_PREFIX}/agent/chat")
+def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    import urllib.request as _urllib_req
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada no servidor")
+
+    now = datetime.now()
+
+    # ── Despesas: últimos 3 meses por categoria (parte do usuário logado) ──
+    expense_lines = []
+    for delta in range(3):
+        if delta == 0:
+            m_date = now
+        else:
+            m_date = now.replace(day=1) - timedelta(days=1) if delta == 1 else \
+                     (now.replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)
+            m_date = now.replace(month=((now.month - delta - 1) % 12) + 1,
+                                  year=now.year + ((now.month - delta - 1) // 12) * -1
+                                  if now.month - delta <= 0 else now.year)
+        month_str = f"{m_date.year}-{m_date.month:02d}"
+        splits = (db.query(ExpenseSplit)
+                  .join(Expense, Expense.id == ExpenseSplit.expense_id)
+                  .filter(
+                      ExpenseSplit.user_id == current_user.id,
+                      func.to_char(ExpenseSplit.due_date, 'YYYY-MM') == month_str
+                  )
+                  .options(joinedload(ExpenseSplit.user))
+                  .all())
+        if not splits:
+            continue
+        # group by category
+        from collections import defaultdict
+        cat_totals: dict = defaultdict(float)
+        exp_ids = list({s.expense_id for s in splits})
+        expenses_q = db.query(Expense).options(joinedload(Expense.category)).filter(Expense.id.in_(exp_ids)).all()
+        exp_map = {e.id: e for e in expenses_q}
+        for s in splits:
+            cat_name = exp_map[s.expense_id].category.name if s.expense_id in exp_map else "?"
+            cat_totals[cat_name] += float(s.user_amount)
+        cats_str = ", ".join(f"{cat}: R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for cat, v in sorted(cat_totals.items(), key=lambda x: -x[1]))
+        total = sum(cat_totals.values())
+        expense_lines.append(f"  {month_str}: Total R$ {total:,.2f} | {cats_str}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    # ── Receitas: últimos 3 meses ──
+    income_lines = []
+    incomes = db.query(Income).filter(
+        Income.user_id == current_user.id,
+        Income.income_date >= (now.replace(day=1) - timedelta(days=90))
+    ).all()
+    inc_by_month: dict = {}
+    for inc in incomes:
+        key = f"{inc.income_date.year}-{inc.income_date.month:02d}"
+        inc_by_month[key] = inc_by_month.get(key, 0) + float(inc.amount)
+    for k, v in sorted(inc_by_month.items(), reverse=True):
+        income_lines.append(f"  {k}: R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    # ── Targets ──
+    current_month_str = f"{now.year}-{now.month:02d}"
+    targets = db.query(Target).filter(Target.user_id == current_user.id, Target.is_active == True).all()
+    target_lines = []
+    for tgt in targets:
+        # gastos do target no mês atual
+        cat_ids = json.loads(tgt.category_ids) if tgt.category_ids else []
+        pm_ids = json.loads(tgt.payment_methods) if tgt.payment_methods else []
+        q = (db.query(func.sum(ExpenseSplit.user_amount))
+             .join(Expense, Expense.id == ExpenseSplit.expense_id)
+             .filter(
+                 ExpenseSplit.user_id == current_user.id,
+                 func.to_char(ExpenseSplit.due_date, 'YYYY-MM') == current_month_str
+             ))
+        if cat_ids:
+            q = q.filter(Expense.category_id.in_(cat_ids))
+        if pm_ids:
+            q = q.filter(Expense.payment_method_id.in_(pm_ids))
+        spent = float(q.scalar() or 0)
+        budget = float(tgt.monthly_amount)
+        pct = (spent / budget * 100) if budget > 0 else 0
+        target_lines.append(f"  {tgt.emoji} {tgt.name}: R$ {spent:,.2f} / R$ {budget:,.2f} ({pct:.1f}%)".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    expenses_text = "\n".join(expense_lines) if expense_lines else "  Sem despesas registradas"
+    income_text = "\n".join(income_lines) if income_lines else "  Sem receitas registradas"
+    targets_text = "\n".join(target_lines) if target_lines else "  Sem metas configuradas"
+
+    system_prompt = f"""Você é um assistente financeiro pessoal integrado ao app fisc.io.
+Responda sempre em português do Brasil, de forma clara e objetiva.
+Use markdown simples (negrito com **texto**) quando útil.
+
+=== DADOS DE {current_user.name.upper()} — {current_month_str} ===
+
+DESPESAS (últimos 3 meses, parte de {current_user.name}):
+{expenses_text}
+
+RECEITAS:
+{income_text}
+
+METAS DO MÊS ATUAL:
+{targets_text}
+
+Responda perguntas sobre os dados acima. Seja direto e útil."""
+
+    # Build Gemini contents array
+    contents = []
+    for h in data.history[-10:]:  # last 10 messages for context
+        contents.append({"role": h.role, "parts": [{"text": h.text}]})
+    contents.append({"role": "user", "parts": [{"text": data.message}]})
+
+    payload = json.dumps({
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "contents": contents,
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
+    }).encode()
+
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    req = _urllib_req.Request(url, data=payload,
+                              headers={"Content-Type": "application/json",
+                                       "x-goog-api-key": settings.GEMINI_API_KEY},
+                              method="POST")
+    try:
+        with _urllib_req.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read())
+        reply = result["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Erro ao chamar Gemini: {e}")
+
+    return {"reply": reply}
+
+
+# ============================================================================
 # AUDIT ENDPOINT — reconcile CSV/OFX bank files against DB expenses
 # ============================================================================
 
