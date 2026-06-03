@@ -3428,7 +3428,7 @@
                         <div class="flex-1 min-w-0">
                             <p class="font-bold text-lg"><span class="expense-info-badge" style="font-size:14px;">${emoji}</span> ${e.description}</p>
                             <p class="text-sm text-gray-600">${new Date((e.original_date || e.expense_date) + 'T12:00:00').toLocaleDateString('pt-BR')}${e.is_recurring ? ' <span style="font-size:11px;">🔁</span>' : ''}${e.original_date && e.original_date !== e.expense_date ? ' <span style="font-size:11px;">➡️</span>' : ''}</p>
-                            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;"><span class="expense-info-badge">${paidEmoji} ${e.paid_by_name}</span><span class="expense-info-badge">${profileEmoji} ${profileName}</span></div>
+                            <div style="display:flex;flex-direction:column;gap:3px;margin-top:3px;align-items:flex-start;"><span class="expense-info-badge">${paidEmoji} ${e.paid_by_name}</span><span class="expense-info-badge">${profileEmoji} ${profileName}</span></div>
                             ${e.notes ? `<p class="text-sm text-gray-500 mt-2">${e.notes}</p>` : ''}
                         </div>
                         <div class="text-right ml-4 flex flex-col justify-between">
