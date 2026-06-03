@@ -3066,10 +3066,14 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
 
     key = settings.GEMINI_API_KEY.strip()
     print(f"[agent] GEMINI_API_KEY length={len(key)} prefix={key[:8] if key else 'EMPTY'}", flush=True)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={key}"
-    req = _urllib_req.Request(url, data=payload,
-                              headers={"Content-Type": "application/json"},
-                              method="POST")
+    # Tentar ambos os métodos de autenticação: Bearer (novo formato AQ.*) e x-goog-api-key (formato AIza*)
+    if key.startswith("AQ."):
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
+        auth_headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+    else:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={key}"
+        auth_headers = {"Content-Type": "application/json"}
+    req = _urllib_req.Request(url, data=payload, headers=auth_headers, method="POST")
     try:
         with _urllib_req.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read())
@@ -3093,9 +3097,15 @@ def agent_list_models(_: User = Depends(get_current_user)):
     import urllib.request as _ur
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={settings.GEMINI_API_KEY.strip()}"
+    k = settings.GEMINI_API_KEY.strip()
+    if k.startswith("AQ."):
+        list_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        list_req = _ur.Request(list_url, headers={"Authorization": f"Bearer {k}"})
+    else:
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={k}"
+        list_req = list_url
     try:
-        with _ur.urlopen(url, timeout=10) as r:
+        with _ur.urlopen(list_req, timeout=10) as r:
             data = json.loads(r.read())
         names = [m["name"] for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
         return {"models": names}
