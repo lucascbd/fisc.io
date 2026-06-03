@@ -796,6 +796,8 @@
         .dark-mode .dark-invert-icon { filter: invert(1); }
         .inst-label { color: #4B5563; }
         .dark-mode .inst-label { color: #e8eaed; }
+        .expense-info-badge { display:inline-block; background:#e8eaed; color:#3c4043; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:600; white-space:nowrap; }
+        .dark-mode .expense-info-badge { background:#3c4043; color:#e8eaed; }
         .dark-mode .theme-toggle-label {
             color: #e8eaed;
         }
@@ -3426,8 +3428,8 @@
                         <div class="flex-1 min-w-0">
                             <p class="font-bold text-lg">${emoji} ${e.description}</p>
                             <p class="text-sm text-gray-600">${new Date((e.original_date || e.expense_date) + 'T12:00:00').toLocaleDateString('pt-BR')}${e.is_recurring ? ' <span style="font-size:11px;">🔁</span>' : ''}${e.original_date && e.original_date !== e.expense_date ? ' <span style="font-size:11px;">➡️</span>' : ''}</p>
-                            <p class="text-xs text-gray-600 truncate">👤 Pago por: <span class="font-bold">${paidEmoji} ${e.paid_by_name}</span></p>
-                            <p class="text-xs text-gray-600 truncate">⚖️ Perfil: <span class="font-bold">${profileEmoji} ${profileName}</span></p>
+                            <p class="text-xs text-gray-600 truncate">👤 Pago por: <span class="expense-info-badge">${paidEmoji} ${e.paid_by_name}</span></p>
+                            <p class="text-xs text-gray-600 truncate">⚖️ Perfil: <span class="expense-info-badge">${profileEmoji} ${profileName}</span></p>
                             ${e.notes ? `<p class="text-sm text-gray-500 mt-2">${e.notes}</p>` : ''}
                         </div>
                         <div class="text-right ml-4 flex flex-col justify-between">
