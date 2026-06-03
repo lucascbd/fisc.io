@@ -3073,8 +3073,15 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
         with _urllib_req.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read())
         reply = result["candidates"][0]["content"]["parts"][0]["text"]
+    except _urllib_req.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        try:
+            msg = json.loads(body).get("error", {}).get("message", body[:300])
+        except Exception:
+            msg = body[:300]
+        raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Erro ao chamar Gemini: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {e}")
 
     return {"reply": reply}
 
