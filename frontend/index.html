@@ -1288,35 +1288,39 @@
             background: transparent !important;
         }
 
-        /* Scrollbar que some após interação */
+        /* Scrollbar: oculta por padrão (mobile); visível só em desktop com mouse */
         *, *::before, *::after {
-            scrollbar-width: thin !important;
-            scrollbar-color: rgba(128, 128, 128, 0.4) transparent !important;
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
         }
         *::-webkit-scrollbar {
-            width: 6px !important;
-            height: 6px !important;
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
         }
-        *::-webkit-scrollbar-track {
-            background: transparent !important;
-        }
-        *::-webkit-scrollbar-thumb {
-            background: rgba(128, 128, 128, 0.4);
-            border-radius: 3px;
-        }
-        *::-webkit-scrollbar-thumb:hover {
-            background: rgba(128, 128, 128, 0.6);
-        }
-        
-        /* Dark mode scrollbar */
-        .dark-mode *, .dark-mode *::before, .dark-mode *::after {
-            scrollbar-color: rgba(154, 160, 166, 0.5) transparent !important;
-        }
-        .dark-mode *::-webkit-scrollbar-thumb {
-            background: rgba(154, 160, 166, 0.5) !important;
-        }
-        .dark-mode *::-webkit-scrollbar-thumb:hover {
-            background: rgba(154, 160, 166, 0.7) !important;
+
+        /* Desktop com mouse real: mostrar scrollbar fina */
+        @media (hover: hover) and (pointer: fine) {
+            *, *::before, *::after {
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(128, 128, 128, 0.4) transparent !important;
+            }
+            *::-webkit-scrollbar {
+                display: block !important;
+                width: 6px !important;
+                height: 6px !important;
+            }
+            *::-webkit-scrollbar-track { background: transparent !important; }
+            *::-webkit-scrollbar-thumb {
+                background: rgba(128, 128, 128, 0.4);
+                border-radius: 3px;
+            }
+            *::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.6); }
+            .dark-mode *, .dark-mode *::before, .dark-mode *::after {
+                scrollbar-color: rgba(154, 160, 166, 0.5) transparent !important;
+            }
+            .dark-mode *::-webkit-scrollbar-thumb { background: rgba(154, 160, 166, 0.5) !important; }
+            .dark-mode *::-webkit-scrollbar-thumb:hover { background: rgba(154, 160, 166, 0.7) !important; }
         }
 
         /* Ocultar scrollbar absolutamente em dispositivos touch/mobile */
@@ -3385,7 +3389,7 @@
                                 : `<p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIconHtml}</p>`
                             }
                             <div class="flex gap-2 justify-end">
-                                ${_ePm?.is_card ? `<button onclick="postponeExpense(${e.id})" class="text-gray-600 text-sm" title="Jogar pro próximo mês">➡️</button>` : ''}
+                                ${(_ePm?.is_card && (user.is_admin || e.created_by_user_id === user.id)) ? `<button onclick="postponeExpense(${e.id})" class="text-gray-600 text-sm" title="Jogar pro próximo mês">➡️</button>` : ''}
                                 ${(user.is_admin || e.created_by_user_id === user.id) ? `<button onclick="editExpense(${e.id})" class="text-blue-600 text-sm">✏️</button>` : ''}
                                 ${(user.is_admin || e.created_by_user_id === user.id) ? `<button onclick="deleteItem('expenses', ${e.id})" class="text-red-600 text-sm">🗑️</button>` : ''}
                             </div>
