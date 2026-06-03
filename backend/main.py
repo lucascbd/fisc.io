@@ -3064,10 +3064,11 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
     }).encode()
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
+    key = settings.GEMINI_API_KEY.strip()
+    print(f"[agent] GEMINI_API_KEY length={len(key)} prefix={key[:8] if key else 'EMPTY'}", flush=True)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={key}"
     req = _urllib_req.Request(url, data=payload,
-                              headers={"Content-Type": "application/json",
-                                       "x-goog-api-key": settings.GEMINI_API_KEY},
+                              headers={"Content-Type": "application/json"},
                               method="POST")
     try:
         with _urllib_req.urlopen(req, timeout=30) as resp:
@@ -3092,7 +3093,7 @@ def agent_list_models(_: User = Depends(get_current_user)):
     import urllib.request as _ur
     if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={settings.GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={settings.GEMINI_API_KEY.strip()}"
     try:
         with _ur.urlopen(url, timeout=10) as r:
             data = json.loads(r.read())
