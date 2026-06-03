@@ -3419,17 +3419,21 @@
                 const paidEmoji = paidUser?.emoji || '👤';
                 
                 const _ePm = pmById(e.payment_method_id);
-                const pmIconHtml = _ePm && _ePm.icon_path
-                    ? `<img src="${_ePm.icon_path}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">`
-                    : (_ePm ? `<span style="display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center;border-radius:50%;background:${_ePm.color||'#999'};font-size:9px;flex-shrink:0;">💳</span>` : '');
+                const pmBadgeHtml = _ePm ? (() => {
+                    const icon = _ePm.icon_path
+                        ? `<img src="${_ePm.icon_path}" style="width:11px;height:11px;object-fit:contain;vertical-align:middle;margin-right:2px;">`
+                        : `<span style="width:7px;height:7px;border-radius:50%;background:${_ePm.color||'#999'};display:inline-block;vertical-align:middle;margin-right:2px;flex-shrink:0;"></span>`;
+                    return `<span class="expense-info-badge" style="display:inline-flex;align-items:center;">${icon}${_ePm.description}</span>`;
+                })() : '';
                 return `
                 <div class="bg-white rounded-lg shadow p-4 mb-4">
                     <div class="flex justify-between items-stretch">
                         <div class="flex-1 min-w-0">
-                            <p class="font-bold text-lg">${emoji} ${e.description}</p>
+                            <p class="font-bold text-lg">${e.description}</p>
                             <p class="text-sm text-gray-600">${new Date((e.original_date || e.expense_date) + 'T12:00:00').toLocaleDateString('pt-BR')}${e.is_recurring ? ' <span style="font-size:11px;">🔁</span>' : ''}${e.original_date && e.original_date !== e.expense_date ? ' <span style="font-size:11px;">➡️</span>' : ''}</p>
-                            <p class="text-xs text-gray-600 truncate">👤 Pago por: <span class="expense-info-badge">${paidEmoji} ${e.paid_by_name}</span></p>
-                            <p class="text-xs text-gray-600 truncate">⚖️ Perfil: <span class="expense-info-badge">${profileEmoji} ${profileName}</span></p>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;"><span class="expense-info-badge">${emoji} ${e.category_name}</span>${pmBadgeHtml}</div>
+                            <p class="text-xs text-gray-600 truncate" style="margin-top:3px;">👤 Pago por: <span class="expense-info-badge">${paidEmoji} ${e.paid_by_name}</span></p>
+                            <p class="text-xs text-gray-600 truncate" style="margin-top:3px;">⚖️ Perfil: <span class="expense-info-badge">${profileEmoji} ${profileName}</span></p>
                             ${e.notes ? `<p class="text-sm text-gray-500 mt-2">${e.notes}</p>` : ''}
                         </div>
                         <div class="text-right ml-4 flex flex-col justify-between">
@@ -3440,11 +3444,11 @@
                                     const instNum = split?.installment_number || '';
                                     return `<div>
                                         <p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">
-                                            ${instNum ? `<span class="inst-label" style="font-size:11px;font-weight:normal;">(${instNum} / ${e.installments})</span>` : ''}R$ ${formatBRL(e.total_amount / e.installments)} ${pmIconHtml}</p>
+                                            ${instNum ? `<span class="inst-label" style="font-size:11px;font-weight:normal;">(${instNum} / ${e.installments})</span>` : ''}R$ ${formatBRL(e.total_amount / e.installments)}</p>
                                         <p class="text-sm text-gray-600">R$ ${formatBRL(e.total_amount)} · ${e.installments}x</p>
                                     </div>`;
                                 })()
-                                : `<p class="text-2xl font-bold text-blue-600" style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">R$ ${formatBRL(e.total_amount)} ${pmIconHtml}</p>`
+                                : `<p class="text-2xl font-bold text-blue-600">R$ ${formatBRL(e.total_amount)}</p>`
                             }
                             <div class="flex gap-2 justify-end">
                                 ${(_ePm?.is_card && (user.is_admin || e.created_by_user_id === user.id)) ? `<button onclick="postponeExpense(${e.id})" class="text-gray-600 text-sm" title="Jogar pro próximo mês">➡️</button>` : ''}
