@@ -3420,8 +3420,8 @@
                 
                 const _ePm = pmById(e.payment_method_id);
                 const pmIconHtml = _ePm && _ePm.icon_path
-                    ? `<span class="expense-info-badge" style="display:inline-flex;align-items:center;padding:2px 5px;"><img src="${_ePm.icon_path}" style="width:14px;height:14px;object-fit:contain;"></span>`
-                    : (_ePm ? `<span class="expense-info-badge" style="display:inline-flex;align-items:center;gap:3px;"><span style="width:8px;height:8px;border-radius:50%;background:${_ePm.color||'#999'};flex-shrink:0;"></span>${_ePm.description}</span>` : '');
+                    ? `<span class="expense-info-badge" style="display:inline-flex;align-items:center;padding:2px 6px;"><img src="${_ePm.icon_path}" style="width:20px;height:20px;object-fit:contain;"></span>`
+                    : (_ePm ? `<span class="expense-info-badge" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;"><span style="width:10px;height:10px;border-radius:50%;background:${_ePm.color||'#999'};flex-shrink:0;"></span>${_ePm.description}</span>` : '');
                 return `
                 <div class="bg-white rounded-lg shadow p-4 mb-4">
                     <div class="flex justify-between items-stretch">
