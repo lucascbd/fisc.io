@@ -3066,14 +3066,11 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
 
     key = settings.GEMINI_API_KEY.strip()
     print(f"[agent] GEMINI_API_KEY length={len(key)} prefix={key[:8] if key else 'EMPTY'}", flush=True)
-    # Tentar ambos os métodos de autenticação: Bearer (novo formato AQ.*) e x-goog-api-key (formato AIza*)
-    if key.startswith("AQ."):
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
-        auth_headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
-    else:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={key}"
-        auth_headers = {"Content-Type": "application/json"}
-    req = _urllib_req.Request(url, data=payload, headers=auth_headers, method="POST")
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    req = _urllib_req.Request(url, data=payload,
+                              headers={"Content-Type": "application/json",
+                                       "x-goog-api-key": key},
+                              method="POST")
     try:
         with _urllib_req.urlopen(req, timeout=30) as resp:
             result = json.loads(resp.read())
