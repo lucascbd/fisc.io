@@ -3064,7 +3064,7 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
     }).encode()
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
     req = _urllib_req.Request(url, data=payload,
                               headers={"Content-Type": "application/json",
                                        "x-goog-api-key": settings.GEMINI_API_KEY},
@@ -3084,6 +3084,22 @@ Responda perguntas sobre os dados acima. Seja direto e útil."""
         raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {e}")
 
     return {"reply": reply}
+
+
+@app.get(f"{settings.API_V1_PREFIX}/agent/models")
+def agent_list_models(_: User = Depends(get_current_user)):
+    """Lista modelos disponíveis para a API key configurada (diagnóstico)."""
+    import urllib.request as _ur
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={settings.GEMINI_API_KEY}"
+    try:
+        with _ur.urlopen(url, timeout=10) as r:
+            data = json.loads(r.read())
+        names = [m["name"] for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
+        return {"models": names}
+    except _ur.HTTPError as e:
+        raise HTTPException(status_code=500, detail=e.read().decode()[:300])
 
 
 # ============================================================================
