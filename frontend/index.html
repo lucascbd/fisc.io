@@ -759,6 +759,28 @@
         .dark-mode .sidebar-divider {
             background: #3c4043;
         }
+        .sidebar-logout-footer {
+            border-top: 1px solid #dadce0;
+            padding: 10px 16px;
+            display: flex;
+            justify-content: flex-end;
+            flex-shrink: 0;
+        }
+        .sidebar-logout-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #d93025;
+            transition: color .15s;
+        }
+        .sidebar-logout-btn:hover { color: #b31412; }
+        .dark-mode .sidebar-logout-footer { border-top-color: #3c4043; }
+        .dark-mode .sidebar-logout-btn { color: #f28b82; }
+        .dark-mode .sidebar-logout-btn:hover { color: #ff8983; }
         .dark-mode .dark-invert-icon { filter: invert(1); }
         .inst-label { color: #4B5563; }
         .dark-mode .inst-label { color: #e8eaed; }
@@ -1296,7 +1318,20 @@
         .dark-mode *::-webkit-scrollbar-thumb:hover {
             background: rgba(154, 160, 166, 0.7) !important;
         }
-        
+
+        /* Ocultar scrollbar absolutamente em dispositivos touch/mobile */
+        @media (hover: none) {
+            *, *::before, *::after {
+                scrollbar-width: none !important;
+                -ms-overflow-style: none !important;
+            }
+            *::-webkit-scrollbar {
+                display: none !important;
+                width: 0 !important;
+                height: 0 !important;
+            }
+        }
+
         /* Impedir scroll do body quando sidebar ou modal está aberto */
         body.sidebar-open,
         body.modal-open {
@@ -1496,7 +1531,6 @@
                         <img src="/icons/system/settings.png" style="width:20px;height:20px;object-fit:contain;">
                     </button>
                     
-                    <button onclick="logout()" class="text-sm text-red-400">Sair</button>
                 </div>
             </div>
         </nav>
@@ -1622,6 +1656,9 @@
                         <!-- Conteúdo carregado dinamicamente -->
                     </div>
                 </div>
+            </div>
+            <div class="sidebar-logout-footer">
+                <button onclick="logout()" class="sidebar-logout-btn">Sair</button>
             </div>
         </div>
 
@@ -2476,9 +2513,9 @@
                 document.getElementById('sidebarBtnAddProfile')?.classList.add('hidden');
             }
             
-            // Carregar tema salvo
+            // Carregar tema salvo (dark mode é padrão quando não há preferência)
             const savedTheme = localStorage.getItem('darkMode');
-            if (savedTheme === 'true') {
+            if (savedTheme === null || savedTheme === 'true') {
                 document.body.classList.add('dark-mode');
                 document.getElementById('darkModeToggle')?.classList.add('active');
                 const themeColor = document.getElementById('themeColorMeta');
@@ -2664,10 +2701,11 @@
                 }).join('');
             }
 
-            // Botões aba Despesas
+            // Botões aba Despesas (apenas PMs com despesas no mês filtrado)
             const econt = document.getElementById('expensePmFiltersContainer');
             if (econt) {
-                econt.innerHTML = myPms.map(pm => {
+                const visibleExpPms = window._pmIdsExpense ? myPms.filter(pm => window._pmIdsExpense.has(pm.id)) : myPms;
+                econt.innerHTML = visibleExpPms.map(pm => {
                     const on = activeExpensePmFilter.length > 0 && activeExpensePmFilter.includes(pm.id);
                     const iconHtml = pm.icon_path
                         ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
@@ -2682,7 +2720,8 @@
             id = parseInt(id);
             const idx = activeExpensePmFilter.indexOf(id);
             if (idx > -1) activeExpensePmFilter.splice(idx, 1); else activeExpensePmFilter.push(id);
-            if (activeExpensePmFilter.length === userPms(user.id).length) activeExpensePmFilter = [];
+            const visibleCount = window._pmIdsExpense ? userPms(user.id).filter(p => window._pmIdsExpense.has(p.id)).length : userPms(user.id).length;
+            if (activeExpensePmFilter.length === visibleCount) activeExpensePmFilter = [];
             applyExpensePmFilterStyles();
             loadExpenses();
         }
@@ -2984,7 +3023,7 @@
                                             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
                                                 <span style="font-size: 12px; font-weight: 600; color: ${labelColor};">${tgt.emoji} ${tgt.name}</span>
                                                 <span style="font-size: 12px; font-weight: 600; color: ${valueColor};">
-                                                    R$ ${formatBRL(spent)} / R$ ${formatBRL(targetAmt)}
+                                                    R$ ${formatBRL(spent)} <span style="font-weight: 400; color: ${isDark ? '#9aa0a6' : '#80868b'};">(${targetAmt > 0 ? (spent/targetAmt*100).toFixed(1).replace('.',',') : '0,0'}%)</span> / R$ ${formatBRL(targetAmt)}
                                                 </span>
                                             </div>
                                             <div style="position:relative; height: 6px; background: ${trackColor}; border-radius: 3px; overflow: hidden; margin-bottom: 0px;">
@@ -3271,6 +3310,11 @@
                         profiles.filter(p => profIds.has(p.id)).map(p => `<option value="${p.id}">${p.emoji||'⚖️'} ${p.name}</option>`).join('');
                     if (current && profIds.has(parseInt(current))) profileSelect.value = current;
                 }
+                // Métodos de pagamento com despesas no mês filtrado
+                const pmIdsInMonth = new Set(expenses.filter(e => e.payment_method_id != null).map(e => e.payment_method_id));
+                window._pmIdsExpense = pmIdsInMonth.size > 0 ? pmIdsInMonth : null;
+                if (window._pmIdsExpense) activeExpensePmFilter = activeExpensePmFilter.filter(id => window._pmIdsExpense.has(id));
+                renderPmFilterButtons();
             } catch (e) { console.log('Filtros fallback'); }
             loadExpenses();
         }
@@ -3342,8 +3386,8 @@
                             }
                             <div class="flex gap-2 justify-end">
                                 ${_ePm?.is_card ? `<button onclick="postponeExpense(${e.id})" class="text-gray-600 text-sm" title="Jogar pro próximo mês">➡️</button>` : ''}
-                                <button onclick="editExpense(${e.id})" class="text-blue-600 text-sm">✏️</button>
-                                <button onclick="deleteItem('expenses', ${e.id})" class="text-red-600 text-sm">🗑️</button>
+                                ${(user.is_admin || e.created_by_user_id === user.id) ? `<button onclick="editExpense(${e.id})" class="text-blue-600 text-sm">✏️</button>` : ''}
+                                ${(user.is_admin || e.created_by_user_id === user.id) ? `<button onclick="deleteItem('expenses', ${e.id})" class="text-red-600 text-sm">🗑️</button>` : ''}
                             </div>
                         </div>
                     </div>
@@ -9136,24 +9180,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             }, {passive: true});
             
             console.log('Swipe ativado');
-
-            // Hide tab bar scrollbar on initial load; only reveal on actual horizontal drag
-            (function() {
-                const bar = document.getElementById('tabsBar');
-                if (!bar) return;
-                bar.style.overflowX = 'hidden';
-                let _tsX = 0;
-                function onTouchStart(e) { _tsX = e.touches[0].clientX; }
-                function onTouchMove(e) {
-                    if (Math.abs(e.touches[0].clientX - _tsX) > 8) {
-                        bar.style.overflowX = '';
-                        bar.removeEventListener('touchstart', onTouchStart);
-                        bar.removeEventListener('touchmove', onTouchMove);
-                    }
-                }
-                bar.addEventListener('touchstart', onTouchStart, { passive: true });
-                bar.addEventListener('touchmove', onTouchMove, { passive: true });
-            })();
         })();
     </script>
 

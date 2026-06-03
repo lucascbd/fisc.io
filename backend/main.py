@@ -1758,7 +1758,8 @@ async def list_expenses(
         "category_emoji": e.category.icon,
         "split_profile_id": e.split_profile_id,
         "profile_name": e.split_profile.name,
-        "notes": e.notes
+        "notes": e.notes,
+        "created_by_user_id": e.created_by_user_id
     } for e in expenses]
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/with-splits")
@@ -1836,6 +1837,7 @@ async def list_expenses_with_splits(
             "split_profile_id": e.split_profile_id,
             "profile_name": e.split_profile.name,
             "notes": e.notes,
+            "created_by_user_id": e.created_by_user_id,
             "splits": [{
                 "id": s.id,
                 "user_id": s.user_id,
@@ -2156,6 +2158,7 @@ async def get_dashboard(
             "split_profile_id": e.split_profile_id,
             "profile_name": e.split_profile.name,
             "notes": e.notes,
+            "created_by_user_id": e.created_by_user_id,
             "splits": [{
                 "id": s.id,
                 "user_id": s.user_id,
