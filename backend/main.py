@@ -2941,7 +2941,7 @@ async def delete_income(income_id: int, db: Session = Depends(get_db), _: User =
     return {"ok": True}
 
 # ============================================================================
-# AGENT ENDPOINT — Gemini AI financial assistant
+# AGENT ENDPOINT — Gemini AI financial assistant with function calling
 # ============================================================================
 
 class AgentMessage(BaseModel):
@@ -2952,6 +2952,108 @@ class AgentChatRequest(BaseModel):
     message: str
     history: List[AgentMessage] = []
 
+# ── Agent DB tool implementations ────────────────────────────────────────────
+
+def _agent_monthly_expenses(year: int, month: int, user_id: int, db) -> dict:
+    from collections import defaultdict as _dd
+    month_str = f"{year}-{month:02d}"
+    rows = (db.query(Category.name, func.sum(ExpenseSplit.user_amount))
+            .join(Expense, Expense.id == ExpenseSplit.expense_id)
+            .join(Category, Category.id == Expense.category_id)
+            .filter(ExpenseSplit.user_id == user_id,
+                    func.to_char(ExpenseSplit.due_date, 'YYYY-MM') == month_str)
+            .group_by(Category.name)
+            .order_by(func.sum(ExpenseSplit.user_amount).desc())
+            .all())
+    if not rows:
+        return {"mes": month_str, "total": 0.0, "por_categoria": [],
+                "observacao": "Nenhuma despesa registrada neste mês."}
+    cats = [{"categoria": r[0], "total": round(float(r[1]), 2)} for r in rows]
+    return {"mes": month_str, "total": round(sum(c["total"] for c in cats), 2), "por_categoria": cats}
+
+
+def _agent_expenses_by_category(category_name: str, start_date: str, end_date: str, user_id: int, db) -> dict:
+    rows = (db.query(func.to_char(ExpenseSplit.due_date, 'YYYY-MM'), Category.name,
+                     func.sum(ExpenseSplit.user_amount))
+            .join(Expense, Expense.id == ExpenseSplit.expense_id)
+            .join(Category, Category.id == Expense.category_id)
+            .filter(ExpenseSplit.user_id == user_id,
+                    func.to_char(ExpenseSplit.due_date, 'YYYY-MM') >= start_date[:7],
+                    func.to_char(ExpenseSplit.due_date, 'YYYY-MM') <= end_date[:7],
+                    func.lower(Category.name).contains(category_name.lower()))
+            .group_by(func.to_char(ExpenseSplit.due_date, 'YYYY-MM'), Category.name)
+            .order_by(func.to_char(ExpenseSplit.due_date, 'YYYY-MM'))
+            .all())
+    if not rows:
+        return {"erro": f"Nenhum gasto encontrado para '{category_name}' no período {start_date} a {end_date}."}
+    by_month: dict = {}
+    cat_names: set = set()
+    for mes, cat, total in rows:
+        cat_names.add(cat)
+        by_month[mes] = by_month.get(mes, 0.0) + float(total)
+    monthly = [{"mes": k, "total": round(v, 2)} for k, v in sorted(by_month.items())]
+    total = sum(v["total"] for v in monthly)
+    return {"categorias_encontradas": list(cat_names), "periodo": f"{start_date} a {end_date}",
+            "total": round(total, 2),
+            "media_mensal": round(total / len(monthly), 2) if monthly else 0,
+            "por_mes": monthly}
+
+
+def _agent_historical_inflation(start_date: str, end_date: str, db) -> dict:
+    from sqlalchemy import text as _text
+    try:
+        sy, sm = map(int, start_date[:7].split('-'))
+        ey, em = map(int, end_date[:7].split('-'))
+    except Exception:
+        return {"erro": "Formato de data inválido. Use YYYY-MM."}
+    start_int, end_int = sy * 100 + sm, ey * 100 + em
+    rows = db.execute(_text(
+        'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+        'AND lower("D4N") LIKE \'%geral%\' ORDER BY "D3C"'
+    ), {"s": start_int, "e": end_int}).fetchall()
+    if not rows:
+        rows = db.execute(_text(
+            'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+            'ORDER BY "D3C","D4C" LIMIT 60'
+        ), {"s": start_int, "e": end_int}).fetchall()
+    if not rows:
+        return {"observacao": "Sem dados IPCA disponíveis para o período.", "periodo": f"{start_date} a {end_date}"}
+    data = [{"mes": f"{r[0]//100}-{r[0]%100:02d}", "categoria": r[1],
+             "variacao_pct": float(r[2]) if r[2] is not None else None} for r in rows]
+    return {"periodo": f"{start_date} a {end_date}", "fonte": "IBGE/SIDRA", "dados": data}
+
+
+# ── Gemini tools declaration ──────────────────────────────────────────────────
+
+_AGENT_TOOLS = [{"function_declarations": [
+    {
+        "name": "get_monthly_expenses",
+        "description": "Retorna o total de despesas e o detalhamento por categoria de um mês específico do usuário. Use sempre que precisar de dados de um mês concreto.",
+        "parameters": {"type": "object",
+                       "properties": {"year":  {"type": "integer", "description": "Ano (ex: 2025)"},
+                                      "month": {"type": "integer", "description": "Mês de 1 a 12"}},
+                       "required": ["year", "month"]}
+    },
+    {
+        "name": "get_expenses_by_category",
+        "description": "Retorna os gastos de uma categoria mês a mês em um intervalo de tempo. Use para tendências e comparações ao longo do tempo.",
+        "parameters": {"type": "object",
+                       "properties": {"category_name": {"type": "string", "description": "Nome ou parte do nome da categoria (ex: 'Alimentação')"},
+                                      "start_date":    {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":      {"type": "string", "description": "Data final YYYY-MM"}},
+                       "required": ["category_name", "start_date", "end_date"]}
+    },
+    {
+        "name": "get_historical_inflation",
+        "description": "Retorna dados do IPCA (inflação oficial brasileira) de um período. Use para contextualizar crescimento de gastos frente à inflação.",
+        "parameters": {"type": "object",
+                       "properties": {"start_date": {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":   {"type": "string", "description": "Data final YYYY-MM"}},
+                       "required": ["start_date", "end_date"]}
+    }
+]}]
+
+
 @app.post(f"{settings.API_V1_PREFIX}/agent/chat")
 def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     import urllib.request as _urllib_req
@@ -2959,133 +3061,88 @@ def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada no servidor")
 
     now = datetime.now()
-
-    # ── Despesas: últimos 3 meses por categoria (parte do usuário logado) ──
-    expense_lines = []
-    for delta in range(3):
-        if delta == 0:
-            m_date = now
-        else:
-            m_date = now.replace(day=1) - timedelta(days=1) if delta == 1 else \
-                     (now.replace(day=1) - timedelta(days=1)).replace(day=1) - timedelta(days=1)
-            m_date = now.replace(month=((now.month - delta - 1) % 12) + 1,
-                                  year=now.year + ((now.month - delta - 1) // 12) * -1
-                                  if now.month - delta <= 0 else now.year)
-        month_str = f"{m_date.year}-{m_date.month:02d}"
-        splits = (db.query(ExpenseSplit)
-                  .join(Expense, Expense.id == ExpenseSplit.expense_id)
-                  .filter(
-                      ExpenseSplit.user_id == current_user.id,
-                      func.to_char(ExpenseSplit.due_date, 'YYYY-MM') == month_str
-                  )
-                  .options(joinedload(ExpenseSplit.user))
-                  .all())
-        if not splits:
-            continue
-        # group by category
-        from collections import defaultdict
-        cat_totals: dict = defaultdict(float)
-        exp_ids = list({s.expense_id for s in splits})
-        expenses_q = db.query(Expense).options(joinedload(Expense.category)).filter(Expense.id.in_(exp_ids)).all()
-        exp_map = {e.id: e for e in expenses_q}
-        for s in splits:
-            cat_name = exp_map[s.expense_id].category.name if s.expense_id in exp_map else "?"
-            cat_totals[cat_name] += float(s.user_amount)
-        cats_str = ", ".join(f"{cat}: R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") for cat, v in sorted(cat_totals.items(), key=lambda x: -x[1]))
-        total = sum(cat_totals.values())
-        expense_lines.append(f"  {month_str}: Total R$ {total:,.2f} | {cats_str}".replace(",", "X").replace(".", ",").replace("X", "."))
-
-    # ── Receitas: últimos 3 meses ──
-    income_lines = []
-    incomes = db.query(Income).filter(
-        Income.user_id == current_user.id,
-        Income.income_date >= (now.replace(day=1) - timedelta(days=90))
-    ).all()
-    inc_by_month: dict = {}
-    for inc in incomes:
-        key = f"{inc.income_date.year}-{inc.income_date.month:02d}"
-        inc_by_month[key] = inc_by_month.get(key, 0) + float(inc.amount)
-    for k, v in sorted(inc_by_month.items(), reverse=True):
-        income_lines.append(f"  {k}: R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-
-    # ── Targets ──
     current_month_str = f"{now.year}-{now.month:02d}"
-    targets = db.query(Target).filter(Target.user_id == current_user.id, Target.is_active == True).all()
-    target_lines = []
-    for tgt in targets:
-        # gastos do target no mês atual
-        cat_ids = json.loads(tgt.category_ids) if tgt.category_ids else []
-        pm_ids = json.loads(tgt.payment_methods) if tgt.payment_methods else []
-        q = (db.query(func.sum(ExpenseSplit.user_amount))
-             .join(Expense, Expense.id == ExpenseSplit.expense_id)
-             .filter(
-                 ExpenseSplit.user_id == current_user.id,
-                 func.to_char(ExpenseSplit.due_date, 'YYYY-MM') == current_month_str
-             ))
-        if cat_ids:
-            q = q.filter(Expense.category_id.in_(cat_ids))
-        if pm_ids:
-            q = q.filter(Expense.payment_method_id.in_(pm_ids))
-        spent = float(q.scalar() or 0)
-        budget = float(tgt.monthly_amount)
-        pct = (spent / budget * 100) if budget > 0 else 0
-        target_lines.append(f"  {tgt.emoji} {tgt.name}: R$ {spent:,.2f} / R$ {budget:,.2f} ({pct:.1f}%)".replace(",", "X").replace(".", ",").replace("X", "."))
-
-    expenses_text = "\n".join(expense_lines) if expense_lines else "  Sem despesas registradas"
-    income_text = "\n".join(income_lines) if income_lines else "  Sem receitas registradas"
-    targets_text = "\n".join(target_lines) if target_lines else "  Sem metas configuradas"
 
     system_prompt = f"""Você é um assistente financeiro pessoal integrado ao app fisc.io.
 Responda sempre em português do Brasil, de forma clara e objetiva.
-Use markdown simples (negrito com **texto**) quando útil.
+Use markdown (negrito, listas, tabelas) quando útil para organizar a informação.
 
-=== DADOS DE {current_user.name.upper()} — {current_month_str} ===
+Usuário: {current_user.name}
+Mês atual: {current_month_str}
 
-DESPESAS (últimos 3 meses, parte de {current_user.name}):
-{expenses_text}
+Você tem acesso a ferramentas para consultar o banco de dados financeiro completo:
+- get_monthly_expenses(year, month): despesas totais e por categoria de qualquer mês
+- get_expenses_by_category(category_name, start_date, end_date): evolução de uma categoria ao longo do tempo
+- get_historical_inflation(start_date, end_date): IPCA mensal do período
 
-RECEITAS:
-{income_text}
+IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou estime valores."""
 
-METAS DO MÊS ATUAL:
-{targets_text}
-
-Responda perguntas sobre os dados acima. Seja direto e útil."""
-
-    # Build Gemini contents array
     contents = []
-    for h in data.history[-10:]:  # last 10 messages for context
+    for h in data.history[-10:]:
         contents.append({"role": h.role, "parts": [{"text": h.text}]})
     contents.append({"role": "user", "parts": [{"text": data.message}]})
 
-    payload = json.dumps({
-        "system_instruction": {"parts": [{"text": system_prompt}]},
-        "contents": contents,
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096}
-    }).encode()
-
     key = settings.GEMINI_API_KEY.strip()
-    print(f"[agent] GEMINI_API_KEY length={len(key)} prefix={key[:8] if key else 'EMPTY'}", flush=True)
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
-    req = _urllib_req.Request(url, data=payload,
-                              headers={"Content-Type": "application/json",
-                                       "x-goog-api-key": key},
-                              method="POST")
-    try:
-        with _urllib_req.urlopen(req, timeout=30) as resp:
-            result = json.loads(resp.read())
-        reply = result["candidates"][0]["content"]["parts"][0]["text"]
-    except _urllib_req.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        try:
-            msg = json.loads(body).get("error", {}).get("message", body[:300])
-        except Exception:
-            msg = body[:300]
-        raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {e}")
+    base_payload = {
+        "system_instruction": {"parts": [{"text": system_prompt}]},
+        "tools": _AGENT_TOOLS,
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096}
+    }
 
-    return {"reply": reply}
+    def _call(payload_dict: dict) -> dict:
+        payload = json.dumps(payload_dict).encode()
+        req = _urllib_req.Request(url, data=payload,
+                                  headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                                  method="POST")
+        try:
+            with _urllib_req.urlopen(req, timeout=30) as resp:
+                return json.loads(resp.read())
+        except _urllib_req.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            try:
+                msg = json.loads(body).get("error", {}).get("message", body[:300])
+            except Exception:
+                msg = body[:300]
+            raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
+        except Exception as ex:
+            raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
+
+    # Function-calling loop — up to 5 tool rounds
+    for _round in range(5):
+        result = _call({**base_payload, "contents": contents})
+        parts = result["candidates"][0]["content"]["parts"]
+
+        fn_calls = [p["functionCall"] for p in parts if "functionCall" in p]
+        if not fn_calls:
+            reply = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+            return {"reply": reply or "Não consegui gerar uma resposta. Tente novamente."}
+
+        # Append model's function-call turn
+        contents.append({"role": "model", "parts": parts})
+
+        # Execute each requested function
+        fn_responses = []
+        for fn in fn_calls:
+            name, args = fn["name"], fn.get("args", {})
+            try:
+                if name == "get_monthly_expenses":
+                    res = _agent_monthly_expenses(int(args["year"]), int(args["month"]), current_user.id, db)
+                elif name == "get_expenses_by_category":
+                    res = _agent_expenses_by_category(str(args["category_name"]), str(args["start_date"]),
+                                                      str(args["end_date"]), current_user.id, db)
+                elif name == "get_historical_inflation":
+                    res = _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db)
+                else:
+                    res = {"erro": f"Ferramenta '{name}' não reconhecida."}
+            except Exception as ex:
+                res = {"erro": f"Erro ao executar {name}: {ex}"}
+            fn_responses.append({"functionResponse": {"name": name, "response": {"result": res}}})
+
+        # Append function results as user turn
+        contents.append({"role": "user", "parts": fn_responses})
+
+    raise HTTPException(status_code=500, detail="Agente excedeu o limite de chamadas de ferramentas.")
 
 
 @app.get(f"{settings.API_V1_PREFIX}/agent/models")
