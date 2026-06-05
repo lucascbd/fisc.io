@@ -3058,7 +3058,7 @@ _AGENT_TOOLS = [{"function_declarations": [
 def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     import urllib.request as _urllib_req, time as _time
 
-    if not settings.GEMINI_API_KEY and not settings.DEEPSEEK_API_KEY:
+    if not settings.GEMINI_API_KEY and not settings.GROQ_API_KEY:
         raise HTTPException(status_code=503, detail="Nenhuma chave de IA configurada no servidor")
 
     now = datetime.now()
@@ -3140,8 +3140,8 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
 
     # ── DeepSeek implementation (OpenAI-compatible format) ────────────────────
     def _run_deepseek() -> str:
-        key = settings.DEEPSEEK_API_KEY.strip()
-        url = "https://api.deepseek.com/v1/chat/completions"
+        key = settings.GROQ_API_KEY.strip()
+        url = "https://api.groq.com/openai/v1/chat/completions"
         messages = [{"role": "system", "content": system_prompt}]
         for h in data.history[-10:]:
             messages.append({"role": "assistant" if h.role == "model" else "user", "content": h.text})
@@ -3151,7 +3151,7 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                     for fd in _AGENT_TOOLS[0]["function_declarations"]]
 
         def _dscall(msgs: list) -> dict:
-            payload = json.dumps({"model": "deepseek-chat", "messages": msgs, "tools": ds_tools,
+            payload = json.dumps({"model": "llama-3.3-70b-versatile", "messages": msgs, "tools": ds_tools,
                                   "max_tokens": 2048, "temperature": 0.7}).encode()
             req = _urllib_req.Request(url, data=payload,
                                       headers={"Content-Type": "application/json",
@@ -3166,9 +3166,9 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                     msg = json.loads(body).get("error", {}).get("message", body[:300])
                 except Exception:
                     msg = body[:300]
-                raise HTTPException(status_code=500, detail=f"DeepSeek: {msg}")
+                raise HTTPException(status_code=500, detail=f"Groq: {msg}")
             except Exception as ex:
-                raise HTTPException(status_code=500, detail=f"Erro ao chamar DeepSeek: {ex}")
+                raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
 
         for _ in range(3):
             result = _dscall(messages)
@@ -3196,14 +3196,14 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
             return {"reply": _run_gemini()}
         except HTTPException as e:
             detail_lower = e.detail.lower()
-            has_deepseek = bool(settings.DEEPSEEK_API_KEY)
+            has_deepseek = bool(settings.GROQ_API_KEY)
             is_retryable = any(p in detail_lower for p in _GEMINI_FALLBACK_PHRASES)
             if has_deepseek and is_retryable:
                 pass  # fall through to DeepSeek
             else:
                 raise
 
-    if settings.DEEPSEEK_API_KEY:
+    if settings.GROQ_API_KEY:
         return {"reply": _run_deepseek()}
 
     raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Tente novamente mais tarde.")
