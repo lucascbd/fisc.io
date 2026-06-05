@@ -2999,7 +2999,7 @@ def _agent_expenses_by_category(category_name: str, start_date: str, end_date: s
             "por_mes": monthly}
 
 
-def _agent_historical_inflation(start_date: str, end_date: str, db) -> dict:
+def _agent_historical_inflation(start_date: str, end_date: str, db, category_name: str = "") -> dict:
     from sqlalchemy import text as _text
     try:
         sy, sm = map(int, start_date[:7].split('-'))
@@ -3007,15 +3007,33 @@ def _agent_historical_inflation(start_date: str, end_date: str, db) -> dict:
     except Exception:
         return {"erro": "Formato de data inválido. Use YYYY-MM."}
     start_int, end_int = sy * 100 + sm, ey * 100 + em
-    rows = db.execute(_text(
-        'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
-        'AND lower("D4N") LIKE \'%geral%\' ORDER BY "D3C"'
-    ), {"s": start_int, "e": end_int}).fetchall()
-    if not rows:
+
+    if category_name:
+        # Buscar subcategoria IPCA pelo nome (ex: "Uber", "Transporte", "Alimentação")
         rows = db.execute(_text(
             'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
-            'ORDER BY "D3C","D4C" LIMIT 60'
+            'AND lower("D4N") LIKE :cat ORDER BY "D3C","D4C"'
+        ), {"s": start_int, "e": end_int, "cat": f"%{category_name.lower()}%"}).fetchall()
+        if not rows:
+            # Fallback: listar categorias disponíveis para ajudar o agente
+            avail = db.execute(_text(
+                'SELECT DISTINCT "D4N" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+                'ORDER BY "D4N" LIMIT 30'
+            ), {"s": start_int, "e": end_int}).fetchall()
+            cats = [r[0] for r in avail if r[0]]
+            return {"erro": f"Subcategoria IPCA '{category_name}' não encontrada.",
+                    "categorias_disponiveis": cats}
+    else:
+        rows = db.execute(_text(
+            'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+            'AND lower("D4N") LIKE \'%geral%\' ORDER BY "D3C"'
         ), {"s": start_int, "e": end_int}).fetchall()
+        if not rows:
+            rows = db.execute(_text(
+                'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+                'ORDER BY "D3C","D4C" LIMIT 60'
+            ), {"s": start_int, "e": end_int}).fetchall()
+
     if not rows:
         return {"observacao": "Sem dados IPCA disponíveis para o período.", "periodo": f"{start_date} a {end_date}"}
     data = [{"mes": f"{r[0]//100}-{r[0]%100:02d}", "categoria": r[1],
@@ -3045,10 +3063,11 @@ _AGENT_TOOLS = [{"function_declarations": [
     },
     {
         "name": "get_historical_inflation",
-        "description": "Retorna dados do IPCA (inflação oficial brasileira) de um período. Use para contextualizar crescimento de gastos frente à inflação.",
+        "description": "Retorna dados do IPCA (inflação oficial brasileira) de um período. Sem category_name retorna o índice geral. Com category_name filtra por subcategoria IPCA (ex: 'Transporte', 'Alimentação', 'Uber'). Se a categoria não for encontrada, retorna lista de categorias disponíveis.",
         "parameters": {"type": "object",
-                       "properties": {"start_date": {"type": "string", "description": "Data inicial YYYY-MM"},
-                                      "end_date":   {"type": "string", "description": "Data final YYYY-MM"}},
+                       "properties": {"start_date":    {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":      {"type": "string", "description": "Data final YYYY-MM"},
+                                      "category_name": {"type": "string", "description": "Nome ou parte do nome da subcategoria IPCA (opcional)"}},
                        "required": ["start_date", "end_date"]}
     }
 ]}]
@@ -3074,7 +3093,7 @@ Mês atual: {current_month_str}
 Você tem acesso a ferramentas para consultar o banco de dados financeiro completo:
 - get_monthly_expenses(year, month): despesas totais e por categoria de qualquer mês
 - get_expenses_by_category(category_name, start_date, end_date): evolução de uma categoria ao longo do tempo
-- get_historical_inflation(start_date, end_date): IPCA mensal do período
+- get_historical_inflation(start_date, end_date, category_name?): IPCA mensal do período; category_name filtra por subcategoria IPCA (ex: 'Transporte', 'Uber')
 
 IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou estime valores."""
 
@@ -3086,7 +3105,8 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                 return _agent_expenses_by_category(str(args["category_name"]), str(args["start_date"]),
                                                    str(args["end_date"]), current_user.id, db)
             elif name == "get_historical_inflation":
-                return _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db)
+                return _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db,
+                                                   str(args.get("category_name", "")))
             return {"erro": f"Ferramenta '{name}' não reconhecida."}
         except Exception as ex:
             return {"erro": f"Erro ao executar {name}: {ex}"}
@@ -3125,7 +3145,7 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                 except Exception as ex:
                     raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
 
-        for _ in range(3):
+        for _ in range(5):
             result = _gcall({**base, "contents": contents})
             parts = result["candidates"][0]["content"]["parts"]
             fn_calls = [p["functionCall"] for p in parts if "functionCall" in p]
@@ -3172,7 +3192,7 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
             except Exception as ex:
                 raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
 
-        for _ in range(3):
+        for _ in range(5):
             result = _dscall(messages)
             choice = result["choices"][0]
             msg_obj = choice["message"]
