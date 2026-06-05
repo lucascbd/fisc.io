@@ -2999,6 +2999,81 @@ def _agent_expenses_by_category(category_name: str, start_date: str, end_date: s
             "por_mes": monthly}
 
 
+def _agent_financial_summary(start_date: str, end_date: str, user_id: int, db) -> dict:
+    """Retorna resumo completo: despesas por categoria por mês + IPCA correlacionado + receitas."""
+    from sqlalchemy import text as _text
+    try:
+        sy, sm = map(int, start_date[:7].split('-'))
+        ey, em = map(int, end_date[:7].split('-'))
+        start_int, end_int = sy * 100 + sm, ey * 100 + em
+    except Exception:
+        return {"erro": "Formato de data inválido. Use YYYY-MM."}
+
+    # Despesas por mês e categoria (com código IPCA mapeado)
+    rows = db.execute(_text("""
+        SELECT to_char(es.due_date,'YYYY-MM') as mes,
+               c.name as categoria, c.ipca_category_code, c.ipca_category_name,
+               SUM(es.user_amount) as total
+        FROM expense_splits es
+        JOIN expenses e ON es.expense_id = e.id
+        JOIN categories c ON e.category_id = c.id
+        WHERE es.user_id = :uid
+          AND to_char(es.due_date,'YYYY-MM') >= :start
+          AND to_char(es.due_date,'YYYY-MM') <= :end
+        GROUP BY mes, c.name, c.ipca_category_code, c.ipca_category_name
+        ORDER BY mes, total DESC
+    """), {"uid": user_id, "start": start_date[:7], "end": end_date[:7]}).fetchall()
+
+    # IPCA por código de categoria (lookup em lote)
+    ipca_codes = list({r[2] for r in rows if r[2]})
+    ipca_by_code_month: dict = {}
+    if ipca_codes:
+        ipca_rows = db.execute(_text(
+            'SELECT "D4C","D3C","D4N","V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+            'AND "D4C"=ANY(:codes)'
+        ), {"s": start_int, "e": end_int, "codes": ipca_codes}).fetchall()
+        for d4c, d3c, d4n, v in ipca_rows:
+            mes_str = f"{d3c//100}-{d3c%100:02d}"
+            ipca_by_code_month[(d4c, mes_str)] = {"variacao_pct": float(v) if v is not None else None, "nome_ipca": d4n}
+
+    # IPCA geral
+    gen_rows = db.execute(_text(
+        'SELECT "D3C","V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e AND lower("D4N") LIKE \'%geral%\''
+    ), {"s": start_int, "e": end_int}).fetchall()
+    ipca_geral = {f"{r[0]//100}-{r[0]%100:02d}": (float(r[1]) if r[1] is not None else None) for r in gen_rows}
+
+    # Receitas por mês
+    inc_rows = (db.query(func.to_char(Income.income_date, 'YYYY-MM'), func.sum(Income.amount))
+                .filter(Income.user_id == user_id,
+                        func.to_char(Income.income_date, 'YYYY-MM') >= start_date[:7],
+                        func.to_char(Income.income_date, 'YYYY-MM') <= end_date[:7])
+                .group_by(func.to_char(Income.income_date, 'YYYY-MM')).all())
+    receitas = {r[0]: round(float(r[1]), 2) for r in inc_rows}
+
+    # Montar resultado por mês
+    months: dict = {}
+    for mes, cat, ipca_code, ipca_cat_name, total in rows:
+        if mes not in months:
+            months[mes] = {"mes": mes, "despesa_total": 0.0, "receita": receitas.get(mes, 0.0),
+                           "ipca_geral_pct": ipca_geral.get(mes), "categorias": []}
+        cat_ipca = ipca_by_code_month.get((ipca_code, mes)) if ipca_code else None
+        months[mes]["categorias"].append({
+            "categoria": cat, "total": round(float(total), 2),
+            "ipca_pct": cat_ipca["variacao_pct"] if cat_ipca else None,
+            "ipca_nome": cat_ipca["nome_ipca"] if cat_ipca else (ipca_cat_name or None)
+        })
+        months[mes]["despesa_total"] = round(months[mes]["despesa_total"] + float(total), 2)
+
+    result = sorted(months.values(), key=lambda x: x["mes"])
+    return {
+        "periodo": f"{start_date} a {end_date}",
+        "meses": result,
+        "total_despesas": round(sum(m["despesa_total"] for m in result), 2),
+        "total_receitas": round(sum(receitas.values()), 2),
+        "fonte_ipca": "IBGE/SIDRA"
+    }
+
+
 def _agent_historical_inflation(start_date: str, end_date: str, db, category_name: str = "") -> dict:
     from sqlalchemy import text as _text
     try:
@@ -3031,7 +3106,6 @@ def _agent_historical_inflation(start_date: str, end_date: str, db, category_nam
             'AND lower("D4N") LIKE :cat ORDER BY "D3C","D4C"'
         ), {"s": start_int, "e": end_int, "cat": f"%{category_name.lower()}%"}).fetchall()
         if not rows:
-            # Mostrar mapeamentos disponíveis para ajudar o agente
             mappings = (db.query(Category.name, Category.ipca_category_name)
                         .filter(Category.ipca_category_code.isnot(None), Category.is_active == True)
                         .all())
@@ -3080,6 +3154,14 @@ _AGENT_TOOLS = [{"function_declarations": [
                        "required": ["category_name", "start_date", "end_date"]}
     },
     {
+        "name": "get_financial_summary",
+        "description": "Retorna resumo financeiro COMPLETO de um período: TODAS as categorias de despesa por mês com valores, IPCA já correlacionado por categoria, receitas e IPCA geral. Use este tool PRIMEIRO para qualquer análise que envolva múltiplas categorias, comparações entre meses, inflação ponderada, ou visão geral das finanças.",
+        "parameters": {"type": "object",
+                       "properties": {"start_date": {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":   {"type": "string", "description": "Data final YYYY-MM"}},
+                       "required": ["start_date", "end_date"]}
+    },
+    {
         "name": "get_historical_inflation",
         "description": "Retorna dados do IPCA (inflação oficial brasileira) de um período. Sem category_name retorna o índice geral. Com category_name filtra por subcategoria IPCA (ex: 'Transporte', 'Alimentação', 'Uber'). Se a categoria não for encontrada, retorna lista de categorias disponíveis.",
         "parameters": {"type": "object",
@@ -3109,15 +3191,17 @@ Usuário: {current_user.name}
 Mês atual: {current_month_str}
 
 Você tem acesso a ferramentas para consultar o banco de dados financeiro completo:
-- get_monthly_expenses(year, month): despesas totais e por categoria de qualquer mês
+- get_financial_summary(start_date, end_date): TODAS as categorias + IPCA por categoria + receitas em uma única chamada. Use SEMPRE que a pergunta envolver múltiplas categorias, visão geral, inflação ponderada ou comparação entre meses.
+- get_monthly_expenses(year, month): despesas totais e por categoria de um único mês específico
 - get_expenses_by_category(category_name, start_date, end_date): evolução de uma categoria ao longo do tempo
-- get_historical_inflation(start_date, end_date, category_name?): IPCA mensal do período; ao passar category_name o sistema busca automaticamente o código IPCA mapeado para aquela categoria de despesa do app (ex: 'Uber' → código IPCA de transporte)
+- get_historical_inflation(start_date, end_date, category_name?): IPCA mensal; com category_name busca o código IPCA mapeado para aquela categoria do app
 
 REGRAS CRÍTICAS:
-1. NUNCA afirme ou estime variações percentuais sem antes chamar get_historical_inflation
-2. NUNCA diga que dados não estão disponíveis sem antes tentar buscar com as ferramentas
-3. Se get_historical_inflation retornar categorias_app_mapeadas, use essa lista para encontrar a categoria correta e buscar novamente
-4. Sempre consulte as ferramentas antes de responder — jamais deduza dados financeiros"""
+1. Para qualquer análise geral ou que envolva múltiplas categorias, chame get_financial_summary PRIMEIRO — ele retorna tudo de uma vez, incluindo IPCA já correlacionado por categoria.
+2. NUNCA afirme variações percentuais sem antes ter dados reais das ferramentas
+3. NUNCA diga que dados não estão disponíveis sem antes tentar buscar com as ferramentas
+4. Se get_historical_inflation retornar categorias_app_mapeadas, use essa lista para encontrar a categoria correta e buscar novamente
+5. Sempre consulte as ferramentas antes de responder — jamais deduza dados financeiros"""
 
     def _execute_tool(name: str, args: dict) -> dict:
         try:
@@ -3129,6 +3213,8 @@ REGRAS CRÍTICAS:
             elif name == "get_historical_inflation":
                 return _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db,
                                                    str(args.get("category_name", "")))
+            elif name == "get_financial_summary":
+                return _agent_financial_summary(str(args["start_date"]), str(args["end_date"]), current_user.id, db)
             return {"erro": f"Ferramenta '{name}' não reconhecida."}
         except Exception as ex:
             return {"erro": f"Erro ao executar {name}: {ex}"}
