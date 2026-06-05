@@ -3194,25 +3194,29 @@ REGRAS CRÍTICAS:
 
         def _dscall(msgs: list) -> dict:
             payload = json.dumps({"model": "llama-3.3-70b-versatile", "messages": msgs, "tools": ds_tools,
-                                  "max_tokens": 2048, "temperature": 0.7}).encode()
-            req = _urllib_req.Request(url, data=payload,
-                                      headers={"Content-Type": "application/json",
-                                               "Authorization": f"Bearer {key}",
-                                               "User-Agent": "fisc.io/1.0",
-                                               "Accept": "application/json"},
-                                      method="POST")
-            try:
-                with _urllib_req.urlopen(req, timeout=30) as resp:
-                    return json.loads(resp.read())
-            except _urllib_req.HTTPError as e:
-                body = e.read().decode("utf-8", errors="replace")
+                                  "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
+            for _attempt in range(2):
+                req = _urllib_req.Request(url, data=payload,
+                                          headers={"Content-Type": "application/json",
+                                                   "Authorization": f"Bearer {key}",
+                                                   "User-Agent": "fisc.io/1.0",
+                                                   "Accept": "application/json"},
+                                          method="POST")
                 try:
-                    msg = json.loads(body).get("error", {}).get("message", body[:300])
-                except Exception:
-                    msg = body[:300]
-                raise HTTPException(status_code=500, detail=f"Groq: {msg}")
-            except Exception as ex:
-                raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
+                    with _urllib_req.urlopen(req, timeout=30) as resp:
+                        return json.loads(resp.read())
+                except _urllib_req.HTTPError as e:
+                    body = e.read().decode("utf-8", errors="replace")
+                    try:
+                        msg = json.loads(body).get("error", {}).get("message", body[:300])
+                    except Exception:
+                        msg = body[:300]
+                    if _attempt == 0 and "failed to call a function" in msg.lower():
+                        _time.sleep(2)
+                        continue
+                    raise HTTPException(status_code=500, detail=f"Groq: {msg}")
+                except Exception as ex:
+                    raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
 
         for _ in range(5):
             result = _dscall(messages)
