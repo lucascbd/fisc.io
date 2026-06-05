@@ -3056,9 +3056,10 @@ _AGENT_TOOLS = [{"function_declarations": [
 
 @app.post(f"{settings.API_V1_PREFIX}/agent/chat")
 def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    import urllib.request as _urllib_req
-    if not settings.GEMINI_API_KEY:
-        raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada no servidor")
+    import urllib.request as _urllib_req, time as _time
+
+    if not settings.GEMINI_API_KEY and not settings.DEEPSEEK_API_KEY:
+        raise HTTPException(status_code=503, detail="Nenhuma chave de IA configurada no servidor")
 
     now = datetime.now()
     current_month_str = f"{now.year}-{now.month:02d}"
@@ -3077,28 +3078,87 @@ Você tem acesso a ferramentas para consultar o banco de dados financeiro comple
 
 IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou estime valores."""
 
-    contents = []
-    for h in data.history[-10:]:
-        contents.append({"role": h.role, "parts": [{"text": h.text}]})
-    contents.append({"role": "user", "parts": [{"text": data.message}]})
+    def _execute_tool(name: str, args: dict) -> dict:
+        try:
+            if name == "get_monthly_expenses":
+                return _agent_monthly_expenses(int(args["year"]), int(args["month"]), current_user.id, db)
+            elif name == "get_expenses_by_category":
+                return _agent_expenses_by_category(str(args["category_name"]), str(args["start_date"]),
+                                                   str(args["end_date"]), current_user.id, db)
+            elif name == "get_historical_inflation":
+                return _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db)
+            return {"erro": f"Ferramenta '{name}' não reconhecida."}
+        except Exception as ex:
+            return {"erro": f"Erro ao executar {name}: {ex}"}
 
-    key = settings.GEMINI_API_KEY.strip()
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
-    base_payload = {
-        "system_instruction": {"parts": [{"text": system_prompt}]},
-        "tools": _AGENT_TOOLS,
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 2048}
-    }
+    # ── Gemini implementation (custom format) ─────────────────────────────────
+    def _run_gemini() -> str:
+        key = settings.GEMINI_API_KEY.strip()
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+        contents = []
+        for h in data.history[-10:]:
+            contents.append({"role": h.role, "parts": [{"text": h.text}]})
+        contents.append({"role": "user", "parts": [{"text": data.message}]})
+        base = {"system_instruction": {"parts": [{"text": system_prompt}]},
+                "tools": _AGENT_TOOLS,
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 2048}}
 
-    def _call(payload_dict: dict) -> dict:
-        import time as _time
-        payload = json.dumps(payload_dict).encode()
-        for _attempt in range(2):
+        def _gcall(payload_dict: dict) -> dict:
+            payload = json.dumps(payload_dict).encode()
+            for _attempt in range(2):
+                req = _urllib_req.Request(url, data=payload,
+                                          headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                                          method="POST")
+                try:
+                    with _urllib_req.urlopen(req, timeout=20) as resp:
+                        return json.loads(resp.read())
+                except _urllib_req.HTTPError as e:
+                    body = e.read().decode("utf-8", errors="replace")
+                    try:
+                        msg = json.loads(body).get("error", {}).get("message", body[:300])
+                    except Exception:
+                        msg = body[:300]
+                    if _attempt == 0 and ("high demand" in msg or "overloaded" in msg.lower() or e.code == 429):
+                        _time.sleep(3)
+                        continue
+                    raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
+                except Exception as ex:
+                    raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
+
+        for _ in range(3):
+            result = _gcall({**base, "contents": contents})
+            parts = result["candidates"][0]["content"]["parts"]
+            fn_calls = [p["functionCall"] for p in parts if "functionCall" in p]
+            if not fn_calls:
+                return "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+            contents.append({"role": "model", "parts": parts})
+            fn_responses = [{"functionResponse": {"name": fn["name"],
+                                                   "response": {"result": _execute_tool(fn["name"], fn.get("args", {}))}}}
+                            for fn in fn_calls]
+            contents.append({"role": "user", "parts": fn_responses})
+        return "Agente excedeu o limite de chamadas de ferramentas."
+
+    # ── DeepSeek implementation (OpenAI-compatible format) ────────────────────
+    def _run_deepseek() -> str:
+        key = settings.DEEPSEEK_API_KEY.strip()
+        url = "https://api.deepseek.com/v1/chat/completions"
+        messages = [{"role": "system", "content": system_prompt}]
+        for h in data.history[-10:]:
+            messages.append({"role": "assistant" if h.role == "model" else "user", "content": h.text})
+        messages.append({"role": "user", "content": data.message})
+        ds_tools = [{"type": "function",
+                     "function": {"name": fd["name"], "description": fd["description"], "parameters": fd["parameters"]}}
+                    for fd in _AGENT_TOOLS[0]["function_declarations"]]
+
+        def _dscall(msgs: list) -> dict:
+            payload = json.dumps({"model": "deepseek-chat", "messages": msgs, "tools": ds_tools,
+                                  "max_tokens": 2048, "temperature": 0.7}).encode()
             req = _urllib_req.Request(url, data=payload,
-                                      headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                                      headers={"Content-Type": "application/json",
+                                               "Authorization": f"Bearer {key}"},
                                       method="POST")
             try:
-                with _urllib_req.urlopen(req, timeout=20) as resp:
+                with _urllib_req.urlopen(req, timeout=30) as resp:
                     return json.loads(resp.read())
             except _urllib_req.HTTPError as e:
                 body = e.read().decode("utf-8", errors="replace")
@@ -3106,49 +3166,47 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                     msg = json.loads(body).get("error", {}).get("message", body[:300])
                 except Exception:
                     msg = body[:300]
-                # Retry once on transient demand errors
-                if _attempt == 0 and ("high demand" in msg or "overloaded" in msg.lower() or e.code == 429):
-                    _time.sleep(3)
-                    continue
-                raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
+                raise HTTPException(status_code=500, detail=f"DeepSeek: {msg}")
             except Exception as ex:
-                raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
+                raise HTTPException(status_code=500, detail=f"Erro ao chamar DeepSeek: {ex}")
 
-    # Function-calling loop — up to 3 tool rounds
-    for _round in range(3):
-        result = _call({**base_payload, "contents": contents})
-        parts = result["candidates"][0]["content"]["parts"]
+        for _ in range(3):
+            result = _dscall(messages)
+            choice = result["choices"][0]
+            msg_obj = choice["message"]
+            tool_calls = msg_obj.get("tool_calls") or []
+            if not tool_calls or choice.get("finish_reason") == "stop":
+                return (msg_obj.get("content") or "").strip()
+            messages.append(msg_obj)
+            for tc in tool_calls:
+                try:
+                    tc_args = json.loads(tc["function"]["arguments"])
+                except Exception:
+                    tc_args = {}
+                res = _execute_tool(tc["function"]["name"], tc_args)
+                messages.append({"role": "tool", "tool_call_id": tc["id"],
+                                  "content": json.dumps(res, ensure_ascii=False)})
+        return "Agente excedeu o limite de chamadas de ferramentas."
 
-        fn_calls = [p["functionCall"] for p in parts if "functionCall" in p]
-        if not fn_calls:
-            reply = "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
-            return {"reply": reply or "Não consegui gerar uma resposta. Tente novamente."}
+    # ── Orchestration: Gemini first, DeepSeek as fallback ────────────────────
+    _GEMINI_FALLBACK_PHRASES = ("high demand", "limit: 20", "overloaded", "quota exceeded")
 
-        # Append model's function-call turn
-        contents.append({"role": "model", "parts": parts})
+    if settings.GEMINI_API_KEY:
+        try:
+            return {"reply": _run_gemini()}
+        except HTTPException as e:
+            detail_lower = e.detail.lower()
+            has_deepseek = bool(settings.DEEPSEEK_API_KEY)
+            is_retryable = any(p in detail_lower for p in _GEMINI_FALLBACK_PHRASES)
+            if has_deepseek and is_retryable:
+                pass  # fall through to DeepSeek
+            else:
+                raise
 
-        # Execute each requested function
-        fn_responses = []
-        for fn in fn_calls:
-            name, args = fn["name"], fn.get("args", {})
-            try:
-                if name == "get_monthly_expenses":
-                    res = _agent_monthly_expenses(int(args["year"]), int(args["month"]), current_user.id, db)
-                elif name == "get_expenses_by_category":
-                    res = _agent_expenses_by_category(str(args["category_name"]), str(args["start_date"]),
-                                                      str(args["end_date"]), current_user.id, db)
-                elif name == "get_historical_inflation":
-                    res = _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db)
-                else:
-                    res = {"erro": f"Ferramenta '{name}' não reconhecida."}
-            except Exception as ex:
-                res = {"erro": f"Erro ao executar {name}: {ex}"}
-            fn_responses.append({"functionResponse": {"name": name, "response": {"result": res}}})
+    if settings.DEEPSEEK_API_KEY:
+        return {"reply": _run_deepseek()}
 
-        # Append function results as user turn
-        contents.append({"role": "user", "parts": fn_responses})
-
-    raise HTTPException(status_code=500, detail="Agente excedeu o limite de chamadas de ferramentas.")
+    raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Tente novamente mais tarde.")
 
 
 @app.get(f"{settings.API_V1_PREFIX}/agent/models")

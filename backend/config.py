@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 52560000  # 100 anos — sessão nunca expira na prática
     API_V1_PREFIX: str = "/api/v1"
     GEMINI_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
 
     class Config:
         env_file = ".env"
