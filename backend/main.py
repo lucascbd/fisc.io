@@ -3091,22 +3091,28 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
     }
 
     def _call(payload_dict: dict) -> dict:
+        import time as _time
         payload = json.dumps(payload_dict).encode()
-        req = _urllib_req.Request(url, data=payload,
-                                  headers={"Content-Type": "application/json", "x-goog-api-key": key},
-                                  method="POST")
-        try:
-            with _urllib_req.urlopen(req, timeout=20) as resp:
-                return json.loads(resp.read())
-        except _urllib_req.HTTPError as e:
-            body = e.read().decode("utf-8", errors="replace")
+        for _attempt in range(2):
+            req = _urllib_req.Request(url, data=payload,
+                                      headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                                      method="POST")
             try:
-                msg = json.loads(body).get("error", {}).get("message", body[:300])
-            except Exception:
-                msg = body[:300]
-            raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
-        except Exception as ex:
-            raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
+                with _urllib_req.urlopen(req, timeout=20) as resp:
+                    return json.loads(resp.read())
+            except _urllib_req.HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace")
+                try:
+                    msg = json.loads(body).get("error", {}).get("message", body[:300])
+                except Exception:
+                    msg = body[:300]
+                # Retry once on transient demand errors
+                if _attempt == 0 and ("high demand" in msg or "overloaded" in msg.lower() or e.code == 429):
+                    _time.sleep(3)
+                    continue
+                raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
+            except Exception as ex:
+                raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
 
     # Function-calling loop — up to 3 tool rounds
     for _round in range(3):
