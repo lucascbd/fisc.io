@@ -3009,20 +3009,38 @@ def _agent_historical_inflation(start_date: str, end_date: str, db, category_nam
     start_int, end_int = sy * 100 + sm, ey * 100 + em
 
     if category_name:
-        # Buscar subcategoria IPCA pelo nome (ex: "Uber", "Transporte", "Alimentação")
+        # 1º: tentar encontrar a categoria de despesa no app e usar seu código IPCA mapeado
+        cat_obj = (db.query(Category)
+                   .filter(func.lower(Category.name).contains(category_name.lower()),
+                           Category.ipca_category_code.isnot(None))
+                   .first())
+        if cat_obj and cat_obj.ipca_category_code:
+            rows = db.execute(_text(
+                'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+                'AND "D4C"=:d4c ORDER BY "D3C"'
+            ), {"s": start_int, "e": end_int, "d4c": cat_obj.ipca_category_code}).fetchall()
+            if rows:
+                data = [{"mes": f"{r[0]//100}-{r[0]%100:02d}", "categoria_ipca": r[1],
+                         "categoria_app": cat_obj.name, "variacao_pct": float(r[2]) if r[2] is not None else None}
+                        for r in rows]
+                return {"periodo": f"{start_date} a {end_date}", "fonte": "IBGE/SIDRA",
+                        "categoria_buscada": category_name, "dados": data}
+        # 2º: buscar diretamente pelo nome na tabela IPCA
         rows = db.execute(_text(
             'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
             'AND lower("D4N") LIKE :cat ORDER BY "D3C","D4C"'
         ), {"s": start_int, "e": end_int, "cat": f"%{category_name.lower()}%"}).fetchall()
         if not rows:
-            # Fallback: listar categorias disponíveis para ajudar o agente
+            # Mostrar mapeamentos disponíveis para ajudar o agente
+            mappings = (db.query(Category.name, Category.ipca_category_name)
+                        .filter(Category.ipca_category_code.isnot(None), Category.is_active == True)
+                        .all())
             avail = db.execute(_text(
-                'SELECT DISTINCT "D4N" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
-                'ORDER BY "D4N" LIMIT 30'
+                'SELECT DISTINCT "D4N" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e ORDER BY "D4N" LIMIT 30'
             ), {"s": start_int, "e": end_int}).fetchall()
-            cats = [r[0] for r in avail if r[0]]
-            return {"erro": f"Subcategoria IPCA '{category_name}' não encontrada.",
-                    "categorias_disponiveis": cats}
+            return {"erro": f"Categoria '{category_name}' não encontrada no IPCA.",
+                    "categorias_app_mapeadas": [{"categoria_app": m[0], "ipca": m[1]} for m in mappings],
+                    "subcategorias_ipca_disponiveis": [r[0] for r in avail if r[0]]}
     else:
         rows = db.execute(_text(
             'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
@@ -3093,9 +3111,13 @@ Mês atual: {current_month_str}
 Você tem acesso a ferramentas para consultar o banco de dados financeiro completo:
 - get_monthly_expenses(year, month): despesas totais e por categoria de qualquer mês
 - get_expenses_by_category(category_name, start_date, end_date): evolução de uma categoria ao longo do tempo
-- get_historical_inflation(start_date, end_date, category_name?): IPCA mensal do período; category_name filtra por subcategoria IPCA (ex: 'Transporte', 'Uber')
+- get_historical_inflation(start_date, end_date, category_name?): IPCA mensal do período; ao passar category_name o sistema busca automaticamente o código IPCA mapeado para aquela categoria de despesa do app (ex: 'Uber' → código IPCA de transporte)
 
-IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou estime valores."""
+REGRAS CRÍTICAS:
+1. NUNCA afirme ou estime variações percentuais sem antes chamar get_historical_inflation
+2. NUNCA diga que dados não estão disponíveis sem antes tentar buscar com as ferramentas
+3. Se get_historical_inflation retornar categorias_app_mapeadas, use essa lista para encontrar a categoria correta e buscar novamente
+4. Sempre consulte as ferramentas antes de responder — jamais deduza dados financeiros"""
 
     def _execute_tool(name: str, args: dict) -> dict:
         try:
