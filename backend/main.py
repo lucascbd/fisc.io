@@ -3087,7 +3087,7 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
     base_payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "tools": _AGENT_TOOLS,
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4096}
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 2048}
     }
 
     def _call(payload_dict: dict) -> dict:
@@ -3096,7 +3096,7 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                                   headers={"Content-Type": "application/json", "x-goog-api-key": key},
                                   method="POST")
         try:
-            with _urllib_req.urlopen(req, timeout=30) as resp:
+            with _urllib_req.urlopen(req, timeout=20) as resp:
                 return json.loads(resp.read())
         except _urllib_req.HTTPError as e:
             body = e.read().decode("utf-8", errors="replace")
@@ -3108,8 +3108,8 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
         except Exception as ex:
             raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
 
-    # Function-calling loop — up to 5 tool rounds
-    for _round in range(5):
+    # Function-calling loop — up to 3 tool rounds
+    for _round in range(3):
         result = _call({**base_payload, "contents": contents})
         parts = result["candidates"][0]["content"]["parts"]
 
