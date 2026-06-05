@@ -3083,7 +3083,7 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
     contents.append({"role": "user", "parts": [{"text": data.message}]})
 
     key = settings.GEMINI_API_KEY.strip()
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent"
     base_payload = {
         "system_instruction": {"parts": [{"text": system_prompt}]},
         "tools": _AGENT_TOOLS,
