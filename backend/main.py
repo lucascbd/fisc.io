@@ -3266,91 +3266,10 @@ REGRAS CRÍTICAS:
             contents.append({"role": "user", "parts": fn_responses})
         return "Agente excedeu o limite de chamadas de ferramentas."
 
-    # ── DeepSeek implementation (OpenAI-compatible format) ────────────────────
-    def _run_deepseek() -> str:
-        key = settings.GROQ_API_KEY.strip()
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        messages = [{"role": "system", "content": system_prompt}]
-        for h in data.history[-10:]:
-            messages.append({"role": "assistant" if h.role == "model" else "user", "content": h.text})
-        messages.append({"role": "user", "content": data.message})
-        ds_tools = [{"type": "function",
-                     "function": {"name": fd["name"], "description": fd["description"], "parameters": fd["parameters"]}}
-                    for fd in _AGENT_TOOLS[0]["function_declarations"]]
-
-        _groq_model = "llama-3.3-70b-versatile"
-
-        def _dscall(msgs: list) -> dict:
-            nonlocal _groq_model
-            payload = json.dumps({"model": _groq_model, "messages": msgs, "tools": ds_tools,
-                                  "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
-            for _attempt in range(2):
-                req = _urllib_req.Request(url, data=payload,
-                                          headers={"Content-Type": "application/json",
-                                                   "Authorization": f"Bearer {key}",
-                                                   "User-Agent": "fisc.io/1.0",
-                                                   "Accept": "application/json"},
-                                          method="POST")
-                try:
-                    with _urllib_req.urlopen(req, timeout=30) as resp:
-                        return json.loads(resp.read())
-                except _urllib_req.HTTPError as e:
-                    body = e.read().decode("utf-8", errors="replace")
-                    try:
-                        msg = json.loads(body).get("error", {}).get("message", body[:300])
-                    except Exception:
-                        msg = body[:300]
-                    msg_lower = msg.lower()
-                    if _attempt == 0 and "failed to call a function" in msg_lower:
-                        _time.sleep(2)
-                        continue
-                    if "rate limit" in msg_lower and ("tokens per day" in msg_lower or "tpd" in msg_lower):
-                        if _groq_model != "llama-3.1-8b-instant":
-                            _groq_model = "llama-3.1-8b-instant"
-                            payload = json.dumps({"model": _groq_model, "messages": msgs, "tools": ds_tools,
-                                                  "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
-                            continue
-                    raise HTTPException(status_code=500, detail=f"Groq: {msg}")
-                except Exception as ex:
-                    raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
-
-        for _ in range(5):
-            result = _dscall(messages)
-            choice = result["choices"][0]
-            msg_obj = choice["message"]
-            tool_calls = msg_obj.get("tool_calls") or []
-            if not tool_calls or choice.get("finish_reason") == "stop":
-                return (msg_obj.get("content") or "").strip()
-            messages.append(msg_obj)
-            for tc in tool_calls:
-                try:
-                    tc_args = json.loads(tc["function"]["arguments"])
-                except Exception:
-                    tc_args = {}
-                res = _execute_tool(tc["function"]["name"], tc_args)
-                messages.append({"role": "tool", "tool_call_id": tc["id"],
-                                  "content": json.dumps(res, ensure_ascii=False)})
-        return "Agente excedeu o limite de chamadas de ferramentas."
-
-    # ── Orchestration: Gemini first, DeepSeek as fallback ────────────────────
-    _GEMINI_FALLBACK_PHRASES = ("high demand", "limit: 20", "overloaded", "quota exceeded")
-
-    if settings.GEMINI_API_KEY:
-        try:
-            return {"reply": _run_gemini()}
-        except HTTPException as e:
-            detail_lower = e.detail.lower()
-            has_deepseek = bool(settings.GROQ_API_KEY)
-            is_retryable = any(p in detail_lower for p in _GEMINI_FALLBACK_PHRASES)
-            if has_deepseek and is_retryable:
-                pass  # fall through to DeepSeek
-            else:
-                raise
-
-    if settings.GROQ_API_KEY:
-        return {"reply": _run_deepseek()}
-
-    raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Tente novamente mais tarde.")
+    # ── Orchestration ─────────────────────────────────────────────────────────
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Configure GEMINI_API_KEY.")
+    return {"reply": _run_gemini()}
 
 
 @app.get(f"{settings.API_V1_PREFIX}/agent/models")

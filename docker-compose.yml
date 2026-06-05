@@ -32,7 +32,6 @@ services:
       APP_NAME: ${APP_NAME}
       DEBUG: ${DEBUG}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
       - icons_uploads:/app/icons/uploads
