@@ -3278,8 +3278,11 @@ REGRAS CRÍTICAS:
                      "function": {"name": fd["name"], "description": fd["description"], "parameters": fd["parameters"]}}
                     for fd in _AGENT_TOOLS[0]["function_declarations"]]
 
+        _groq_model = "llama-3.3-70b-versatile"
+
         def _dscall(msgs: list) -> dict:
-            payload = json.dumps({"model": "llama-3.3-70b-versatile", "messages": msgs, "tools": ds_tools,
+            nonlocal _groq_model
+            payload = json.dumps({"model": _groq_model, "messages": msgs, "tools": ds_tools,
                                   "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
             for _attempt in range(2):
                 req = _urllib_req.Request(url, data=payload,
@@ -3297,9 +3300,16 @@ REGRAS CRÍTICAS:
                         msg = json.loads(body).get("error", {}).get("message", body[:300])
                     except Exception:
                         msg = body[:300]
-                    if _attempt == 0 and "failed to call a function" in msg.lower():
+                    msg_lower = msg.lower()
+                    if _attempt == 0 and "failed to call a function" in msg_lower:
                         _time.sleep(2)
                         continue
+                    if "rate limit" in msg_lower and ("tokens per day" in msg_lower or "tpd" in msg_lower):
+                        if _groq_model != "llama-3.1-8b-instant":
+                            _groq_model = "llama-3.1-8b-instant"
+                            payload = json.dumps({"model": _groq_model, "messages": msgs, "tools": ds_tools,
+                                                  "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
+                            continue
                     raise HTTPException(status_code=500, detail=f"Groq: {msg}")
                 except Exception as ex:
                     raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
