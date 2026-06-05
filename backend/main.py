@@ -3155,7 +3155,9 @@ IMPORTANTE: Sempre use as ferramentas para buscar dados reais. Não invente ou e
                                   "max_tokens": 2048, "temperature": 0.7}).encode()
             req = _urllib_req.Request(url, data=payload,
                                       headers={"Content-Type": "application/json",
-                                               "Authorization": f"Bearer {key}"},
+                                               "Authorization": f"Bearer {key}",
+                                               "User-Agent": "fisc.io/1.0",
+                                               "Accept": "application/json"},
                                       method="POST")
             try:
                 with _urllib_req.urlopen(req, timeout=30) as resp:
