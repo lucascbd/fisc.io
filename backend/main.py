@@ -3247,7 +3247,10 @@ REGRAS CRÍTICAS:
                     except Exception:
                         msg = body[:300]
                     if _attempt == 0 and ("high demand" in msg or "overloaded" in msg.lower() or e.code == 429):
-                        _time.sleep(3)
+                        import re as _re
+                        m = _re.search(r'retry in ([0-9.]+)s', msg)
+                        wait = min(float(m.group(1)), 55.0) if m else 5.0
+                        _time.sleep(wait)
                         continue
                     raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
                 except Exception as ex:
