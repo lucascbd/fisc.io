@@ -3492,26 +3492,26 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
     if not acct:
         raise HTTPException(status_code=404, detail="Conta não encontrada.")
     try:
-        import pluggy_sdk
-        from uuid import UUID as _UUID
+        import requests as _req
         from datetime import date as _date, datetime as _dt
         api_key = _pluggy_api_key()
-        df = _dt.fromisoformat(date_from) if date_from else _dt.combine(_date.today().replace(day=1), _dt.min.time())
-        dt = _dt.fromisoformat(date_to) if date_to else _dt.combine(_date.today(), _dt.max.time())
+        df = date_from or _date.today().replace(day=1).isoformat()
+        dt = date_to or _date.today().isoformat()
 
         all_txns = []
-        with _pluggy_client_with_key(api_key) as api_client:
-            tx_api = pluggy_sdk.TransactionApi(api_client)
-            cursor = None
-            for _ in range(10):  # max 10 pages
-                resp = tx_api.transactions_list_by_cursor(
-                    account_id=_UUID(acct.pluggy_account_id),
-                    date_from=df, date_to=dt, after=cursor
-                )
-                all_txns.extend(resp.results)
-                cursor = resp.next
-                if not cursor:
-                    break
+        headers = {"X-API-KEY": api_key, "Accept": "application/json"}
+        cursor = None
+        for _ in range(10):
+            params = {"accountId": acct.pluggy_account_id, "dateFrom": df, "dateTo": dt, "pageSize": 500}
+            if cursor:
+                params["after"] = cursor
+            r = _req.get("https://api.pluggy.ai/v2/transactions", headers=headers, params=params, timeout=30)
+            r.raise_for_status()
+            page = r.json()
+            all_txns.extend(page.get("results", []))
+            cursor = page.get("next")
+            if not cursor:
+                break
 
         # IDs já importados
         from sqlalchemy import text as _text
@@ -3521,20 +3521,12 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
         for row in db.execute(_text("SELECT pluggy_transaction_id FROM incomes WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
             imported.add(row[0])
 
-        def _tx_date(tx):
-            d = getattr(tx, 'var_date', None) or getattr(tx, 'date', None)
-            if d is None:
-                return ""
-            if hasattr(d, 'strftime'):
-                return d.strftime("%Y-%m-%d")
-            return str(d)[:10]
-
-        return {"transactions": [{"id": str(tx.id), "description": tx.description,
-                 "amount": float(tx.amount or 0),
-                 "date": _tx_date(tx),
-                 "type": str(tx.type or "DEBIT"),
-                 "category": getattr(tx, 'category', None),
-                 "already_imported": str(tx.id) in imported} for tx in all_txns]}
+        return {"transactions": [{"id": str(tx.get("id", "")),
+                 "description": tx.get("description", ""),
+                 "amount": float(tx.get("amount") or 0),
+                 "date": str(tx.get("date", ""))[:10],
+                 "type": str(tx.get("type", "DEBIT")),
+                 "already_imported": str(tx.get("id", "")) in imported} for tx in all_txns]}
     except HTTPException:
         raise
     except Exception as e:
