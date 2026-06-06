@@ -9521,7 +9521,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // use global arrays already loaded by the app; fallback to API if empty
                 const [catsArr, profsArr] = await Promise.all([
                     api(`${API}/categories`),
-                    api(`${API}/split-profiles`),
+                    api(`${API}/profiles`),
                 ]);
                 const catOpts = catsArr.map(c => `<option value="${c.id}">${c.icon||''} ${c.name}</option>`).join('');
                 const profOpts = profsArr.filter(p => p.is_active !== false).map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
