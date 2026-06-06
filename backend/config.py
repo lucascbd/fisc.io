@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 52560000  # 100 anos — sessão nunca expira na prática
     API_V1_PREFIX: str = "/api/v1"
     GEMINI_API_KEY: str = ""
+    PLUGGY_CLIENT_ID: str = ""
+    PLUGGY_CLIENT_SECRET: str = ""
 
     class Config:
         env_file = ".env"

@@ -32,6 +32,8 @@ services:
       APP_NAME: ${APP_NAME}
       DEBUG: ${DEBUG}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      PLUGGY_CLIENT_ID: ${PLUGGY_CLIENT_ID:-}
+      PLUGGY_CLIENT_SECRET: ${PLUGGY_CLIENT_SECRET:-}
     volumes:
       - ${FIREBASE_CREDENTIALS_PATH}:/app/firebase-credentials.json:ro
       - icons_uploads:/app/icons/uploads

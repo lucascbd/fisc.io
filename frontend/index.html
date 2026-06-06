@@ -17,6 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdn.pluggy.ai/pluggy-connect/v2/pluggy-connect.js"></script>
     <script>
         // Unregister datalabels globally — only use per-chart in inflation tab
         if (window.ChartDataLabels) Chart.unregister(ChartDataLabels);
@@ -1792,6 +1793,21 @@
                     gap: 2px;
                     min-width: 70px;
                 "><span style="font-size: 20px;">🤖</span><span>Agente</span></button>
+                <button onclick="showTab('openfinance', this)" id="tabOpenfinance" style="
+                    background-color: transparent;
+                    color: #5f6368;
+                    font-weight: 400;
+                    border: none;
+                    border-radius: 16px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                    min-width: 70px;
+                "><span style="font-size: 20px;">🏦</span><span>Open Finance</span></button>
                 <div style="min-width: 8px; flex-shrink: 0;">&nbsp;</div>
             </div>
         </div>
@@ -2143,6 +2159,38 @@
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Open Finance Tab -->
+            <div id="openfinanceTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow p-4 mb-4" id="ofAccountsCard">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <span class="font-semibold text-sm">🏦 Contas conectadas</span>
+                        <button onclick="ofConnect()" id="ofConnectBtn"
+                            style="background:#1a73e8;color:#fff;border:none;border-radius:16px;padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;">
+                            + Conectar banco
+                        </button>
+                    </div>
+                    <div id="ofAccountsList" style="display:flex;flex-direction:column;gap:6px;">
+                        <p class="text-gray-500 text-sm text-center py-2">Nenhuma conta conectada</p>
+                    </div>
+                </div>
+                <div class="mb-4 flex items-end gap-2" id="ofFiltersRow" style="display:none!important;">
+                    <div style="flex-shrink:0;">
+                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Conta</label>
+                        <select id="ofAccountSelect" onchange="ofLoadTransactions()" class="filter-h border rounded-lg px-2 text-sm"></select>
+                    </div>
+                    <div style="flex-shrink:0;">
+                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">De</label>
+                        <input type="date" id="ofDateFrom" onchange="ofLoadTransactions()" class="filter-h border rounded-lg px-2 text-sm">
+                    </div>
+                    <div style="flex-shrink:0;">
+                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Até</label>
+                        <input type="date" id="ofDateTo" onchange="ofLoadTransactions()" class="filter-h border rounded-lg px-2 text-sm">
+                    </div>
+                    <button onclick="ofLoadTransactions()" style="height:38px;background:#1a73e8;color:#fff;border:none;border-radius:8px;padding:0 14px;font-size:13px;cursor:pointer;flex-shrink:0;">↺</button>
+                </div>
+                <div id="ofTransactionsList"></div>
             </div>
 
         </div>
@@ -2611,7 +2659,7 @@
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
 
             // Resetar todos os botões para estilo não selecionado
-            const allTabs = ['tabHome', 'tabExpenses', 'tabCharts', 'tabInflation', 'tabIncome', 'tabAgent'];
+            const allTabs = ['tabHome', 'tabExpenses', 'tabCharts', 'tabInflation', 'tabIncome', 'tabAgent', 'tabOpenfinance'];
             allTabs.forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -2638,6 +2686,7 @@
             else if (tab === 'inflation') loadInflation();
             else if (tab === 'income') loadIncome();
             // agent tab needs no initial load
+            else if (tab === 'openfinance') loadOpenFinance();
         }
 
         // ✅ 8️⃣ Carregar meses e iniciar no mês vigente
@@ -9245,6 +9294,307 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         };
     </script>
 
+    <!-- ── OPEN FINANCE (Pluggy) ── -->
+    <script>
+        let _ofAccounts = [];
+        let _ofTxStore = {};
+
+        async function loadOpenFinance() {
+            await _ofLoadAccounts();
+        }
+
+        async function _ofLoadAccounts() {
+            try {
+                const data = await api(`${API}/openfinance/accounts`);
+                _ofAccounts = data || [];
+                const list = document.getElementById('ofAccountsList');
+                if (!_ofAccounts.length) {
+                    list.innerHTML = '<p class="text-gray-500 text-sm text-center py-2">Nenhuma conta conectada</p>';
+                    document.getElementById('ofFiltersRow').style.display = 'none';
+                    document.getElementById('ofTransactionsList').innerHTML = '';
+                    return;
+                }
+                list.innerHTML = _ofAccounts.map(a => `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8f9fa;border-radius:8px;">
+                        <div>
+                            <span style="font-weight:500;font-size:13px;">${a.account_name}</span>
+                            <span style="font-size:11px;color:#5f6368;margin-left:6px;">${a.account_type}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="font-size:11px;color:#5f6368;">${a.payment_method_name || '—'}</span>
+                            <button onclick="_ofDeleteAccount(${a.id})" style="background:none;border:none;cursor:pointer;color:#d93025;font-size:16px;padding:0 2px;">✕</button>
+                        </div>
+                    </div>
+                `).join('');
+                const sel = document.getElementById('ofAccountSelect');
+                sel.innerHTML = _ofAccounts.map(a => `<option value="${a.id}">${a.account_name}</option>`).join('');
+                document.getElementById('ofFiltersRow').style.cssText = '';
+                const today = new Date();
+                const from = new Date(today);
+                from.setDate(from.getDate() - 30);
+                const toEl = document.getElementById('ofDateTo');
+                const fromEl = document.getElementById('ofDateFrom');
+                if (!toEl.value) toEl.value = today.toISOString().slice(0,10);
+                if (!fromEl.value) fromEl.value = from.toISOString().slice(0,10);
+                ofLoadTransactions();
+            } catch(e) {
+                showToast('Erro ao carregar contas: ' + e.message, 'error');
+            }
+        }
+
+        async function ofConnect() {
+            try {
+                const resp = await api(`${API}/openfinance/connect-token`);
+                const token = resp.access_token;
+                new PluggyConnect({
+                    connectToken: token,
+                    onSuccess: async ({ item }) => { await _ofPickAccounts(item.id); },
+                    onError: (err) => showToast('Erro na conexão: ' + (err.message || err), 'error'),
+                }).init();
+            } catch(e) {
+                showToast('Erro ao gerar token Pluggy: ' + e.message, 'error');
+            }
+        }
+
+        async function _ofPickAccounts(itemId) {
+            try {
+                const data = await api(`${API}/openfinance/items/accounts`, 'POST', { item_id: itemId });
+                const accounts = data.accounts || [];
+                if (!accounts.length) { showToast('Nenhuma conta encontrada no item', 'warning'); return; }
+                const pms = await api(`${API}/payment-methods`);
+                const pmOptions = pms.map(p => `<option value="${p.id}">${p.description}</option>`).join('');
+                const rows = accounts.map(a => `
+                    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:10px;margin-bottom:8px;">
+                        <div style="font-weight:500;font-size:13px;">${a.name}</div>
+                        <div style="font-size:11px;color:#5f6368;margin-bottom:6px;">${a.type} • ${a.id}</div>
+                        <select id="pmFor_${a.id}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:4px 8px;font-size:12px;">
+                            <option value="">-- Método de pagamento (opcional) --</option>
+                            ${pmOptions}
+                        </select>
+                        <button onclick="_ofSaveAccount('${itemId}','${a.id}','${a.name}','${a.type}')"
+                            style="margin-top:6px;background:#1a73e8;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;width:100%;">
+                            Salvar
+                        </button>
+                    </div>
+                `).join('');
+                document.getElementById('modalContainer').innerHTML = `
+                    <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;" onclick="if(event.target===this)this.remove()">
+                        <div class="bg-white w-full max-w-sm overflow-auto flex flex-col" style="border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:80vh;padding:1.25rem;">
+                            <h3 style="font-weight:600;font-size:1rem;margin-bottom:12px;">Contas encontradas</h3>
+                            ${rows}
+                            <button onclick="document.getElementById('modalContainer').innerHTML=''" style="margin-top:8px;background:#f1f3f4;border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;">Fechar</button>
+                        </div>
+                    </div>`;
+            } catch(e) {
+                showToast('Erro ao buscar contas: ' + e.message, 'error');
+            }
+        }
+
+        async function _ofSaveAccount(itemId, accountId, accountName, accountType) {
+            const pmId = document.getElementById('pmFor_' + accountId)?.value || null;
+            try {
+                await api(`${API}/openfinance/accounts`, 'POST', {
+                    item_id: itemId,
+                    pluggy_account_id: accountId,
+                    account_name: accountName,
+                    account_type: accountType,
+                    payment_method_id: pmId ? parseInt(pmId) : null,
+                });
+                document.getElementById('modalContainer').innerHTML = '';
+                showToast('Conta salva!', 'success');
+                await _ofLoadAccounts();
+            } catch(e) {
+                showToast('Erro ao salvar conta: ' + e.message, 'error');
+            }
+        }
+
+        async function _ofDeleteAccount(id) {
+            if (!confirm('Remover esta conta?')) return;
+            try {
+                await api(`${API}/openfinance/accounts/${id}`, 'DELETE');
+                showToast('Conta removida', 'success');
+                await _ofLoadAccounts();
+            } catch(e) {
+                showToast('Erro: ' + e.message, 'error');
+            }
+        }
+
+        async function ofLoadTransactions() {
+            const accId = document.getElementById('ofAccountSelect').value;
+            const from = document.getElementById('ofDateFrom').value;
+            const to = document.getElementById('ofDateTo').value;
+            if (!accId || !from || !to) return;
+            const list = document.getElementById('ofTransactionsList');
+            list.innerHTML = '<p class="text-center text-sm text-gray-500 py-4">Carregando...</p>';
+            try {
+                const data = await api(`${API}/openfinance/transactions?account_id=${accId}&date_from=${from}&date_to=${to}`);
+                _ofTxStore = {};
+                (data.transactions || []).forEach(tx => { _ofTxStore[tx.id] = tx; });
+                _ofRenderTransactions(data.transactions || []);
+            } catch(e) {
+                list.innerHTML = `<p class="text-center text-sm py-4" style="color:#d93025;">${e.message}</p>`;
+            }
+        }
+
+        function _ofRenderTransactions(txs) {
+            const list = document.getElementById('ofTransactionsList');
+            if (!txs.length) {
+                list.innerHTML = '<p class="text-center text-sm text-gray-500 py-4">Nenhuma transação encontrada</p>';
+                return;
+            }
+            const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
+            const rows = txs.map(tx => {
+                const isDebit = tx.type === 'DEBIT';
+                const color = isDebit ? '#d93025' : '#1e8e3e';
+                const sign = isDebit ? '-' : '+';
+                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fff;border-bottom:1px solid #f1f3f4;" id="ofRow_${tx.id}">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tx.description}</div>
+                        <div style="font-size:11px;color:#5f6368;">${tx.date}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                        <span style="font-size:13px;font-weight:600;color:${color};">${sign}${fmt(tx.amount)}</span>
+                        ${tx.already_imported
+                            ? '<span style="font-size:11px;color:#5f6368;padding:2px 8px;background:#f1f3f4;border-radius:10px;">importado</span>'
+                            : isDebit
+                                ? `<button onclick="_ofShowImportExpense('${tx.id}')" style="font-size:11px;background:#1a73e8;color:#fff;border:none;border-radius:10px;padding:2px 8px;cursor:pointer;">+ Despesa</button>`
+                                : `<button onclick="_ofImportIncome('${tx.id}')" style="font-size:11px;background:#1e8e3e;color:#fff;border:none;border-radius:10px;padding:2px 8px;cursor:pointer;">+ Receita</button>`
+                        }
+                    </div>
+                </div>`;
+            }).join('');
+            list.innerHTML = `<div class="bg-white rounded-lg shadow overflow-hidden">${rows}</div>`;
+        }
+
+        async function _ofShowImportExpense(txId) {
+            const tx = _ofTxStore[txId];
+            if (!tx) return;
+            const [cats, profiles, pms] = await Promise.all([
+                api(`${API}/categories`),
+                api(`${API}/split-profiles`),
+                api(`${API}/payment-methods`),
+            ]);
+            const users = JSON.parse(localStorage.getItem('users') || '[]');
+            const catOpts = cats.filter(c => c.is_active).map(c => `<option value="${c.id}">${c.icon||''} ${c.name}</option>`).join('');
+            const profOpts = profiles.filter(p => p.is_active).map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
+            const userOpts = users.map(u => `<option value="${u.id}">${u.emoji||''} ${u.name}</option>`).join('');
+            const pmOpts = pms.map(p => `<option value="${p.id}">${p.description}</option>`).join('');
+            const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
+            const accId = document.getElementById('ofAccountSelect').value;
+            const acc = _ofAccounts.find(a => String(a.id) === String(accId));
+            document.getElementById('modalContainer').innerHTML = `
+                <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;" onclick="if(event.target===this)this.remove()">
+                    <div class="bg-white w-full max-w-sm overflow-auto flex flex-col" style="border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;padding:1.25rem;">
+                        <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;">Importar como Despesa</h3>
+                        <p style="font-size:12px;color:#5f6368;margin-bottom:12px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Descrição</label>
+                        <input id="ofExpDesc" value="${tx.description.replace(/"/g,'&quot;')}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Valor</label>
+                        <input id="ofExpAmt" type="number" step="0.01" value="${tx.amount}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Data</label>
+                        <input id="ofExpDate" type="date" value="${tx.date}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Categoria</label>
+                        <select id="ofExpCat" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">${catOpts}</select>
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Perfil de divisão</label>
+                        <select id="ofExpProf" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">${profOpts}</select>
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Pago por</label>
+                        <select id="ofExpUser" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">${userOpts}</select>
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Método de pagamento</label>
+                        <select id="ofExpPm" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                            <option value="">-- nenhum --</option>
+                            ${pmOpts}
+                        </select>
+                        <button onclick="_ofDoImportExpense('${txId}')" style="background:#1a73e8;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;margin-top:4px;">Importar</button>
+                        <button onclick="document.getElementById('modalContainer').innerHTML=''" style="background:#f1f3f4;border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;margin-top:6px;">Cancelar</button>
+                    </div>
+                </div>`;
+            if (acc?.payment_method_id) {
+                const pmSel = document.getElementById('ofExpPm');
+                if (pmSel) pmSel.value = String(acc.payment_method_id);
+            }
+            const me = JSON.parse(localStorage.getItem('user') || '{}');
+            if (me.id) {
+                const uSel = document.getElementById('ofExpUser');
+                if (uSel) uSel.value = String(me.id);
+            }
+        }
+
+        async function _ofDoImportExpense(txId) {
+            const desc = document.getElementById('ofExpDesc').value.trim();
+            const amt = parseFloat(document.getElementById('ofExpAmt').value);
+            const date = document.getElementById('ofExpDate').value;
+            const catId = parseInt(document.getElementById('ofExpCat').value);
+            const profId = parseInt(document.getElementById('ofExpProf').value);
+            const userId = parseInt(document.getElementById('ofExpUser').value);
+            const pmId = document.getElementById('ofExpPm').value;
+            if (!desc || isNaN(amt) || !date || isNaN(catId) || isNaN(profId) || isNaN(userId)) {
+                showToast('Preencha todos os campos obrigatórios', 'error'); return;
+            }
+            try {
+                await api(`${API}/openfinance/import/expense`, 'POST', {
+                    pluggy_transaction_id: txId,
+                    description: desc,
+                    amount: amt,
+                    expense_date: date,
+                    category_id: catId,
+                    split_profile_id: profId,
+                    paid_by_user_id: userId,
+                    payment_method_id: pmId ? parseInt(pmId) : null,
+                });
+                document.getElementById('modalContainer').innerHTML = '';
+                showToast('Despesa importada!', 'success');
+                const row = document.getElementById('ofRow_' + txId);
+                if (row) { const btn = row.querySelector('button'); if (btn) btn.outerHTML = '<span style="font-size:11px;color:#5f6368;padding:2px 8px;background:#f1f3f4;border-radius:10px;">importado</span>'; }
+            } catch(e) {
+                showToast('Erro ao importar: ' + e.message, 'error');
+            }
+        }
+
+        async function _ofImportIncome(txId) {
+            const tx = _ofTxStore[txId];
+            if (!tx) return;
+            const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
+            document.getElementById('modalContainer').innerHTML = `
+                <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;" onclick="if(event.target===this)this.remove()">
+                    <div class="bg-white w-full max-w-sm overflow-auto flex flex-col" style="border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;padding:1.25rem;">
+                        <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;">Importar como Receita</h3>
+                        <p style="font-size:12px;color:#5f6368;margin-bottom:12px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Descrição</label>
+                        <input id="ofIncDesc" value="${tx.description.replace(/"/g,'&quot;')}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Valor</label>
+                        <input id="ofIncAmt" type="number" step="0.01" value="${tx.amount}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Data</label>
+                        <input id="ofIncDate" type="date" value="${tx.date}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <button onclick="_ofDoImportIncome('${txId}')" style="background:#1e8e3e;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;margin-top:4px;">Importar</button>
+                        <button onclick="document.getElementById('modalContainer').innerHTML=''" style="background:#f1f3f4;border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;margin-top:6px;">Cancelar</button>
+                    </div>
+                </div>`;
+        }
+
+        async function _ofDoImportIncome(txId) {
+            const desc = document.getElementById('ofIncDesc').value.trim();
+            const amt = parseFloat(document.getElementById('ofIncAmt').value);
+            const date = document.getElementById('ofIncDate').value;
+            if (!desc || isNaN(amt) || !date) { showToast('Preencha todos os campos', 'error'); return; }
+            const me = JSON.parse(localStorage.getItem('user') || '{}');
+            try {
+                await api(`${API}/openfinance/import/income`, 'POST', {
+                    pluggy_transaction_id: txId,
+                    description: desc,
+                    amount: amt,
+                    income_date: date,
+                    user_id: me.id,
+                });
+                document.getElementById('modalContainer').innerHTML = '';
+                showToast('Receita importada!', 'success');
+                const row = document.getElementById('ofRow_' + txId);
+                if (row) { const btn = row.querySelector('button'); if (btn) btn.outerHTML = '<span style="font-size:11px;color:#5f6368;padding:2px 8px;background:#f1f3f4;border-radius:10px;">importado</span>'; }
+            } catch(e) {
+                showToast('Erro ao importar: ' + e.message, 'error');
+            }
+        }
+    </script>
+
     <!-- Service Worker será registrado automaticamente pelo Firebase -->
     <script>
         // SWIPE NAVIGATION - Mudar de aba deslizando
@@ -9253,7 +9603,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             
             // Função para obter tabs disponíveis dinamicamente
             function getAvailableTabs() {
-                const allTabs = ['home', 'expenses', 'charts', 'inflation', 'income', 'agent'];
+                const allTabs = ['home', 'expenses', 'charts', 'inflation', 'income', 'agent', 'openfinance'];
                 const available = [];
                 for (const t of allTabs) {
                     const tab = document.getElementById(t + 'Tab');

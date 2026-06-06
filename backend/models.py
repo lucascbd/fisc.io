@@ -109,6 +109,7 @@ class Expense(Base):
     payment_method_id = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
     original_date = Column(Date, nullable=True)                    # data real de lançamento (antes do ajuste de cartão)
     is_recurring = Column(Boolean, default=False, nullable=True)   # gerada por despesa recorrente
+    pluggy_transaction_id = Column(String(36), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_user_id = Column(Integer, ForeignKey("users.id"))
 
@@ -239,6 +240,24 @@ class Income(Base):
     income_date = Column(Date, nullable=False, index=True)
     notes       = Column(String, nullable=True)
     user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    pluggy_transaction_id = Column(String(36), nullable=True, unique=True, index=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", foreign_keys=[user_id], lazy="joined")
+
+
+class PluggyAccount(Base):
+    """Contas bancárias conectadas via Pluggy (Open Finance)"""
+    __tablename__ = "pluggy_accounts"
+
+    id                 = Column(Integer, primary_key=True, index=True)
+    user_id            = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id            = Column(String(36), nullable=False)
+    pluggy_account_id  = Column(String(36), nullable=False, unique=True, index=True)
+    account_name       = Column(String(200), nullable=False)
+    account_type       = Column(String(20), nullable=False)  # BANK or CREDIT
+    payment_method_id  = Column(Integer, ForeignKey("payment_methods.id", ondelete="SET NULL"), nullable=True)
+    created_at         = Column(DateTime(timezone=True), server_default=func.now())
+
+    user           = relationship("User", foreign_keys=[user_id])
+    payment_method = relationship("PaymentMethod", foreign_keys=[payment_method_id])

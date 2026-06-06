@@ -19,7 +19,7 @@ from decimal import Decimal
 
 from config import settings
 from database import Base, engine, get_db
-from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income
+from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income, PluggyAccount
 from expense_service import ExpenseService
 from firebase_service import FirebaseService
 
@@ -44,6 +44,8 @@ def _safe_add_column(sql: str):
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
 _safe_add_column("ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS interval NUMERIC(4,2) NOT NULL DEFAULT 0")
 _safe_add_column("ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT FALSE")
+_safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
+_safe_add_column("ALTER TABLE incomes ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
 
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
@@ -3177,7 +3179,7 @@ _AGENT_TOOLS = [{"function_declarations": [
 def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     import urllib.request as _urllib_req, time as _time
 
-    if not settings.GEMINI_API_KEY and not settings.GROQ_API_KEY:
+    if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Nenhuma chave de IA configurada no servidor")
 
     now = datetime.now()
@@ -3366,3 +3368,233 @@ async def audit_analyze(
             "micro":    len(result.micro_adjustments),
         },
     }
+
+
+# ── Open Finance (Pluggy) ─────────────────────────────────────────────────────
+
+def _pluggy_api_key() -> str:
+    """Authenticate with Pluggy and return a short-lived API key."""
+    if not settings.PLUGGY_CLIENT_ID or not settings.PLUGGY_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Open Finance não configurado no servidor.")
+    import pluggy_sdk
+    from uuid import UUID as _UUID
+    configuration = pluggy_sdk.Configuration()
+    with pluggy_sdk.ApiClient(configuration) as api_client:
+        auth = pluggy_sdk.AuthApi(api_client)
+        resp = auth.auth_create(
+            auth_request=pluggy_sdk.AuthRequest(
+                client_id=_UUID(settings.PLUGGY_CLIENT_ID),
+                client_secret=settings.PLUGGY_CLIENT_SECRET
+            )
+        )
+        return resp.api_key
+
+
+def _pluggy_client_with_key(api_key: str):
+    """Return a configured ApiClient using the Pluggy API key."""
+    import pluggy_sdk
+    cfg = pluggy_sdk.Configuration(api_key={"default": api_key})
+    return pluggy_sdk.ApiClient(cfg)
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/connect-token")
+def openfinance_connect_token(current_user: User = Depends(get_current_user)):
+    try:
+        import pluggy_sdk
+        api_key = _pluggy_api_key()
+        with _pluggy_client_with_key(api_key) as api_client:
+            auth = pluggy_sdk.AuthApi(api_client)
+            resp = auth.connect_token_create(
+                connect_token_request=pluggy_sdk.ConnectTokenRequest()
+            )
+            return {"access_token": resp.access_token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar token Pluggy: {e}")
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/accounts")
+def openfinance_list_accounts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    accounts = db.query(PluggyAccount).filter(PluggyAccount.user_id == current_user.id).all()
+    pm_map = {p.id: p.description for p in db.query(PaymentMethod).filter(PaymentMethod.user_id == current_user.id).all()}
+    return [{"id": a.id, "account_name": a.account_name, "account_type": a.account_type,
+             "pluggy_account_id": a.pluggy_account_id, "item_id": a.item_id,
+             "payment_method_id": a.payment_method_id,
+             "payment_method_name": pm_map.get(a.payment_method_id)} for a in accounts]
+
+
+class PluggyItemRequest(BaseModel):
+    item_id: str
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/items/accounts")
+def openfinance_item_accounts(data: PluggyItemRequest, _: User = Depends(get_current_user)):
+    """Retorna as contas de um item Pluggy (após conexão via widget)."""
+    try:
+        import pluggy_sdk
+        from uuid import UUID as _UUID
+        api_key = _pluggy_api_key()
+        with _pluggy_client_with_key(api_key) as api_client:
+            acct_api = pluggy_sdk.AccountApi(api_client)
+            resp = acct_api.accounts_list(item_id=_UUID(data.item_id))
+            return {"accounts": [{"id": str(a.id), "name": a.name, "type": str(a.type),
+                     "balance": float(a.balance or 0)} for a in resp.results]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar contas Pluggy: {e}")
+
+
+class SavePluggyAccountRequest(BaseModel):
+    item_id: str
+    pluggy_account_id: str
+    account_name: str
+    account_type: str
+    payment_method_id: Optional[int] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/accounts")
+def openfinance_save_account(data: SavePluggyAccountRequest, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
+    existing = db.query(PluggyAccount).filter(
+        PluggyAccount.pluggy_account_id == data.pluggy_account_id).first()
+    if existing:
+        existing.payment_method_id = data.payment_method_id
+        existing.item_id = data.item_id
+        db.commit()
+        return {"id": existing.id}
+    acct = PluggyAccount(user_id=current_user.id, item_id=data.item_id,
+                         pluggy_account_id=data.pluggy_account_id,
+                         account_name=data.account_name, account_type=data.account_type,
+                         payment_method_id=data.payment_method_id)
+    db.add(acct)
+    db.commit()
+    db.refresh(acct)
+    return {"id": acct.id}
+
+
+@app.delete(f"{settings.API_V1_PREFIX}/openfinance/accounts/{{account_id}}")
+def openfinance_delete_account(account_id: int, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    acct = db.query(PluggyAccount).filter(PluggyAccount.id == account_id,
+                                           PluggyAccount.user_id == current_user.id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    db.delete(acct)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/transactions")
+def openfinance_transactions(account_id: int, date_from: str = None, date_to: str = None,
+                              db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    acct = db.query(PluggyAccount).filter(PluggyAccount.id == account_id,
+                                           PluggyAccount.user_id == current_user.id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    try:
+        import pluggy_sdk
+        from uuid import UUID as _UUID
+        from datetime import date as _date, datetime as _dt
+        api_key = _pluggy_api_key()
+        df = _dt.fromisoformat(date_from) if date_from else _dt.combine(_date.today().replace(day=1), _dt.min.time())
+        dt = _dt.fromisoformat(date_to) if date_to else _dt.combine(_date.today(), _dt.max.time())
+
+        all_txns = []
+        with _pluggy_client_with_key(api_key) as api_client:
+            tx_api = pluggy_sdk.TransactionApi(api_client)
+            page = 1
+            while True:
+                resp = tx_api.transactions_list(
+                    account_id=_UUID(acct.pluggy_account_id),
+                    var_from=df, to=dt, page_size=500, page=page
+                )
+                all_txns.extend(resp.results)
+                total_pages = getattr(resp, 'total_pages', 1) or 1
+                if page >= total_pages or page >= 5:
+                    break
+                page += 1
+
+        # IDs já importados
+        from sqlalchemy import text as _text
+        imported = set()
+        for row in db.execute(_text("SELECT pluggy_transaction_id FROM expenses WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
+            imported.add(row[0])
+        for row in db.execute(_text("SELECT pluggy_transaction_id FROM incomes WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
+            imported.add(row[0])
+
+        def _tx_date(tx):
+            d = getattr(tx, 'var_date', None) or getattr(tx, 'date', None)
+            if d is None:
+                return ""
+            if hasattr(d, 'strftime'):
+                return d.strftime("%Y-%m-%d")
+            return str(d)[:10]
+
+        return {"transactions": [{"id": str(tx.id), "description": tx.description,
+                 "amount": float(tx.amount or 0),
+                 "date": _tx_date(tx),
+                 "type": str(tx.type or "DEBIT"),
+                 "category": getattr(tx, 'category', None),
+                 "already_imported": str(tx.id) in imported} for tx in all_txns]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar transações: {e}")
+
+
+class ImportExpenseRequest(BaseModel):
+    pluggy_transaction_id: str
+    description: str
+    amount: float
+    expense_date: str
+    category_id: int
+    split_profile_id: int
+    paid_by_user_id: Optional[int] = None
+    payment_method_id: Optional[int] = None
+    notes: Optional[str] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/import/expense")
+def openfinance_import_expense(data: ImportExpenseRequest, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    from sqlalchemy import text as _text
+    from datetime import date as _date
+    if db.execute(_text("SELECT id FROM expenses WHERE pluggy_transaction_id = :t"),
+                  {"t": data.pluggy_transaction_id}).fetchone():
+        raise HTTPException(status_code=409, detail="Transação já importada.")
+    exp = Expense(description=data.description, total_amount=data.amount, installments=1,
+                  expense_date=_date.fromisoformat(data.expense_date),
+                  paid_by_user_id=data.paid_by_user_id or current_user.id,
+                  category_id=data.category_id,
+                  split_profile_id=data.split_profile_id, notes=data.notes,
+                  payment_method_id=data.payment_method_id,
+                  created_by_user_id=current_user.id,
+                  pluggy_transaction_id=data.pluggy_transaction_id)
+    db.add(exp)
+    db.flush()
+    ExpenseService.create_splits(db, exp)
+    db.commit()
+    return {"id": exp.id}
+
+
+class ImportIncomeRequest(BaseModel):
+    pluggy_transaction_id: str
+    description: str
+    amount: float
+    income_date: str
+    notes: Optional[str] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/import/income")
+def openfinance_import_income(data: ImportIncomeRequest, db: Session = Depends(get_db),
+                               current_user: User = Depends(get_current_user)):
+    from sqlalchemy import text as _text
+    from datetime import date as _date
+    if db.execute(_text("SELECT id FROM incomes WHERE pluggy_transaction_id = :t"),
+                  {"t": data.pluggy_transaction_id}).fetchone():
+        raise HTTPException(status_code=409, detail="Transação já importada.")
+    inc = Income(description=data.description, amount=data.amount,
+                 income_date=_date.fromisoformat(data.income_date), notes=data.notes,
+                 user_id=current_user.id, pluggy_transaction_id=data.pluggy_transaction_id)
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+    return {"id": inc.id}
