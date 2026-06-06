@@ -3417,11 +3417,14 @@ def openfinance_connect_token(current_user: User = Depends(get_current_user)):
 @app.get(f"{settings.API_V1_PREFIX}/openfinance/accounts")
 def openfinance_list_accounts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     accounts = db.query(PluggyAccount).filter(PluggyAccount.user_id == current_user.id).all()
-    pm_map = {p.id: p.description for p in db.query(PaymentMethod).filter(PaymentMethod.user_id == current_user.id).all()}
+    pm_map = {p.id: {"name": p.description, "icon": p.icon_path, "color": p.color}
+              for p in db.query(PaymentMethod).filter(PaymentMethod.user_id == current_user.id).all()}
     return [{"id": a.id, "account_name": a.account_name, "account_type": a.account_type,
              "pluggy_account_id": a.pluggy_account_id, "item_id": a.item_id,
              "payment_method_id": a.payment_method_id,
-             "payment_method_name": pm_map.get(a.payment_method_id)} for a in accounts]
+             "payment_method_name": pm_map.get(a.payment_method_id, {}).get("name"),
+             "payment_method_icon": pm_map.get(a.payment_method_id, {}).get("icon"),
+             "payment_method_color": pm_map.get(a.payment_method_id, {}).get("color")} for a in accounts]
 
 
 class PluggyItemRequest(BaseModel):
@@ -3572,17 +3575,21 @@ def openfinance_import_expense(data: ImportExpenseRequest, db: Session = Depends
     if db.execute(_text("SELECT id FROM expenses WHERE pluggy_transaction_id = :t"),
                   {"t": data.pluggy_transaction_id}).fetchone():
         raise HTTPException(status_code=409, detail="Transação já importada.")
-    exp = Expense(description=data.description, total_amount=data.amount, installments=1,
-                  expense_date=_date.fromisoformat(data.expense_date),
-                  paid_by_user_id=data.paid_by_user_id or current_user.id,
-                  category_id=data.category_id,
-                  split_profile_id=data.split_profile_id, notes=data.notes,
-                  payment_method_id=data.payment_method_id,
-                  created_by_user_id=current_user.id,
-                  pluggy_transaction_id=data.pluggy_transaction_id)
-    db.add(exp)
-    db.flush()
-    ExpenseService.create_splits(db, exp)
+    from decimal import Decimal as _Dec
+    exp = ExpenseService.create_expense(
+        db,
+        paid_by_user_id=data.paid_by_user_id or current_user.id,
+        category_id=data.category_id,
+        split_profile_id=data.split_profile_id,
+        description=data.description,
+        total_amount=_Dec(str(data.amount)),
+        expense_date=_date.fromisoformat(data.expense_date),
+        notes=data.notes,
+        payment_method_id=data.payment_method_id,
+        created_by_user_id=current_user.id,
+    )
+    db.execute(_text("UPDATE expenses SET pluggy_transaction_id = :t WHERE id = :id"),
+               {"t": data.pluggy_transaction_id, "id": exp.id})
     db.commit()
     return {"id": exp.id}
 

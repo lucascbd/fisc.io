@@ -9343,7 +9343,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <span style="font-size:11px;color:#5f6368;margin-left:6px;">${a.account_type}</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:8px;">
-                            <span style="font-size:11px;color:#5f6368;">${a.payment_method_name || '—'}</span>
+                            ${a.payment_method_icon
+                                ? `<img src="${a.payment_method_icon}" style="width:22px;height:22px;object-fit:contain;border-radius:4px;" onerror="this.style.display='none'">`
+                                : a.payment_method_color
+                                    ? `<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${a.payment_method_color};flex-shrink:0;"></span>`
+                                    : '<span style="font-size:11px;color:#5f6368;">—</span>'}
                             <button onclick="_ofDeleteAccount(${a.id})" style="background:none;border:none;cursor:pointer;color:#d93025;font-size:16px;padding:0 2px;">✕</button>
                         </div>
                     </div>
@@ -9502,7 +9506,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f3f4;" id="ofRow_${tx.id}">
                     <div style="flex:1;min-width:0;margin-right:8px;">
                         <div class="of-desc" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tx.description}</div>
-                        <div class="of-date" style="font-size:11px;color:#5f6368;">${tx.date}</div>
+                        <div class="of-date" style="font-size:11px;color:#5f6368;">${tx.date} · ${tx.type === 'CREDIT' ? 'CRÉDITO' : 'DÉBITO'}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                         <span style="font-size:13px;font-weight:600;color:${color};">${sign}${fmt(tx.amount)}</span>
@@ -9513,18 +9517,59 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             list.innerHTML = `<div class="bg-white rounded-lg shadow overflow-hidden">${rows}</div>`;
         }
 
+        function _ofSelectCat(catId) {
+            document.getElementById('ofExpCat').value = catId;
+            const isDark = document.body.classList.contains('dark-mode');
+            document.querySelectorAll('.of-cat-option').forEach(el => {
+                if (parseInt(el.dataset.catId) === catId) {
+                    el.classList.add('selected');
+                    el.style.background = isDark ? '#8ab4f8' : '#e8f0fe';
+                    el.style.borderColor = isDark ? '#8ab4f8' : '#1a73e8';
+                } else {
+                    el.classList.remove('selected');
+                    el.style.background = isDark ? '#3c4043' : '#f8f9fa';
+                    el.style.borderColor = 'transparent';
+                }
+            });
+        }
+
+        function _ofSelectProf(profId) {
+            document.getElementById('ofExpProf').value = profId;
+            const isDark = document.body.classList.contains('dark-mode');
+            document.querySelectorAll('.of-prof-option').forEach(el => {
+                if (parseInt(el.dataset.profId) === profId) {
+                    el.classList.add('selected');
+                    el.style.background = isDark ? '#8ab4f8' : '#e8f0fe';
+                    el.style.borderColor = isDark ? '#8ab4f8' : '#1a73e8';
+                } else {
+                    el.classList.remove('selected');
+                    el.style.background = isDark ? '#3c4043' : '#f8f9fa';
+                    el.style.borderColor = 'transparent';
+                }
+            });
+        }
+
         async function _ofShowImportExpense(txId) {
             const tx = _ofTxStore[txId];
             if (!tx) return;
             try {
                 const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
-                // use global arrays already loaded by the app; fallback to API if empty
                 const [catsArr, profsArr] = await Promise.all([
                     api(`${API}/categories`),
                     api(`${API}/profiles`),
                 ]);
-                const catOpts = catsArr.map(c => `<option value="${c.id}">${c.icon||''} ${c.name}</option>`).join('');
-                const profOpts = profsArr.filter(p => p.is_active !== false).map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
+                const catGrid = catsArr.map(c => `
+                    <div onclick="_ofSelectCat(${c.id})" class="of-cat-option" data-cat-id="${c.id}"
+                        style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:55px;border-radius:12px;border:2px solid transparent;background:#f8f9fa;cursor:pointer;flex-shrink:0;">
+                        <span style="font-size:1.3rem;">${c.icon || '📁'}</span>
+                        <span style="font-size:9px;color:#5f6368;margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
+                    </div>`).join('');
+                const profGrid = profsArr.map(p => `
+                    <div onclick="_ofSelectProf(${p.id})" class="of-prof-option" data-prof-id="${p.id}"
+                        style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:55px;border-radius:12px;border:2px solid transparent;background:#f8f9fa;cursor:pointer;flex-shrink:0;">
+                        <span style="font-size:1.3rem;">${p.emoji || '⚖️'}</span>
+                        <span style="font-size:9px;color:#5f6368;margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</span>
+                    </div>`).join('');
                 const dupWarning = tx.possible_duplicate
                     ? `<div style="background:#fef7e0;border-radius:8px;padding:8px 10px;font-size:12px;color:#7a5600;margin-bottom:10px;">⚠ Possível duplicata detectada — já existe uma despesa com mesmo valor e data neste método de pagamento.</div>`
                     : '';
@@ -9534,18 +9579,23 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;">Importar como Despesa</h3>
                             <p style="font-size:12px;color:#5f6368;margin-bottom:10px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
                             ${dupWarning}
-                            <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Categoria</label>
-                            <select id="ofExpCat" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:10px;width:100%;box-sizing:border-box;">${catOpts}</select>
-                            <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Perfil de divisão</label>
-                            <select id="ofExpProf" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:14px;width:100%;box-sizing:border-box;">${profOpts}</select>
+                            <label style="font-size:12px;font-weight:500;margin-bottom:6px;">Categoria</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;max-height:180px;overflow-y:auto;">${catGrid}</div>
+                            <input type="hidden" id="ofExpCat">
+                            <label style="font-size:12px;font-weight:500;margin-bottom:6px;">Perfil de divisão</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">${profGrid}</div>
+                            <input type="hidden" id="ofExpProf">
                             <button onclick="_ofDoImportExpense('${txId}')" style="background:#1a73e8;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;">Importar</button>
                             <button onclick="document.getElementById('modalContainer').innerHTML=''" style="background:#f1f3f4;border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;margin-top:6px;">Cancelar</button>
                         </div>
                     </div>`;
-                // pre-select preferred category/profile if user has one
+                // pre-select preferred profile
                 if (user?.preferred_split_profile_id) {
-                    const sel = document.getElementById('ofExpProf');
-                    if (sel) sel.value = String(user.preferred_split_profile_id);
+                    _ofSelectProf(user.preferred_split_profile_id);
+                }
+                // auto-select first category if only one exists
+                if (catsArr.length === 1) {
+                    _ofSelectCat(catsArr[0].id);
                 }
             } catch(e) {
                 _ofNotify('Erro ao abrir formulário: ' + e.message, 'error');
