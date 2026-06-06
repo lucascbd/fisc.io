@@ -3502,17 +3502,16 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
         all_txns = []
         with _pluggy_client_with_key(api_key) as api_client:
             tx_api = pluggy_sdk.TransactionApi(api_client)
-            page = 1
-            while True:
-                resp = tx_api.transactions_list(
+            cursor = None
+            for _ in range(10):  # max 10 pages
+                resp = tx_api.transactions_list_by_cursor(
                     account_id=_UUID(acct.pluggy_account_id),
-                    var_from=df, to=dt, page_size=500, page=page
+                    date_from=df, date_to=dt, after=cursor
                 )
                 all_txns.extend(resp.results)
-                total_pages = getattr(resp, 'total_pages', 1) or 1
-                if page >= total_pages or page >= 5:
+                cursor = resp.next
+                if not cursor:
                     break
-                page += 1
 
         # IDs já importados
         from sqlalchemy import text as _text
