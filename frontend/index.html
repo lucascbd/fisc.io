@@ -17,7 +17,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-    <script src="https://cdn.pluggy.ai/pluggy-connect/v2/pluggy-connect.js"></script>
     <script>
         // Unregister datalabels globally — only use per-chart in inflation tab
         if (window.ChartDataLabels) Chart.unregister(ChartDataLabels);
@@ -9351,6 +9350,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
         async function ofConnect() {
             try {
+                if (typeof PluggyConnect === 'undefined') {
+                    await new Promise((resolve, reject) => {
+                        const s = document.createElement('script');
+                        s.src = 'https://cdn.pluggy.ai/pluggy-connect/v2/pluggy-connect.js';
+                        s.onload = resolve;
+                        s.onerror = () => reject(new Error('Falha ao carregar widget Pluggy. Verifique sua conexão.'));
+                        document.head.appendChild(s);
+                    });
+                }
                 const resp = await api(`${API}/openfinance/connect-token`);
                 const connectToken = resp.access_token;
                 new PluggyConnect({
@@ -9359,7 +9367,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     onError: (err) => _ofNotify('Erro na conexão: ' + (err.message || err), 'error'),
                 }).init();
             } catch(e) {
-                _ofNotify('Erro ao gerar token Pluggy: ' + e.message, 'error');
+                _ofNotify('Erro: ' + e.message, 'error');
             }
         }
 
