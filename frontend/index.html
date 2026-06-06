@@ -1807,7 +1807,7 @@
                     align-items: center;
                     gap: 2px;
                     min-width: 70px;
-                "><span style="font-size: 20px;">🏦</span><span>Open Finance</span></button>
+                "><span style="font-size: 20px;">🏦</span><span>Pluggy</span></button>
                 <div style="min-width: 8px; flex-shrink: 0;">&nbsp;</div>
             </div>
         </div>
@@ -9358,7 +9358,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
         async function _ofPickAccounts(itemId) {
             try {
-                const data = await api(`${API}/openfinance/items/accounts`, 'POST', { item_id: itemId });
+                const data = await api(`${API}/openfinance/items/accounts`, { method: 'POST', body: JSON.stringify({ item_id: itemId }) });
                 const accounts = data.accounts || [];
                 if (!accounts.length) { showToast('Nenhuma conta encontrada no item', 'warning'); return; }
                 const pms = await api(`${API}/payment-methods`);
@@ -9393,13 +9393,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         async function _ofSaveAccount(itemId, accountId, accountName, accountType) {
             const pmId = document.getElementById('pmFor_' + accountId)?.value || null;
             try {
-                await api(`${API}/openfinance/accounts`, 'POST', {
+                await api(`${API}/openfinance/accounts`, { method: 'POST', body: JSON.stringify({
                     item_id: itemId,
                     pluggy_account_id: accountId,
                     account_name: accountName,
                     account_type: accountType,
                     payment_method_id: pmId ? parseInt(pmId) : null,
-                });
+                }) });
                 document.getElementById('modalContainer').innerHTML = '';
                 showToast('Conta salva!', 'success');
                 await _ofLoadAccounts();
@@ -9411,7 +9411,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         async function _ofDeleteAccount(id) {
             if (!confirm('Remover esta conta?')) return;
             try {
-                await api(`${API}/openfinance/accounts/${id}`, 'DELETE');
+                await api(`${API}/openfinance/accounts/${id}`, { method: 'DELETE' });
                 showToast('Conta removida', 'success');
                 await _ofLoadAccounts();
             } catch(e) {
@@ -9531,7 +9531,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 showToast('Preencha todos os campos obrigatórios', 'error'); return;
             }
             try {
-                await api(`${API}/openfinance/import/expense`, 'POST', {
+                await api(`${API}/openfinance/import/expense`, { method: 'POST', body: JSON.stringify({
                     pluggy_transaction_id: txId,
                     description: desc,
                     amount: amt,
@@ -9540,7 +9540,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     split_profile_id: profId,
                     paid_by_user_id: userId,
                     payment_method_id: pmId ? parseInt(pmId) : null,
-                });
+                }) });
                 document.getElementById('modalContainer').innerHTML = '';
                 showToast('Despesa importada!', 'success');
                 const row = document.getElementById('ofRow_' + txId);
@@ -9578,13 +9578,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (!desc || isNaN(amt) || !date) { showToast('Preencha todos os campos', 'error'); return; }
             const me = JSON.parse(localStorage.getItem('user') || '{}');
             try {
-                await api(`${API}/openfinance/import/income`, 'POST', {
+                await api(`${API}/openfinance/import/income`, { method: 'POST', body: JSON.stringify({
                     pluggy_transaction_id: txId,
                     description: desc,
                     amount: amt,
                     income_date: date,
-                    user_id: me.id,
-                });
+                }) });
                 document.getElementById('modalContainer').innerHTML = '';
                 showToast('Receita importada!', 'success');
                 const row = document.getElementById('ofRow_' + txId);
