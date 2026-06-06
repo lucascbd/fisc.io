@@ -3500,14 +3500,11 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
 
         all_txns = []
         headers = {"X-API-KEY": api_key, "Accept": "application/json"}
-        # v2 expects full ISO datetime strings
-        df_iso = (df + "T00:00:00.000Z") if len(df) == 10 else df
-        dt_iso = (dt + "T23:59:59.999Z") if len(dt) == 10 else dt
         cursor = None
         for _ in range(10):
-            params = {"accountId": acct.pluggy_account_id, "from": df_iso, "to": dt_iso}
+            params = {"accountId": acct.pluggy_account_id, "dateFrom": df, "dateTo": dt}
             if cursor:
-                params["cursor"] = cursor
+                params["after"] = cursor
             r = _req.get("https://api.pluggy.ai/v2/transactions", headers=headers, params=params, timeout=30)
             if not r.ok:
                 raise HTTPException(status_code=500, detail=f"Pluggy API: {r.status_code} — {r.text}")
