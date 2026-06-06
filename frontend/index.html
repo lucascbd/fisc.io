@@ -9292,12 +9292,19 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 }
             }, 3000);  // 3 segundos para garantir que Service Worker está ativo
         };
-    </script>
 
-    <!-- ── OPEN FINANCE (Pluggy) ── -->
-    <script>
+        // ── OPEN FINANCE (Pluggy) ────────────────────────────────────────────
         let _ofAccounts = [];
         let _ofTxStore = {};
+
+        function _ofNotify(msg, type) {
+            const d = document.createElement('div');
+            d.textContent = msg;
+            const bg = type === 'error' ? '#d93025' : type === 'success' ? '#1e8e3e' : '#1a73e8';
+            d.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:${bg};color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 2px 8px rgba(0,0,0,0.3);pointer-events:none;`;
+            document.body.appendChild(d);
+            setTimeout(() => d.remove(), 3500);
+        }
 
         async function loadOpenFinance() {
             await _ofLoadAccounts();
@@ -9338,21 +9345,21 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (!fromEl.value) fromEl.value = from.toISOString().slice(0,10);
                 ofLoadTransactions();
             } catch(e) {
-                showToast('Erro ao carregar contas: ' + e.message, 'error');
+                _ofNotify('Erro ao carregar contas: ' + e.message, 'error');
             }
         }
 
         async function ofConnect() {
             try {
                 const resp = await api(`${API}/openfinance/connect-token`);
-                const token = resp.access_token;
+                const connectToken = resp.access_token;
                 new PluggyConnect({
-                    connectToken: token,
+                    connectToken,
                     onSuccess: async ({ item }) => { await _ofPickAccounts(item.id); },
-                    onError: (err) => showToast('Erro na conexão: ' + (err.message || err), 'error'),
+                    onError: (err) => _ofNotify('Erro na conexão: ' + (err.message || err), 'error'),
                 }).init();
             } catch(e) {
-                showToast('Erro ao gerar token Pluggy: ' + e.message, 'error');
+                _ofNotify('Erro ao gerar token Pluggy: ' + e.message, 'error');
             }
         }
 
@@ -9360,7 +9367,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             try {
                 const data = await api(`${API}/openfinance/items/accounts`, { method: 'POST', body: JSON.stringify({ item_id: itemId }) });
                 const accounts = data.accounts || [];
-                if (!accounts.length) { showToast('Nenhuma conta encontrada no item', 'warning'); return; }
+                if (!accounts.length) { _ofNotify('Nenhuma conta encontrada no item', 'error'); return; }
                 const pms = await api(`${API}/payment-methods`);
                 const pmOptions = pms.map(p => `<option value="${p.id}">${p.description}</option>`).join('');
                 const rows = accounts.map(a => `
@@ -9386,7 +9393,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         </div>
                     </div>`;
             } catch(e) {
-                showToast('Erro ao buscar contas: ' + e.message, 'error');
+                _ofNotify('Erro ao buscar contas: ' + e.message, 'error');
             }
         }
 
@@ -9401,10 +9408,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     payment_method_id: pmId ? parseInt(pmId) : null,
                 }) });
                 document.getElementById('modalContainer').innerHTML = '';
-                showToast('Conta salva!', 'success');
+                _ofNotify('Conta salva!', 'success');
                 await _ofLoadAccounts();
             } catch(e) {
-                showToast('Erro ao salvar conta: ' + e.message, 'error');
+                _ofNotify('Erro ao salvar conta: ' + e.message, 'error');
             }
         }
 
@@ -9412,10 +9419,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (!confirm('Remover esta conta?')) return;
             try {
                 await api(`${API}/openfinance/accounts/${id}`, { method: 'DELETE' });
-                showToast('Conta removida', 'success');
+                _ofNotify('Conta removida', 'success');
                 await _ofLoadAccounts();
             } catch(e) {
-                showToast('Erro: ' + e.message, 'error');
+                _ofNotify('Erro: ' + e.message, 'error');
             }
         }
 
@@ -9469,15 +9476,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         async function _ofShowImportExpense(txId) {
             const tx = _ofTxStore[txId];
             if (!tx) return;
-            const [cats, profiles, pms] = await Promise.all([
+            const [cats, profs, pms] = await Promise.all([
                 api(`${API}/categories`),
                 api(`${API}/split-profiles`),
                 api(`${API}/payment-methods`),
             ]);
-            const users = JSON.parse(localStorage.getItem('users') || '[]');
+            const usersArr = JSON.parse(localStorage.getItem('users') || '[]');
             const catOpts = cats.filter(c => c.is_active).map(c => `<option value="${c.id}">${c.icon||''} ${c.name}</option>`).join('');
-            const profOpts = profiles.filter(p => p.is_active).map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
-            const userOpts = users.map(u => `<option value="${u.id}">${u.emoji||''} ${u.name}</option>`).join('');
+            const profOpts = profs.filter(p => p.is_active).map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
+            const userOpts = usersArr.map(u => `<option value="${u.id}">${u.emoji||''} ${u.name}</option>`).join('');
             const pmOpts = pms.map(p => `<option value="${p.id}">${p.description}</option>`).join('');
             const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
             const accId = document.getElementById('ofAccountSelect').value;
@@ -9513,10 +9520,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (pmSel) pmSel.value = String(acc.payment_method_id);
             }
             const me = JSON.parse(localStorage.getItem('user') || '{}');
-            if (me.id) {
-                const uSel = document.getElementById('ofExpUser');
-                if (uSel) uSel.value = String(me.id);
-            }
+            if (me.id) { const uSel = document.getElementById('ofExpUser'); if (uSel) uSel.value = String(me.id); }
         }
 
         async function _ofDoImportExpense(txId) {
@@ -9528,7 +9532,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const userId = parseInt(document.getElementById('ofExpUser').value);
             const pmId = document.getElementById('ofExpPm').value;
             if (!desc || isNaN(amt) || !date || isNaN(catId) || isNaN(profId) || isNaN(userId)) {
-                showToast('Preencha todos os campos obrigatórios', 'error'); return;
+                _ofNotify('Preencha todos os campos obrigatórios', 'error'); return;
             }
             try {
                 await api(`${API}/openfinance/import/expense`, { method: 'POST', body: JSON.stringify({
@@ -9542,11 +9546,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     payment_method_id: pmId ? parseInt(pmId) : null,
                 }) });
                 document.getElementById('modalContainer').innerHTML = '';
-                showToast('Despesa importada!', 'success');
+                _ofNotify('Despesa importada!', 'success');
                 const row = document.getElementById('ofRow_' + txId);
                 if (row) { const btn = row.querySelector('button'); if (btn) btn.outerHTML = '<span style="font-size:11px;color:#5f6368;padding:2px 8px;background:#f1f3f4;border-radius:10px;">importado</span>'; }
             } catch(e) {
-                showToast('Erro ao importar: ' + e.message, 'error');
+                _ofNotify('Erro ao importar: ' + e.message, 'error');
             }
         }
 
@@ -9575,8 +9579,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             const desc = document.getElementById('ofIncDesc').value.trim();
             const amt = parseFloat(document.getElementById('ofIncAmt').value);
             const date = document.getElementById('ofIncDate').value;
-            if (!desc || isNaN(amt) || !date) { showToast('Preencha todos os campos', 'error'); return; }
-            const me = JSON.parse(localStorage.getItem('user') || '{}');
+            if (!desc || isNaN(amt) || !date) { _ofNotify('Preencha todos os campos', 'error'); return; }
             try {
                 await api(`${API}/openfinance/import/income`, { method: 'POST', body: JSON.stringify({
                     pluggy_transaction_id: txId,
@@ -9585,11 +9588,11 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     income_date: date,
                 }) });
                 document.getElementById('modalContainer').innerHTML = '';
-                showToast('Receita importada!', 'success');
+                _ofNotify('Receita importada!', 'success');
                 const row = document.getElementById('ofRow_' + txId);
                 if (row) { const btn = row.querySelector('button'); if (btn) btn.outerHTML = '<span style="font-size:11px;color:#5f6368;padding:2px 8px;background:#f1f3f4;border-radius:10px;">importado</span>'; }
             } catch(e) {
-                showToast('Erro ao importar: ' + e.message, 'error');
+                _ofNotify('Erro ao importar: ' + e.message, 'error');
             }
         }
     </script>
