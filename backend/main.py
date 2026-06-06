@@ -3514,20 +3514,39 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
             if not cursor:
                 break
 
-        # IDs já importados
+        # IDs já importados via pluggy_transaction_id
         from sqlalchemy import text as _text
+        from decimal import Decimal as _Dec
         imported = set()
         for row in db.execute(_text("SELECT pluggy_transaction_id FROM expenses WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
             imported.add(row[0])
         for row in db.execute(_text("SELECT pluggy_transaction_id FROM incomes WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
             imported.add(row[0])
 
+        # Duplicatas por (valor, data, método de pagamento)
+        dup_keys = set()
+        if acct.payment_method_id:
+            rows = db.execute(_text(
+                "SELECT total_amount::text, expense_date::text FROM expenses "
+                "WHERE payment_method_id = :pm AND pluggy_transaction_id IS NULL"
+            ), {"pm": acct.payment_method_id}).fetchall()
+            for r in rows:
+                dup_keys.add((str(r[0]), str(r[1])))
+
+        def _is_dup(tx):
+            if acct.payment_method_id is None:
+                return False
+            amt = f"{float(tx.get('amount') or 0):.2f}"
+            dt = str(tx.get("date", ""))[:10]
+            return (amt, dt) in dup_keys
+
         return {"transactions": [{"id": str(tx.get("id", "")),
                  "description": tx.get("description", ""),
                  "amount": float(tx.get("amount") or 0),
                  "date": str(tx.get("date", ""))[:10],
                  "type": str(tx.get("type", "DEBIT")),
-                 "already_imported": str(tx.get("id", "")) in imported} for tx in all_txns]}
+                 "already_imported": str(tx.get("id", "")) in imported,
+                 "possible_duplicate": not (str(tx.get("id", "")) in imported) and _is_dup(tx)} for tx in all_txns]}
     except HTTPException:
         raise
     except Exception as e:
