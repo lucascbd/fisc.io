@@ -9506,7 +9506,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f3f4;" id="ofRow_${tx.id}">
                     <div style="flex:1;min-width:0;margin-right:8px;">
                         <div class="of-desc" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tx.description}</div>
-                        <div class="of-date" style="font-size:11px;color:#5f6368;">${tx.date} · ${tx.type === 'CREDIT' ? 'CRÉDITO' : 'DÉBITO'}</div>
+                        <div class="of-date" style="font-size:11px;color:#5f6368;">${tx.date}</div>
+                        <div style="font-size:11px;color:#5f6368;">${tx.type === 'CREDIT' ? 'CRÉDITO' : 'DÉBITO'}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                         <span style="font-size:13px;font-weight:600;color:${color};">${sign}${fmt(tx.amount)}</span>
@@ -9520,32 +9521,34 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         function _ofSelectCat(catId) {
             document.getElementById('ofExpCat').value = catId;
             const isDark = document.body.classList.contains('dark-mode');
+            const bg = isDark ? '#3c4043' : '#f8f9fa';
+            const selBg = isDark ? '#8ab4f8' : '#e8f0fe';
+            const selBorder = isDark ? '#8ab4f8' : '#1a73e8';
+            const textColor = isDark ? '#9aa0a6' : '#5f6368';
             document.querySelectorAll('.of-cat-option').forEach(el => {
-                if (parseInt(el.dataset.catId) === catId) {
-                    el.classList.add('selected');
-                    el.style.background = isDark ? '#8ab4f8' : '#e8f0fe';
-                    el.style.borderColor = isDark ? '#8ab4f8' : '#1a73e8';
-                } else {
-                    el.classList.remove('selected');
-                    el.style.background = isDark ? '#3c4043' : '#f8f9fa';
-                    el.style.borderColor = 'transparent';
-                }
+                const isSel = parseInt(el.dataset.catId) === catId;
+                el.classList.toggle('selected', isSel);
+                el.style.background = isSel ? selBg : bg;
+                el.style.borderColor = isSel ? selBorder : 'transparent';
+                const spans = el.querySelectorAll('span');
+                if (spans[1]) spans[1].style.color = isSel && isDark ? '#202124' : textColor;
             });
         }
 
         function _ofSelectProf(profId) {
             document.getElementById('ofExpProf').value = profId;
             const isDark = document.body.classList.contains('dark-mode');
+            const bg = isDark ? '#3c4043' : '#f8f9fa';
+            const selBg = isDark ? '#8ab4f8' : '#e8f0fe';
+            const selBorder = isDark ? '#8ab4f8' : '#1a73e8';
+            const textColor = isDark ? '#9aa0a6' : '#5f6368';
             document.querySelectorAll('.of-prof-option').forEach(el => {
-                if (parseInt(el.dataset.profId) === profId) {
-                    el.classList.add('selected');
-                    el.style.background = isDark ? '#8ab4f8' : '#e8f0fe';
-                    el.style.borderColor = isDark ? '#8ab4f8' : '#1a73e8';
-                } else {
-                    el.classList.remove('selected');
-                    el.style.background = isDark ? '#3c4043' : '#f8f9fa';
-                    el.style.borderColor = 'transparent';
-                }
+                const isSel = parseInt(el.dataset.profId) === profId;
+                el.classList.toggle('selected', isSel);
+                el.style.background = isSel ? selBg : bg;
+                el.style.borderColor = isSel ? selBorder : 'transparent';
+                const spans = el.querySelectorAll('span');
+                if (spans[1]) spans[1].style.color = isSel && isDark ? '#202124' : textColor;
             });
         }
 
@@ -9558,45 +9561,58 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     api(`${API}/categories`),
                     api(`${API}/profiles`),
                 ]);
+                const isDark = document.body.classList.contains('dark-mode');
+                const optionBg         = isDark ? '#3c4043' : '#f8f9fa';
+                const optionSelectedBg = isDark ? '#8ab4f8' : '#e8f0fe';
+                const optionBorder     = isDark ? '#8ab4f8' : '#1a73e8';
+                const optionTextColor  = isDark ? '#9aa0a6' : '#5f6368';
+                const modalBg   = isDark ? '#2d2e30' : '#ffffff';
+                const titleColor = isDark ? '#e8eaed' : '#202124';
+                const cancelBg  = isDark ? '#3c4043' : '#f1f3f4';
+
+                const prefProfId = user?.preferred_split_profile_id || null;
+
                 const catGrid = catsArr.map(c => `
-                    <div onclick="_ofSelectCat(${c.id})" class="of-cat-option" data-cat-id="${c.id}"
-                        style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:55px;border-radius:12px;border:2px solid transparent;background:#f8f9fa;cursor:pointer;flex-shrink:0;">
+                    <div onclick="_ofSelectCat(${c.id})"
+                         class="of-cat-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all"
+                         data-cat-id="${c.id}"
+                         style="background:${optionBg};border:2px solid transparent;width:60px;height:55px;flex-shrink:0;">
                         <span style="font-size:1.3rem;">${c.icon || '📁'}</span>
-                        <span style="font-size:9px;color:#5f6368;margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
+                        <span style="font-size:9px;color:${optionTextColor};margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.name}</span>
                     </div>`).join('');
-                const profGrid = profsArr.map(p => `
-                    <div onclick="_ofSelectProf(${p.id})" class="of-prof-option" data-prof-id="${p.id}"
-                        style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:55px;border-radius:12px;border:2px solid transparent;background:#f8f9fa;cursor:pointer;flex-shrink:0;">
+
+                const profGrid = profsArr.map(p => {
+                    const isSel = p.id === prefProfId;
+                    return `
+                    <div onclick="_ofSelectProf(${p.id})"
+                         class="of-prof-option flex flex-col items-center justify-center rounded-xl cursor-pointer transition-all${isSel ? ' selected' : ''}"
+                         data-prof-id="${p.id}"
+                         style="background:${isSel ? optionSelectedBg : optionBg};border:2px solid ${isSel ? optionBorder : 'transparent'};width:60px;height:55px;flex-shrink:0;">
                         <span style="font-size:1.3rem;">${p.emoji || '⚖️'}</span>
-                        <span style="font-size:9px;color:#5f6368;margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</span>
-                    </div>`).join('');
+                        <span style="font-size:9px;color:${isSel && isDark ? '#202124' : optionTextColor};margin-top:2px;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</span>
+                    </div>`;
+                }).join('');
+
                 const dupWarning = tx.possible_duplicate
                     ? `<div style="background:#fef7e0;border-radius:8px;padding:8px 10px;font-size:12px;color:#7a5600;margin-bottom:10px;">⚠ Possível duplicata detectada — já existe uma despesa com mesmo valor e data neste método de pagamento.</div>`
                     : '';
+
                 document.getElementById('modalContainer').innerHTML = `
                     <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;" onclick="if(event.target===this)this.remove()">
-                        <div class="bg-white w-full max-w-sm overflow-auto flex flex-col" style="border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;padding:1.25rem;">
-                            <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;">Importar como Despesa</h3>
-                            <p style="font-size:12px;color:#5f6368;margin-bottom:10px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
+                        <div class="w-full max-w-sm overflow-auto flex flex-col" style="background:${modalBg};border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;padding:1.25rem;">
+                            <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;color:${titleColor};">Importar como Despesa</h3>
+                            <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
                             ${dupWarning}
-                            <label style="font-size:12px;font-weight:500;margin-bottom:6px;">Categoria</label>
-                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;max-height:180px;overflow-y:auto;">${catGrid}</div>
+                            <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Categoria</label>
                             <input type="hidden" id="ofExpCat">
-                            <label style="font-size:12px;font-weight:500;margin-bottom:6px;">Perfil de divisão</label>
-                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">${profGrid}</div>
-                            <input type="hidden" id="ofExpProf">
+                            <div class="flex flex-wrap gap-2 justify-center" style="margin-bottom:16px;">${catGrid}</div>
+                            <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Perfil de divisão</label>
+                            <input type="hidden" id="ofExpProf" value="${prefProfId || ''}">
+                            <div class="flex flex-wrap gap-2 justify-center" style="margin-bottom:16px;">${profGrid}</div>
                             <button onclick="_ofDoImportExpense('${txId}')" style="background:#1a73e8;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;">Importar</button>
-                            <button onclick="document.getElementById('modalContainer').innerHTML=''" style="background:#f1f3f4;border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;margin-top:6px;">Cancelar</button>
+                            <button onclick="document.getElementById('modalContainer').innerHTML=''" style="background:${cancelBg};border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;margin-top:6px;color:${titleColor};">Cancelar</button>
                         </div>
                     </div>`;
-                // pre-select preferred profile
-                if (user?.preferred_split_profile_id) {
-                    _ofSelectProf(user.preferred_split_profile_id);
-                }
-                // auto-select first category if only one exists
-                if (catsArr.length === 1) {
-                    _ofSelectCat(catsArr[0].id);
-                }
             } catch(e) {
                 _ofNotify('Erro ao abrir formulário: ' + e.message, 'error');
             }
