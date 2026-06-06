@@ -9339,8 +9339,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 list.innerHTML = _ofAccounts.map(a => `
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8f9fa;border-radius:8px;">
                         <div>
-                            <span style="font-weight:500;font-size:13px;">${a.account_name}</span>
-                            <span style="font-size:11px;color:#5f6368;margin-left:6px;">${a.account_type}</span>
+                            <div style="font-weight:500;font-size:13px;">${a.account_name}</div>
+                            <div style="font-size:11px;color:#5f6368;">${a.account_type}</div>
                         </div>
                         <div style="display:flex;align-items:center;gap:8px;">
                             ${a.payment_method_icon
@@ -9510,7 +9510,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         <div style="font-size:11px;color:#5f6368;">${tx.type === 'CREDIT' ? 'CRÉDITO' : 'DÉBITO'}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-                        <span style="font-size:13px;font-weight:600;color:${color};">${sign}${fmt(tx.amount)}</span>
+                        <span style="font-size:13px;font-weight:600;color:${color};">${sign}${fmt(Math.abs(tx.amount))}</span>
                         ${actionHtml}
                     </div>
                 </div>`;
@@ -9599,18 +9599,22 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 document.getElementById('modalContainer').innerHTML = `
                     <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;" onclick="if(event.target===this)this.remove()">
-                        <div class="w-full max-w-sm overflow-auto flex flex-col" style="background:${modalBg};border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;padding:1.25rem;">
-                            <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;color:${titleColor};">Importar como Despesa</h3>
-                            <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
-                            ${dupWarning}
-                            <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Categoria</label>
-                            <input type="hidden" id="ofExpCat">
-                            <div class="flex flex-wrap gap-2 justify-center" style="margin-bottom:16px;">${catGrid}</div>
-                            <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Perfil de divisão</label>
-                            <input type="hidden" id="ofExpProf" value="${prefProfId || ''}">
-                            <div class="flex flex-wrap gap-2 justify-center" style="margin-bottom:16px;">${profGrid}</div>
-                            <button onclick="_ofDoImportExpense('${txId}')" style="background:#1a73e8;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;">Importar</button>
-                            <button onclick="document.getElementById('modalContainer').innerHTML=''" style="background:${cancelBg};border:none;border-radius:8px;padding:8px;font-size:13px;cursor:pointer;width:100%;margin-top:6px;color:${titleColor};">Cancelar</button>
+                        <div class="w-full max-w-sm flex flex-col" style="background:${modalBg};border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow:hidden;">
+                            <div style="overflow-y:auto;flex:1;padding:1.25rem;">
+                                <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;color:${titleColor};">Importar como Despesa</h3>
+                                <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description} • ${fmt(Math.abs(tx.amount))} • ${tx.date}</p>
+                                ${dupWarning}
+                                <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Categoria</label>
+                                <input type="hidden" id="ofExpCat">
+                                <div class="flex flex-wrap gap-2 justify-center" style="margin-bottom:16px;">${catGrid}</div>
+                                <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Perfil de divisão</label>
+                                <input type="hidden" id="ofExpProf" value="${prefProfId || ''}">
+                                <div class="flex flex-wrap gap-2 justify-center">${profGrid}</div>
+                            </div>
+                            <div class="flex gap-3 p-4" style="border-top:1px solid ${isDark ? '#5f6368' : '#dadce0'};flex-shrink:0;">
+                                <button onclick="document.getElementById('modalContainer').innerHTML=''" class="flex-1 py-3" style="background:${cancelBg};border:none;border-radius:20px;font-size:14px;cursor:pointer;color:${titleColor};">Cancelar</button>
+                                <button onclick="_ofDoImportExpense('${txId}')" class="flex-1 py-3" style="background:#1a73e8;color:#fff;border:none;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer;">Importar</button>
+                            </div>
                         </div>
                     </div>`;
             } catch(e) {
