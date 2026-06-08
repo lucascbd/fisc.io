@@ -3616,3 +3616,22 @@ def openfinance_import_income(data: ImportIncomeRequest, db: Session = Depends(g
     db.commit()
     db.refresh(inc)
     return {"id": inc.id}
+
+
+@app.post(f"{settings.API_V1_PREFIX}/admin/ipca/ingest")
+async def trigger_ipca_ingest(current_user: User = Depends(get_current_user)):
+    """Manually trigger IPCA data ingestion — admin only"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    import subprocess, sys as _sys, os as _os
+    script = _os.path.join(_os.path.dirname(__file__), "ipca_ingest.py")
+    try:
+        result = subprocess.run(
+            [_sys.executable, script],
+            capture_output=True, text=True, timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Timeout ao executar ingestão IPCA.")
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=result.stderr.strip() or "Script falhou.")
+    return {"ok": True, "output": result.stdout.strip()}
