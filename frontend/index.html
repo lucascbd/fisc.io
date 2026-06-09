@@ -801,7 +801,7 @@
         .dark-mode #ipcaIngestBtn { background: #3c4043 !important; }
         .daily-mode-btn { background:transparent;color:#5f6368;font-weight:500;font-size:12px; }
         .daily-mode-btn.active { background:#1a73e8 !important;color:#fff !important; }
-        .dark-mode #dailyModeToggle { background:#3c4043; }
+        .dark-mode #dailyModeToggle { background:#3c4043 !important; }
         .dark-mode .daily-mode-btn { color:#9aa0a6; }
         .typing-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa0a6; display: inline-block; animation: typingBounce 1.2s infinite; }
         .typing-dot:nth-child(2) { animation-delay: .2s; }
@@ -7353,26 +7353,39 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 // ── MODO ACUMULADO ────────────────────────────────────────────────────────────
                 if (dailyChartMode === 'acum') {
-                    // Acumular por due_date (inclui parcelas de outros meses devidas neste mês)
+                    // Replica exatamente a lógica do modo Dia:
+                    // parcelas (outros meses, venc. neste mês) são pré-comprometidas desde o dia 1
+                    // gastos do próprio mês acumulam pelo due_date dia a dia
                     const _aCatIds = selTarget?.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
                     const _aPmIds  = selTarget?.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
-                    const _aDay = {};
-                    for (let d = 1; d <= daysInMonth; d++) _aDay[d] = 0;
+                    let _parcelas = 0;
+                    const _gastosDia = {};
+                    for (let d = 1; d <= daysInMonth; d++) _gastosDia[d] = 0;
                     for (const expense of curExp) {
                         if (_aCatIds && !_aCatIds.has(Number(expense.category_id))) continue;
                         if (_aPmIds  && !_aPmIds.has(expense.payment_method_id)) continue;
+                        const origStr = expense.original_date || expense.expense_date;
+                        if (!origStr) continue;
+                        const origDate = new Date(origStr + 'T00:00:00');
+                        const isCurMonExp = origDate.getFullYear() === year && origDate.getMonth() + 1 === mon;
                         for (const split of expense.splits) {
                             if (split.user_id !== user.id) continue;
                             const dd = new Date(split.due_date + 'T00:00:00');
                             if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
-                            _aDay[dd.getDate()] += parseFloat(split.user_amount);
+                            const amt = parseFloat(split.user_amount);
+                            if (isCurMonExp) {
+                                _gastosDia[dd.getDate()] += amt;
+                            } else {
+                                _parcelas += amt;  // pré-comprometido → entra no dia 1
+                            }
                         }
                     }
+                    // Linha acumulada: começa em _parcelas e cresce dia a dia
                     let runningSum = 0;
                     const accumTotals = days.map(d => {
                         if (d > todayDay) return null;
-                        runningSum += _aDay[d] ?? 0;
-                        return runningSum;
+                        runningSum += _gastosDia[d] ?? 0;
+                        return _parcelas + runningSum;
                     });
                     const monthlyTarget = selTarget?.monthly_amount ?? null;
                     const targetHorizData = monthlyTarget != null ? days.map(() => monthlyTarget) : null;
