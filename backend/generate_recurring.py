@@ -99,9 +99,9 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
         if not dry_run:
             insert_day = max(1, min(31, r.insert_day or 1))
             last_day = calendar.monthrange(target_date.year, target_date.month)[1]
-            expense_date = target_date.replace(day=min(insert_day, last_day))
+            real_date = target_date.replace(day=min(insert_day, last_day))
             pm = db.query(PaymentMethod).filter(PaymentMethod.id == r.payment_method_id).first() if r.payment_method_id else None
-            expense_date = _shift_card_date(expense_date, pm)
+            expense_date = _shift_card_date(real_date, pm)
             exp = ExpenseService.create_expense(
                 db=db,
                 description=r.description,
@@ -110,6 +110,7 @@ def generate_for_month(db, target_date: date, dry_run: bool = False, force: bool
                 split_profile_id=r.split_profile_id,
                 paid_by_user_id=r.paid_by_user_id,
                 expense_date=expense_date,
+                original_date=real_date,
                 installments=1,
                 notes=r.notes,
                 payment_method_id=r.payment_method_id,
