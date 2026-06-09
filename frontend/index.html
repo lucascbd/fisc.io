@@ -7459,7 +7459,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                             if (!sp || sp.raw == null) return [];
                                             const over = monthlyTarget != null && sp.raw > monthlyTarget;
                                             const lines = [];
-                                            lines.push(`${over ? '🔴' : '💙'} Acumulado: R$ ${formatBRL(sp.raw)}`);
+                                            lines.push(`${over ? '🔴' : '🔵'} Acumulado: R$ ${formatBRL(sp.raw)}`);
                                             if (monthlyTarget != null) {
                                                 const diff = monthlyTarget - sp.raw;
                                                 lines.push(diff >= 0 ? `✅ Folga: R$ ${formatBRL(diff)}` : `⚠️ Estouro: R$ ${formatBRL(-diff)}`);
