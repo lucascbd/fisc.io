@@ -799,6 +799,10 @@
         @keyframes typingBounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
         @keyframes spin { to { transform: rotate(360deg); } }
         .dark-mode #ipcaIngestBtn { background: #3c4043 !important; }
+        .daily-mode-btn { background:transparent;color:#5f6368;font-weight:500;font-size:12px; }
+        .daily-mode-btn.active { background:#1a73e8 !important;color:#fff !important; }
+        .dark-mode #dailyModeToggle { background:#3c4043; }
+        .dark-mode .daily-mode-btn { color:#9aa0a6; }
         .typing-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa0a6; display: inline-block; animation: typingBounce 1.2s infinite; }
         .typing-dot:nth-child(2) { animation-delay: .2s; }
         .typing-dot:nth-child(3) { animation-delay: .4s; }
@@ -1934,7 +1938,13 @@
 
                 <!-- Gráfico de linha - Despesas por dia do mês -->
                 <div class="mb-6">
-                    <div class="mb-2"><h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3></div>
+                    <div class="mb-2 flex items-center justify-between">
+                        <h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3>
+                        <div id="dailyModeToggle" style="display:flex;background:#f1f3f4;border-radius:20px;padding:2px;gap:2px;flex-shrink:0;">
+                            <button class="daily-mode-btn active" id="dailyModeBtn_dia" onclick="setDailyChartMode('dia')" style="border:none;border-radius:18px;padding:3px 12px;cursor:pointer;transition:.15s;">Dia</button>
+                            <button class="daily-mode-btn" id="dailyModeBtn_acum" onclick="setDailyChartMode('acum')" style="border:none;border-radius:18px;padding:3px 12px;cursor:pointer;transition:.15s;">Acum.</button>
+                        </div>
+                    </div>
                     <!-- Filtros distribuídos igualmente, PM icons à direita -->
                     <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;align-items:flex-end;">
                         <!-- Categoria -->
@@ -2758,6 +2768,15 @@
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
         let dailyCatMonth='';
+        let dailyChartMode='dia';
+
+        function setDailyChartMode(mode) {
+            dailyChartMode = mode;
+            document.querySelectorAll('.daily-mode-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById('dailyModeBtn_' + mode);
+            if (activeBtn) activeBtn.classList.add('active');
+            updateDailyChart();
+        }
 
         function toggleDailyCatFilterDropdown(){
             const dd=document.getElementById('dailyCatFilterDropdown');
@@ -7230,15 +7249,19 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const selTarget = !isNaN(selTargetId) && selTargetId ? (targets||[]).find(t=>t.id===selTargetId) : null;
                 const fixedDailyLimit = selTarget ? selTarget.monthly_amount / daysInMonth : null;
 
+                const _nowD = new Date();
+                const _isCurMonD = _nowD.getFullYear() === year && _nowD.getMonth() + 1 === mon;
+                const _isPastMonD = year < _nowD.getFullYear() || (year === _nowD.getFullYear() && mon < _nowD.getMonth() + 1);
+                const todayDay = _isCurMonD ? _nowD.getDate() : (_isPastMonD ? daysInMonth : 0);
+
                 let tgtDisplayTotals = null;
                 let targetLineData = null;
                 let targetRawData = [];
                 let labelLimit = fixedDailyLimit; // valor exibido no label do gráfico
                 if (selTarget) {
-                    const now = new Date();
-                    const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
-                    const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && mon < now.getMonth() + 1);
-                    const todayDay = isCurrentMonth ? now.getDate() : (isPastMonth ? daysInMonth : 0);
+                    const now = _nowD;
+                    const isCurrentMonth = _isCurMonD;
+                    const isPastMonth = _isPastMonD;
 
                     const tgtCatIds = selTarget.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
                     const tgtPmIds = selTarget.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
@@ -7327,6 +7350,110 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
                 const activeTotals = tgtDisplayTotals ?? totals;
+
+                // ── MODO ACUMULADO ────────────────────────────────────────────────────────────
+                if (dailyChartMode === 'acum') {
+                    let runningSum = 0;
+                    const accumTotals = days.map((d, i) => {
+                        if (d > todayDay) return null;
+                        runningSum += activeTotals[i] ?? 0;
+                        return runningSum;
+                    });
+                    const monthlyTarget = selTarget?.monthly_amount ?? null;
+                    const targetHorizData = monthlyTarget != null ? days.map(() => monthlyTarget) : null;
+
+                    const allVals = [...accumTotals.filter(v => v != null), ...(targetHorizData || [])];
+                    const yMax = allVals.length ? Math.ceil(Math.max(...allVals) * 1.08 / 10) * 10 : 100;
+
+                    const accumColor = (v) => monthlyTarget != null && v > monthlyTarget ? '#ef4444' : '#1a73e8';
+                    const accumDs = [{
+                        data: accumTotals,
+                        borderWidth: 2.5,
+                        borderColor: '#1a73e8',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        cubicInterpolationMode: 'monotone',
+                        pointRadius: accumTotals.map(v => v != null ? 3 : 0),
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
+                        pointBorderColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
+                        spanGaps: false,
+                        segment: monthlyTarget != null ? {
+                            borderColor: ctx => accumColor(ctx.p1.parsed.y)
+                        } : undefined,
+                    }];
+                    if (targetHorizData) {
+                        accumDs.push({
+                            data: targetHorizData,
+                            borderColor: '#f59e0b',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            fill: false,
+                            tension: 0,
+                            spanGaps: true,
+                        });
+                    }
+
+                    const ctxA = document.getElementById('dailyLineChart').getContext('2d');
+                    dailyLineChart = new Chart(ctxA, {
+                        type: 'line',
+                        data: { labels: days.map(String), datasets: accumDs },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            layout: { padding: { top: 18, bottom: 12 } },
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    filter: item => item.raw != null,
+                                    callbacks: {
+                                        title: items => `Dia ${items[0].label}`,
+                                        label: () => null,
+                                        afterBody: items => {
+                                            const lines = [];
+                                            const sp = items.find(i => i.datasetIndex === 0);
+                                            if (sp && sp.raw != null) {
+                                                const over = monthlyTarget != null && sp.raw > monthlyTarget;
+                                                lines.push(`${over ? '🔴' : '💙'} Acumulado: R$ ${formatBRL(sp.raw)}`);
+                                                if (monthlyTarget != null) {
+                                                    const diff = monthlyTarget - sp.raw;
+                                                    lines.push(diff >= 0
+                                                        ? `✅ Folga: R$ ${formatBRL(diff)}`
+                                                        : `⚠️ Estouro: R$ ${formatBRL(-diff)}`);
+                                                }
+                                            }
+                                            return lines;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    grid: { color: gridColor, drawTicks: false },
+                                    ticks: {
+                                        color: textColor, font: { size: 11 }, maxRotation: 0,
+                                        callback: (val, idx) => window.innerWidth < 640 && (idx + 1) % 2 === 0 ? '' : String(idx + 1)
+                                    }
+                                },
+                                y: {
+                                    min: 0,
+                                    max: yMax,
+                                    grid: { color: gridColor },
+                                    ticks: {
+                                        color: textColor, font: { size: 11 },
+                                        callback: v => v === 0 ? '' : Math.round(v).toLocaleString('pt-BR')
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [weekBandsPlugin]
+                    });
+                    return;
+                }
+                // ── FIM MODO ACUMULADO ────────────────────────────────────────────────────────
 
                 // Coeficiente de desvio líquido: C = (área_verde − área_vermelha) / área_target
                 // Positivo = abaixo do target (criando folga), negativo = acima (estourando)
