@@ -803,6 +803,7 @@
         .daily-mode-btn.active { background:#1a73e8 !important;color:#fff !important; }
         .dark-mode #dailyModeToggle { background:#3c4043 !important; }
         .dark-mode .daily-mode-btn { color:#9aa0a6; }
+        .dark-mode .daily-mode-btn.active { background:#8ab4f8 !important;color:#202124 !important; }
         .typing-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa0a6; display: inline-block; animation: typingBounce 1.2s infinite; }
         .typing-dot:nth-child(2) { animation-delay: .2s; }
         .typing-dot:nth-child(3) { animation-delay: .4s; }
@@ -7353,14 +7354,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 // ── MODO ACUMULADO ────────────────────────────────────────────────────────────
                 if (dailyChartMode === 'acum') {
-                    // Replica exatamente a lógica do modo Dia:
-                    // parcelas (outros meses, venc. neste mês) são pré-comprometidas desde o dia 1
-                    // gastos do próprio mês acumulam pelo due_date dia a dia
+                    // Mesma lógica do Dia: parcelas pré-comprometidas no dia 1, gastos do mês por due_date
                     const _aCatIds = selTarget?.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
                     const _aPmIds  = selTarget?.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
                     let _parcelas = 0;
                     const _gastosDia = {};
-                    for (let d = 1; d <= daysInMonth; d++) _gastosDia[d] = 0;
+                    const _catDia = {};         // d -> { catName -> { total, emoji } }
+                    const _catParcelas = {};    // catName -> { total, emoji }
+                    for (let d = 1; d <= daysInMonth; d++) { _gastosDia[d] = 0; _catDia[d] = {}; }
                     for (const expense of curExp) {
                         if (_aCatIds && !_aCatIds.has(Number(expense.category_id))) continue;
                         if (_aPmIds  && !_aPmIds.has(expense.payment_method_id)) continue;
@@ -7368,6 +7369,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         if (!origStr) continue;
                         const origDate = new Date(origStr + 'T00:00:00');
                         const isCurMonExp = origDate.getFullYear() === year && origDate.getMonth() + 1 === mon;
+                        const cat = categories.find(c => c.id === expense.category_id);
+                        const catName = cat?.name || 'Outros';
+                        const catEmoji = cat?.icon || '📁';
                         for (const split of expense.splits) {
                             if (split.user_id !== user.id) continue;
                             const dd = new Date(split.due_date + 'T00:00:00');
@@ -7375,8 +7379,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             const amt = parseFloat(split.user_amount);
                             if (isCurMonExp) {
                                 _gastosDia[dd.getDate()] += amt;
+                                const dc = _catDia[dd.getDate()];
+                                if (!dc[catName]) dc[catName] = { total: 0, emoji: catEmoji };
+                                dc[catName].total += amt;
                             } else {
-                                _parcelas += amt;  // pré-comprometido → entra no dia 1
+                                _parcelas += amt;
+                                if (!_catParcelas[catName]) _catParcelas[catName] = { total: 0, emoji: catEmoji };
+                                _catParcelas[catName].total += amt;
                             }
                         }
                     }
@@ -7393,7 +7402,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const allVals = [...accumTotals.filter(v => v != null), ...(targetHorizData || [])];
                     const yMax = allVals.length ? Math.ceil(Math.max(...allVals) * 1.08 / 10) * 10 : 100;
 
-                    const accumColor = (v) => monthlyTarget != null && v > monthlyTarget ? '#ef4444' : '#1a73e8';
+                    const accumColor = v => monthlyTarget != null && v > monthlyTarget ? '#ef4444' : '#1a73e8';
                     const accumDs = [{
                         data: accumTotals,
                         borderWidth: 2.5,
@@ -7406,8 +7415,9 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         pointBackgroundColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
                         pointBorderColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
                         spanGaps: false,
+                        // Segmento vermelho só quando AMBOS os extremos estão acima do target
                         segment: monthlyTarget != null ? {
-                            borderColor: ctx => accumColor(ctx.p1.parsed.y)
+                            borderColor: ctx => (ctx.p0.parsed.y > monthlyTarget && ctx.p1.parsed.y > monthlyTarget) ? '#ef4444' : '#1a73e8'
                         } : undefined,
                     }];
                     if (targetHorizData) {
@@ -7441,18 +7451,30 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                         title: items => `Dia ${items[0].label}`,
                                         label: () => null,
                                         afterBody: items => {
-                                            const lines = [];
                                             const sp = items.find(i => i.datasetIndex === 0);
-                                            if (sp && sp.raw != null) {
-                                                const over = monthlyTarget != null && sp.raw > monthlyTarget;
-                                                lines.push(`${over ? '🔴' : '💙'} Acumulado: R$ ${formatBRL(sp.raw)}`);
-                                                if (monthlyTarget != null) {
-                                                    const diff = monthlyTarget - sp.raw;
-                                                    lines.push(diff >= 0
-                                                        ? `✅ Folga: R$ ${formatBRL(diff)}`
-                                                        : `⚠️ Estouro: R$ ${formatBRL(-diff)}`);
+                                            if (!sp || sp.raw == null) return [];
+                                            const over = monthlyTarget != null && sp.raw > monthlyTarget;
+                                            const lines = [];
+                                            lines.push(`${over ? '🔴' : '💙'} Acumulado: R$ ${formatBRL(sp.raw)}`);
+                                            if (monthlyTarget != null) {
+                                                const diff = monthlyTarget - sp.raw;
+                                                lines.push(diff >= 0 ? `✅ Folga: R$ ${formatBRL(diff)}` : `⚠️ Estouro: R$ ${formatBRL(-diff)}`);
+                                            }
+                                            // Breakdown por categoria acumulado até este dia
+                                            const upToDay = days[sp.dataIndex];
+                                            const catAccum = {};
+                                            for (const [n, c] of Object.entries(_catParcelas)) {
+                                                catAccum[n] = { total: c.total, emoji: c.emoji };
+                                            }
+                                            for (let d = 1; d <= upToDay; d++) {
+                                                for (const [n, c] of Object.entries(_catDia[d] || {})) {
+                                                    if (!catAccum[n]) catAccum[n] = { total: 0, emoji: c.emoji };
+                                                    catAccum[n].total += c.total;
                                                 }
                                             }
+                                            const sorted = Object.entries(catAccum).sort((a, b) => b[1].total - a[1].total);
+                                            if (sorted.length > 0) lines.push('──────────────');
+                                            lines.push(...sorted.map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`));
                                             return lines;
                                         }
                                     }
