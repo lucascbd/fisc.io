@@ -7405,13 +7405,13 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const accumColor = v => monthlyTarget != null && v > monthlyTarget ? '#ef4444' : '#1a73e8';
                     const accumDs = [{
                         data: accumTotals,
-                        borderWidth: 2.5,
+                        borderWidth: 2,
                         borderColor: '#1a73e8',
                         backgroundColor: 'transparent',
                         fill: false,
                         cubicInterpolationMode: 'monotone',
-                        pointRadius: accumTotals.map(v => v != null ? 3 : 0),
-                        pointHoverRadius: 5,
+                        pointRadius: accumTotals.map(v => v != null ? 2.5 : 0),
+                        pointHoverRadius: accumTotals.map(v => v != null ? 4 : 4),
                         pointBackgroundColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
                         pointBorderColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
                         spanGaps: false,
@@ -7473,8 +7473,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                                 }
                                             }
                                             const sorted = Object.entries(catAccum).sort((a, b) => b[1].total - a[1].total);
+                                            const MAX_CATS = 7;
                                             if (sorted.length > 0) lines.push('──────────────');
-                                            lines.push(...sorted.map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`));
+                                            lines.push(...sorted.slice(0, MAX_CATS).map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`));
+                                            if (sorted.length > MAX_CATS) lines.push(`… e mais ${sorted.length - MAX_CATS} categorias`);
                                             return lines;
                                         }
                                     }
