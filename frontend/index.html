@@ -7389,17 +7389,16 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             }
                         }
                     }
-                    // Linha acumulada: começa em _parcelas e cresce dia a dia
+                    // Linha acumulada: todos os dias (futuro tracejado)
                     let runningSum = 0;
                     const accumTotals = days.map(d => {
-                        if (d > todayDay) return null;
                         runningSum += _gastosDia[d] ?? 0;
                         return _parcelas + runningSum;
                     });
                     const monthlyTarget = selTarget?.monthly_amount ?? null;
                     const targetHorizData = monthlyTarget != null ? days.map(() => monthlyTarget) : null;
 
-                    const allVals = [...accumTotals.filter(v => v != null), ...(targetHorizData || [])];
+                    const allVals = [...accumTotals, ...(targetHorizData || [])];
                     const yMax = allVals.length ? Math.ceil(Math.max(...allVals) * 1.08 / 10) * 10 : 100;
 
                     const accumColor = v => monthlyTarget != null && v > monthlyTarget ? '#ef4444' : '#1a73e8';
@@ -7410,15 +7409,20 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         backgroundColor: 'transparent',
                         fill: false,
                         cubicInterpolationMode: 'monotone',
-                        pointRadius: accumTotals.map(v => v != null ? 2.5 : 0),
-                        pointHoverRadius: accumTotals.map(v => v != null ? 4 : 4),
-                        pointBackgroundColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
-                        pointBorderColor: accumTotals.map(v => v != null ? accumColor(v) : 'transparent'),
-                        spanGaps: false,
-                        // Segmento vermelho só quando AMBOS os extremos estão acima do target
-                        segment: monthlyTarget != null ? {
-                            borderColor: ctx => (ctx.p0.parsed.y > monthlyTarget && ctx.p1.parsed.y > monthlyTarget) ? '#ef4444' : '#1a73e8'
-                        } : undefined,
+                        // Bolinhas só até hoje; dias futuros sem ponto (linha tracejada fala por si)
+                        pointRadius: accumTotals.map((_, i) => days[i] <= todayDay ? 2.5 : 0),
+                        pointHoverRadius: 4,
+                        pointBackgroundColor: accumTotals.map((v, i) => days[i] <= todayDay ? accumColor(v) : 'transparent'),
+                        pointBorderColor: accumTotals.map(v => accumColor(v)),
+                        spanGaps: true,
+                        segment: {
+                            // Tracejado para dias futuros
+                            borderDash: ctx => ctx.p1DataIndex >= todayDay ? [5, 4] : undefined,
+                            // Vermelho só quando ambos os extremos estão acima do target
+                            borderColor: monthlyTarget != null
+                                ? ctx => (ctx.p0.parsed.y > monthlyTarget && ctx.p1.parsed.y > monthlyTarget) ? '#ef4444' : '#1a73e8'
+                                : undefined,
+                        },
                     }];
                     if (targetHorizData) {
                         accumDs.push({
