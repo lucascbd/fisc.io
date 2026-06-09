@@ -7353,10 +7353,25 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 // ── MODO ACUMULADO ────────────────────────────────────────────────────────────
                 if (dailyChartMode === 'acum') {
+                    // Acumular por due_date (inclui parcelas de outros meses devidas neste mês)
+                    const _aCatIds = selTarget?.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
+                    const _aPmIds  = selTarget?.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
+                    const _aDay = {};
+                    for (let d = 1; d <= daysInMonth; d++) _aDay[d] = 0;
+                    for (const expense of curExp) {
+                        if (_aCatIds && !_aCatIds.has(Number(expense.category_id))) continue;
+                        if (_aPmIds  && !_aPmIds.has(expense.payment_method_id)) continue;
+                        for (const split of expense.splits) {
+                            if (split.user_id !== user.id) continue;
+                            const dd = new Date(split.due_date + 'T00:00:00');
+                            if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
+                            _aDay[dd.getDate()] += parseFloat(split.user_amount);
+                        }
+                    }
                     let runningSum = 0;
-                    const accumTotals = days.map((d, i) => {
+                    const accumTotals = days.map(d => {
                         if (d > todayDay) return null;
-                        runningSum += activeTotals[i] ?? 0;
+                        runningSum += _aDay[d] ?? 0;
                         return runningSum;
                     });
                     const monthlyTarget = selTarget?.monthly_amount ?? null;
