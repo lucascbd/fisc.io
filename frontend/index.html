@@ -11,8 +11,9 @@
     <!-- Google Fonts - Roboto -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+
     <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -35,7 +36,8 @@
 </head>
 <body class="bg-gray-100">
     <!-- Prevenir flash da tela de login ao recarregar com sessão ativa -->
-    <script>if (localStorage.getItem('token') && localStorage.getItem('user')) { document.write('<style>#loginScreen{display:none!important}</style>'); }</script>
+    <script>if (localStorage.getItem('token') && localStorage.getItem('user')) { document.documentElement.classList.add('auth-active'); }</script>
+    <style>.auth-active #loginScreen { display: none !important; }</style>
     <!-- Login -->
     <div id="loginScreen" class="flex items-center justify-center p-4" style="height: 100vh; height: 100dvh; overflow: hidden;">
         <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">

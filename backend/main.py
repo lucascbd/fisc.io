@@ -2709,10 +2709,15 @@ def _target_dict(t: Target) -> dict:
 @app.get(f"{settings.API_V1_PREFIX}/targets")
 def list_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List targets for the current user, ordered by sort_order."""
+    cache_key = f"targets:user:{current_user.id}"
+    cached = _cache_get(cache_key, 300)
+    if cached is not None:
+        return cached
     targets = db.query(Target).filter(
         Target.user_id == current_user.id, Target.is_active == True
     ).order_by(Target.sort_order).all()
-    return [_target_dict(t) for t in targets]
+    result = [_target_dict(t) for t in targets]
+    return _cache_set(cache_key, result)
 
 @app.post(f"{settings.API_V1_PREFIX}/targets")
 def create_target(data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -2732,6 +2737,7 @@ def create_target(data: TargetCreate, db: Session = Depends(get_db), current_use
     db.add(target)
     db.commit()
     db.refresh(target)
+    _cache_invalidate(f"targets:user:{current_user.id}")
     return _target_dict(target)
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
@@ -2748,6 +2754,7 @@ def update_target(target_id: int, data: TargetCreate, db: Session = Depends(get_
     target.display_mode = data.display_mode
     target.ticket_months = data.ticket_months
     db.commit()
+    _cache_invalidate(f"targets:user:{current_user.id}")
     return _target_dict(target)
 
 @app.delete(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
@@ -2758,6 +2765,7 @@ def delete_target(target_id: int, db: Session = Depends(get_db), current_user: U
         raise HTTPException(status_code=404, detail="Target not found")
     db.delete(target)
     db.commit()
+    _cache_invalidate(f"targets:user:{current_user.id}")
     return {"message": "Target deleted"}
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/reorder")
@@ -2768,6 +2776,7 @@ def reorder_target(target_id: int, data: dict, db: Session = Depends(get_db), cu
         raise HTTPException(status_code=404, detail="Target not found")
     target.sort_order = data.get("sort_order", 0)
     db.commit()
+    _cache_invalidate(f"targets:user:{current_user.id}")
     return {"message": "Reordered"}
 
 @app.get(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/stats")

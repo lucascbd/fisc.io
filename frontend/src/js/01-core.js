@@ -195,7 +195,7 @@
             if (chart && chart.canvas === canvas && chart.config.type === config.type) {
                 chart.data = config.data;
                 chart.options = config.options || {};
-                chart.update();
+                chart.update('none');
                 return chart;
             }
             if (chart) { try { chart.destroy(); } catch (e) {} }

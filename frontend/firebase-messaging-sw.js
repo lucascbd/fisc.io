@@ -71,38 +71,53 @@ self.addEventListener('activate', (event) => {
 // ============================================================================
 // PWA - FETCH (Cache Strategy)
 // ============================================================================
+const STATIC_ASSETS_RE = /\.(js|css|png|jpg|jpeg|gif|svg|webp|ico|woff2?)(\?.*)?$/;
+
 self.addEventListener('fetch', (event) => {
-  // Ignorar APIs e recursos externos
-  if (event.request.url.includes('splitmate-backend') || 
-      event.request.url.includes('firebasestorage') ||
-      event.request.url.includes('googleapis') ||
-      event.request.url.includes('gstatic')) {
+  const url = event.request.url;
+
+  // Ignorar APIs, recursos externos e não-GET
+  if (event.request.method !== 'GET') return;
+  if (url.includes('/api/') || url.includes('splitmate-backend') ||
+      url.includes('firebasestorage') || url.includes('googleapis') ||
+      url.includes('gstatic') || url.includes('jsdelivr')) {
     return;
   }
-  
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response && response.status === 200 && event.request.method === 'GET') {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+
+  const isStatic = STATIC_ASSETS_RE.test(url);
+
+  if (isStatic) {
+    // Cache-first: assets com hash no nome nunca mudam
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
-          return new Response('Offline', {
-            status: 503,
-            statusText: 'Service Unavailable'
-          });
+          return response;
         });
       })
-  );
+    );
+  } else {
+    // Network-first para HTML e outros recursos dinâmicos
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then((cached) =>
+            cached || new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
+          )
+        )
+    );
+  }
 });
 
 // ============================================================================

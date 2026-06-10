@@ -1666,7 +1666,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 }
                 const dueDateTotals = days.map(d => dueDateDayTotals[d]);
 
-                if (dailyLineChart) { dailyLineChart.destroy(); dailyLineChart = null; }
                 const isDark = document.body.classList.contains('dark-mode');
                 const textColor = isDark ? '#e8eaed' : '#202124';
                 const gridColor = isDark ? '#3c4043' : '#e0e0e0';
@@ -1886,7 +1885,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     }
 
                     const ctxA = document.getElementById('dailyLineChart').getContext('2d');
-                    dailyLineChart = new Chart(ctxA, {
+                    dailyLineChart = upsertChart(dailyLineChart, ctxA, {
                         type: 'line',
                         data: { labels: days.map(String), datasets: accumDs },
                         options: {
@@ -2045,7 +2044,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 });
 
                 const ctx = document.getElementById('dailyLineChart').getContext('2d');
-                dailyLineChart = new Chart(ctx, {
+                dailyLineChart = upsertChart(dailyLineChart, ctx, {
                     type: 'line',
                     data: {
                         labels: days.map(String),
