@@ -222,10 +222,10 @@
             div.style.display = hidden ? '' : 'none';
             if (arrow) arrow.textContent = hidden ? '▼' : '▶';
         }
-        function toggleBarYear(year, checked) {
+        function toggleBarYear(year, checked) {  // called from onclick
             document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`).forEach(cb => { cb.checked = checked; });
             updateBarChartSelectedText();
-            updateBarChartFilters();
+            updateBarChartFiltersDebounced();
         }
         function syncBarYearCheckbox(year) {
             const all = document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`);
@@ -309,7 +309,7 @@
         function toggleInflYear(year, checked) {
             document.querySelectorAll(`.infl-month-cb[data-year="${year}"]`).forEach(cb => cb.checked = checked);
             updateInflMonthText();
-            loadInflation();
+            loadInflationDebounced();
         }
         function syncInflYearCheckbox(year) {
             const all = document.querySelectorAll(`.infl-month-cb[data-year="${year}"]`);
@@ -346,7 +346,7 @@
             const allCb = document.getElementById('inflCatAll');
             if (allCb) allCb.checked = inflSelectedCatIds.length === document.querySelectorAll('.infl-cat-cb').length;
             updateInflCatText();
-            loadInflation();
+            loadInflationDebounced();
         }
         function toggleAllInflCats(checked) {
             inflSelectedCatIds = checked ? Array.from(document.querySelectorAll('.infl-cat-cb')).map(cb => parseInt(cb.value)) : [];
@@ -354,7 +354,7 @@
             const allCb = document.getElementById('inflCatAll');
             if (allCb) allCb.checked = checked;
             updateInflCatText();
-            loadInflation();
+            loadInflationDebounced();
         }
 
         // Helper: show/hide inflation chart messages without destroying the canvas
@@ -474,7 +474,7 @@
                                 <label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;">
                                     <input type="checkbox" class="infl-month-cb" value="${m}" data-year="${yr}"
                                         ${isLatest ? 'checked' : ''}
-                                        onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflation();">
+                                        onchange="syncInflYearCheckbox('${yr}'); updateInflMonthText(); loadInflationDebounced();">
                                     <span class="text-sm">${m}</span>
                                 </label>`).join('')}
                             </div>
@@ -556,9 +556,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const labels = data.my_inflation.map(d => d.month);
 
                 // ── Chart 1: Minha Inflação vs IPCA Índice Geral ──
-                if (myInflationChart) myInflationChart.destroy();
                 showInflMsg('myInflation', '');
-                myInflationChart = new Chart(document.getElementById('myInflationChart').getContext('2d'), {
+                myInflationChart = upsertChart(myInflationChart, document.getElementById('myInflationChart').getContext('2d'), {
                     type: 'line',
                     data: {
                         labels,
@@ -630,7 +629,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 });
 
                 // ── Chart 1b: Inflação por Categoria (usar cor do DB) ──
-                if (categoryInflationChart) categoryInflationChart.destroy();
                 if (data.category_inflation?.length) {
                     showInflMsg('categoryInflation', '');
                         const catChartIsMobile = window.innerWidth < 640;
@@ -640,12 +638,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             const bLast = b.series.length ? b.series[b.series.length - 1].cumulative : 0;
                             return bLast - aLast;
                         });
-                        categoryInflationChart = new Chart(document.getElementById('categoryInflationChart').getContext('2d'), {
+                        categoryInflationChart = upsertChart(categoryInflationChart, document.getElementById('categoryInflationChart').getContext('2d'), {
                             type: 'line',
                             data: {
                                 labels,
                                 datasets: sortedCatInflation.map((cat) => {
-                                    const catObj = categories.find(c => c.id === cat.category_id);
+                                    const catObj = byId(categories, cat.category_id);
                                     const color = catObj?.color || '#999999';
                                     return {
                                         label: `${cat.icon} ${cat.name}`,
@@ -718,9 +716,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const adjDatasets = [{ label: 'Total', data: data.adjusted_by_month.map(d => d.adjusted || 0), backgroundColor: 'rgba(26,115,232,0.75)', borderColor: '#1a73e8', borderRadius: 0, borderSkipped: false }];
                 const adjTotals = data.adjusted_by_month.map(d => d.adjusted || 0);
 
-                if (adjustedBarChart) adjustedBarChart.destroy();
                 showInflMsg('adjustedBar', '');
-                adjustedBarChart = new Chart(document.getElementById('adjustedBarChart').getContext('2d'), {
+                adjustedBarChart = upsertChart(adjustedBarChart, document.getElementById('adjustedBarChart').getContext('2d'), {
                     type: 'bar',
                     data: { labels, datasets: adjDatasets },
                     options: {
@@ -757,7 +754,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 });
 
                 // ── Chart 2b: Donut média por categoria (ajustado) ──
-                if (adjustedDonutChart) adjustedDonutChart.destroy();
                 if (data.price_volume?.length) {
                     showInflMsg('adjustedDonut', '');
                     const nMonths = labels.length;
@@ -769,7 +765,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             avg: nMonths > 1
                                 ? (d.avg_spend_prev * (nMonths - 1) + d.avg_spend_last) / nMonths
                                 : d.avg_spend_last,
-                            color: categories.find(c => c.id === d.category_id)?.color || '#999'
+                            color: byId(categories, d.category_id)?.color || '#999'
                         }))
                         .filter(d => d.avg !== 0)
                         .sort((a, b) => b.avg - a.avg);
@@ -784,7 +780,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const donutIsMobile = window.innerWidth < 640;
                     const donutNegColor = isDark ? '#f28b82' : '#d93025';
 
-                    adjustedDonutChart = new Chart(document.getElementById('adjustedDonutChart').getContext('2d'), {
+                    adjustedDonutChart = upsertChart(adjustedDonutChart, document.getElementById('adjustedDonutChart').getContext('2d'), {
                         type: 'doughnut',
                         data: {
                             labels: donutData.map(d => d.name),
@@ -793,6 +789,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         options: {
                             responsive: true, maintainAspectRatio: false,
                             cutout: '50%',
+                            centerValue: donutTotal,
                             layout: { padding: { top: donutIsMobile ? 8 : 0, bottom: donutIsMobile ? 8 : 0 } },
                             plugins: {
                                 legend: {
@@ -853,15 +850,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 ctx.textBaseline = 'middle';
                                 ctx.fillStyle = isDark ? '#8ab4f8' : '#1a73e8';
                                 ctx.font = `bold ${Math.round(Math.min(width, height) * 0.085)}px Arial`;
-                                ctx.fillText(Math.round(donutTotal).toLocaleString('pt-BR'), cx, cy);
+                                ctx.fillText(Math.round(chart.options.centerValue ?? 0).toLocaleString('pt-BR'), cx, cy);
                                 ctx.restore();
                             }
                         }]
                     });
                 } else {
+                    if (adjustedDonutChart) { try { adjustedDonutChart.destroy(); } catch(e) {} adjustedDonutChart = null; }
                     showInflMsg('adjustedDonut', 'Sem dados por categoria para os filtros selecionados.');
                 }
-                if (priceVolumeChart) priceVolumeChart.destroy();
                 if (data.price_volume?.length && data.months?.length >= 2) {
                     const lastM = data.months[data.months.length - 1];
                     const pvData = data.price_volume.filter(d => d.efeito_preco !== 0 || d.efeito_volume !== 0);
@@ -910,7 +907,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             pvWrap.style.height = Math.max(200, rows.length * 36 + 60) + 'px';
                         }
 
-                        priceVolumeChart = new Chart(document.getElementById('priceVolumeChart').getContext('2d'), {
+                        priceVolumeChart = upsertChart(priceVolumeChart, document.getElementById('priceVolumeChart').getContext('2d'), {
                             type: 'bar',
                             data: {
                                 labels,
@@ -1057,7 +1054,6 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const params = new URLSearchParams({ d1c: '1', no_adjust: 'true', months: orderedMonths.join(',') });
                 const data = await api(`${API}/inflation/data?${params}`);
 
-                if (mvmBarChart) { mvmBarChart.destroy(); mvmBarChart = null; }
 
                 if (!data.price_volume?.length || data.months?.length < 2) {
                     showMsg('Sem dados suficientes para os meses selecionados.');
@@ -1098,7 +1094,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 if (mvmWrap) mvmWrap.style.height = Math.max(200, rows.length * 36 + 60) + 'px';
 
                 const fmtMonthLabel = m => m;
-                mvmBarChart = new Chart(document.getElementById('mvmChart').getContext('2d'), {
+                mvmBarChart = upsertChart(mvmBarChart, document.getElementById('mvmChart').getContext('2d'), {
                     type: 'bar',
                     data: {
                         labels,
@@ -1214,7 +1210,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             <span id="bar-yr-arrow-${yr}" class="text-xs text-gray-400" style="cursor:pointer;user-select:none;padding:0 4px;" onclick="toggleBarYearCollapse('${yr}')">${isLatest?'▼':'▶'}</span>
                         </div>
                         <div id="bar-yr-months-${yr}" ${isLatest?'':'style="display:none"'}>
-                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${isLatest?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFilters();"><span class="text-sm">${m}</span></label>`).join('')}
+                            ${barByYear[yr].map(m=>`<label class="flex items-center gap-2 py-0.5 cursor-pointer rounded hover:bg-gray-100" style="padding-left:26px;padding-right:8px;"><input type="checkbox" class="bar-chart-month" value="${m}" data-year="${yr}" ${isLatest?'checked':''} onchange="syncBarYearCheckbox('${yr}');updateBarChartFiltersDebounced();"><span class="text-sm">${m}</span></label>`).join('')}
                         </div>
                     </div>`;
                 }).join('');
@@ -1354,7 +1350,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                     const categoryName = expense.category_name;
                     if (!expensesByCategory[categoryName]) {
-                        const cat = categories.find(c => c.id === expense.category_id);
+                        const cat = byId(categories, expense.category_id);
                         expensesByCategory[categoryName] = { total: 0, color: cat?.color || '#999', emoji: cat?.icon || '📁' };
                     }
                     for (const split of expense.splits) {
@@ -1385,20 +1381,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Atualizar label de total
                 document.getElementById('pieChartTotal').textContent = `Total: R$ ${formatBRL(total)}`;
 
-                // Destruir gráfico anterior se existir
-                if (categoryPieChart) {
-                    categoryPieChart.destroy();
-                }
-
-                // Criar gráfico de donut
                 const ctx = document.getElementById('categoryPieChart').getContext('2d');
                 const isDark = document.body.classList.contains('dark-mode');
                 const textColor = isDark ? '#e8eaed' : '#202124';
-                
+
                 const negativeData = categoryData.filter(d => d.total < 0);
                 const negColor = isDark ? '#f28b82' : '#d93025';
                 const pieIsMobile = window.innerWidth < 640;
-                categoryPieChart = new Chart(ctx, {
+                categoryPieChart = upsertChart(categoryPieChart, ctx, {
                     type: 'doughnut',
                     data: {
                         labels: labels,
@@ -1413,6 +1403,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                         responsive: true,
                         maintainAspectRatio: false,
                         cutout: '50%',
+                        centerValue: total,
                         layout: { padding: { right: pieIsMobile ? 0 : 4, top: pieIsMobile ? 8 : 0, bottom: pieIsMobile ? 8 : 0 } },
                         plugins: {
                             legend: {
@@ -1478,7 +1469,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             ctx.textBaseline = 'middle';
                             ctx.fillStyle = isDark ? '#8ab4f8' : '#1a73e8';
                             ctx.font = `bold ${Math.round(Math.min(width, height) * 0.085)}px Arial`;
-                            ctx.fillText(formatBRL(total), cx, cy);
+                            ctx.fillText(formatBRL(chart.options.centerValue ?? 0), cx, cy);
                             ctx.restore();
                         }
                     }]
@@ -1592,7 +1583,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     // Filtro de categorias
                     if (selectedDailyCatIds !== null && !selectedDailyCatIds.includes(expense.category_id)) continue;
                     const day = origDate.getDate();
-                    const cat = categories.find(c => c.id === expense.category_id);
+                    const cat = byId(categories, expense.category_id);
                     const catName = expense.category_name;
                     const emoji = cat?.icon || '📁';
                     const color = cat?.color || '#999';
@@ -2012,8 +2003,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 const monthTotals = months.map(m => (showIndividual ? (monthlyPersonal[m]||0) : 0) + (showShared ? (monthlyShared[m]||0) : 0));
 
-                if (monthlyBarChart) monthlyBarChart.destroy();
-                monthlyBarChart = new Chart(document.getElementById('monthlyBarChart').getContext('2d'), {
+                monthlyBarChart = upsertChart(monthlyBarChart, document.getElementById('monthlyBarChart').getContext('2d'), {
                     type: 'bar',
                     data: { labels: months, datasets },
                     options: {
@@ -2105,8 +2095,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const datasets=myPmList.filter(pm=>months.some(m=>(monthlyByPm[m]?.[pm.id]||0)>0))
                     .map(pm=>({label:pm.description,data:months.map(m=>monthlyByPm[m]?.[pm.id]||0),backgroundColor:pm.color||'#999',borderColor:pm.color||'#999',borderWidth:1,borderRadius:0,borderSkipped:false}));
                 const monthTotals=months.map(m=>myPmList.reduce((s,pm)=>s+(monthlyByPm[m]?.[pm.id]||0),0));
-                if(pmBarChart)pmBarChart.destroy();
-                pmBarChart=new Chart(document.getElementById('pmBarChart').getContext('2d'),{
+                pmBarChart=upsertChart(pmBarChart,document.getElementById('pmBarChart').getContext('2d'),{
                     type:'bar',data:{labels:months,datasets},
                     options:{responsive:true,maintainAspectRatio:false,
                         plugins:{legend:{display:datasets.length>1,position:'top',labels:{color:textColor,font:{size:11}}},

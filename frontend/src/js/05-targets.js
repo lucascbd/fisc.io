@@ -98,7 +98,7 @@
                 textEl.textContent = 'Todas';
             } else {
                 textEl.textContent = checked.map(cb => {
-                    const c = categories.find(c => c.id === parseInt(cb.value));
+                    const c = byId(categories, parseInt(cb.value));
                     return c ? (c.icon ? c.icon + ' ' + c.name : c.name) : '';
                 }).filter(Boolean).join(', ');
             }

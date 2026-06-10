@@ -28,14 +28,14 @@
             
             document.getElementById('expensesList').innerHTML = list.length ? list.map(e => {
                 // ✅ Emoji antes do nome
-                const category = categories.find(c => c.id === e.category_id);
+                const category = byId(categories, e.category_id);
                 const emoji = category?.icon || '📁';
                 
                 // Buscar nome e emoji do perfil e do usuário pagador
-                const profile = profiles.find(p => p.id === e.split_profile_id);
+                const profile = byId(profiles, e.split_profile_id);
                 const profileName = profile?.name || 'Perfil desconhecido';
                 const profileEmoji = profile?.emoji || '⚖️';
-                const paidUser = users.find(u => u.id === e.paid_by_user_id);
+                const paidUser = byId(users, e.paid_by_user_id);
                 const paidEmoji = paidUser?.emoji || '👤';
                 
                 const _ePm = pmById(e.payment_method_id);

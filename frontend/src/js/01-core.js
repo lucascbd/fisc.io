@@ -100,10 +100,10 @@
             console.log('🌐 Buscando /dashboard do servidor');
             const monthParam = month ? `?month=${month}` : '';
             
-            const data = await api(`${API}/dashboard${monthParam}`);
-            
-            // Targets são por usuário, buscar em paralelo
-            const targetsData = await api(`${API}/targets`).catch(() => []);
+            const [data, targetsData] = await Promise.all([
+                api(`${API}/dashboard${monthParam}`),
+                api(`${API}/targets`).catch(() => []),
+            ]);
             targets = targetsData;
             
             // Atualizar cache estático
@@ -171,8 +171,43 @@
         
         let categoriesSortable = null, profilesSortable = null, usersSortable = null;
 
+        // ── O(1) lookup por id com WeakMap ───────────────────────────────────
+        const _idMapCache = new WeakMap();
+        function byId(arr, id) {
+            if (!arr) return undefined;
+            let m = _idMapCache.get(arr);
+            if (!m) { m = new Map(arr.map(o => [o.id, o])); _idMapCache.set(arr, m); }
+            return m.get(id);
+        }
+
+        // ── Debounce ──────────────────────────────────────────────────────────
+        function debounce(fn, ms) {
+            let t;
+            return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+        }
+
+        // ── Reuso de charts (update in-place em vez de destroy/recreate) ──────
+        function upsertChart(chart, ctx, config) {
+            const canvas = typeof ctx === 'string' ? document.getElementById(ctx) : (ctx.canvas || ctx);
+            if (chart && chart.canvas === canvas && chart.config.type === config.type) {
+                chart.data = config.data;
+                chart.options = config.options || {};
+                chart.update();
+                return chart;
+            }
+            if (chart) { try { chart.destroy(); } catch (e) {} }
+            const context = canvas.nodeName === 'CANVAS' ? canvas.getContext('2d') : canvas;
+            return new Chart(context, config);
+        }
+
+        // Versões debounced das funções de filtro pesado (definidas após os módulos de charts carregarem)
+        const loadInflationDebounced        = debounce(() => loadInflation(), 250);
+        const updatePieChartDebounced       = debounce(() => updatePieChart(), 250);
+        const updatePmBarChartDebounced     = debounce(() => updatePmBarChart(), 250);
+        const updateBarChartFiltersDebounced= debounce(() => updateBarChartFilters(), 250);
+
         // Helpers para métodos de pagamento
-        function pmById(id) { return paymentMethods.find(pm => pm.id === id) || null; }
+        function pmById(id) { return byId(paymentMethods, id) || null; }
         function userPms(userId) { return paymentMethods.filter(pm => pm.user_id === userId); }
         function pmIcon(pm) {
             if (!pm) return '';

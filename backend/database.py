@@ -7,6 +7,8 @@ from config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     connect_args={"client_encoding": "utf8"},
+    pool_size=10,
+    max_overflow=20,
     pool_pre_ping=True,   # valida conexão antes de usar (evita "connection closed" após idle)
     pool_recycle=1800,    # recicla conexões a cada 30 min (evita timeout do Postgres)
 )

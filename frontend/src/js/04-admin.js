@@ -52,7 +52,7 @@
                                 // Atualizar array local de categories para refletir nova ordem
                                 const newOrder = [];
                                 categoryIds.forEach(id => {
-                                    const cat = categories.find(c => c.id === id);
+                                    const cat = byId(categories, id);
                                     if (cat) newOrder.push(cat);
                                 });
                                 categories = newOrder;
@@ -347,7 +347,7 @@
             const curId = parseInt(document.getElementById('exp_payment_method_id')?.value) || null;
             // Se o método atual não pertence ao novo pagador, resetar para o preferido dele
             const curPm = pms.find(p => p.id === curId);
-            const paidByUser = (users || []).find(u => u.id === paidById) || user;
+            const paidByUser = byId(users, paidById) || user;
             const prefPmId = paidByUser?.preferred_payment_method || null;
             const selId = curPm ? curId : (pms.find(p => p.id === prefPmId)?.id || pms[0]?.id || null);
             if (document.getElementById('exp_payment_method_id')) document.getElementById('exp_payment_method_id').value = selId || '';
@@ -533,7 +533,7 @@
                                                 const cats = visibleCategories();
                                                 // Always include the current expense's category even if hidden
                                                 if (expense?.category_id && !cats.find(c => c.id === expense.category_id)) {
-                                                    const hidden = categories.find(c => c.id === expense.category_id);
+                                                    const hidden = byId(categories, expense.category_id);
                                                     if (hidden) cats.unshift(hidden);
                                                 }
                                                 return cats;
@@ -679,7 +679,7 @@
                         return;
                     }
                     // Validar envolvimento do usuário logado
-                    const selectedProfile = profiles.find(p => p.id === parseInt(profVal));
+                    const selectedProfile = byId(profiles, parseInt(profVal));
                     const userInProfile = selectedProfile?.users?.some(u => u.user_id === user.id);
                     const userIsPayer = parseInt(paidVal) === user.id;
                     if (!userIsPayer && !userInProfile) {
@@ -758,7 +758,7 @@
                     categories = await api(`${API}/categories`);
                 } catch(e) {}
             }
-            const category = categoryId ? categories.find(c => c.id === categoryId) : null;
+            const category = categoryId ? byId(categories, categoryId) : null;
             
             // Carregar opções IPCA (lazy, cache simples)
             if (!window._ipcaCategories) {
@@ -1010,7 +1010,7 @@
         async function showProfileModal(profileId = null) {
             // Usar cache de dados estáticos
             await fetchStaticData();
-            const profile = profileId ? profiles.find(p => p.id === profileId) : null;
+            const profile = profileId ? byId(profiles, profileId) : null;
             
             const _savedScrollY = window.scrollY;
             document.body.classList.add('modal-open');
@@ -1233,7 +1233,7 @@
 
         async function showUserModal(userId = null) {
             // Se for o próprio usuário, buscar dados frescos do servidor
-            let usr = userId ? users.find(u => u.id === userId) : null;
+            let usr = userId ? byId(users, userId) : null;
             if (userId) {
                 try {
                     const freshList = await api(`${API}/users`);

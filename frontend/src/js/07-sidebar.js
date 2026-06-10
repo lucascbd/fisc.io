@@ -204,8 +204,8 @@
                 list.innerHTML = visible.map(r => {
                     // Admin can edit all; regular users can edit their own (created_by) or where they are paid_by
                     const canEdit = user.is_admin || r.created_by_user_id === user.id || r.paid_by_user_id === user.id;
-                    const prof = (profiles||[]).find(p => p.id === r.split_profile_id);
-                    const paidUser = (users||[]).find(u => u.id === r.paid_by_user_id);
+                    const prof = byId(profiles, r.split_profile_id);
+                    const paidUser = byId(users, r.paid_by_user_id);
                     const profLabel  = prof     ? (prof.emoji||'⚖️')     + ' ' + prof.name     : (r.split_profile_name||'');
                     const paidLabel  = paidUser ? (paidUser.emoji||'👤') + ' ' + paidUser.name : (r.paid_by_name||'');
                     const iv = r.interval ?? 0;
@@ -487,7 +487,7 @@
         }
 
         async function togglePmClosed(pmId) {
-            const pm = paymentMethods.find(p => p.id === pmId);
+            const pm = byId(paymentMethods, pmId);
             if (!pm) return;
             const action = pm.is_closed ? 'abrir' : 'fechar';
             const actionLabel = pm.is_closed ? 'Abrir fatura' : 'Fechar fatura';
@@ -507,7 +507,7 @@
         }
 
         async function showPaymentMethodModal(pmId = null) {
-            const pm = pmId ? paymentMethods.find(p => p.id === pmId) : null;
+            const pm = pmId ? byId(paymentMethods, pmId) : null;
             const isDark = document.body.classList.contains('dark-mode');
             const modalBg    = isDark ? '#2d2e30' : 'white';
             const headerBg   = isDark ? '#35363a' : '#e8f0fe';
@@ -969,7 +969,7 @@
                             // Atualizar array local
                             const newOrder = [];
                             categoryIds.forEach(id => {
-                                const cat = categories.find(c => c.id === id);
+                                const cat = byId(categories, id);
                                 if (cat) newOrder.push(cat);
                             });
                             categories = newOrder;
