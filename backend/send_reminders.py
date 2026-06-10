@@ -64,24 +64,24 @@ def calculate_user_balances(db, month=None):
         year, mon = map(int, month.split('-'))
     
     users = db.query(User).filter(User.is_active == True).all()
-    
+
+    # 1 query com GROUP BY em vez de 1 query por usuário
+    rows = db.query(
+        ExpenseSplit.user_id,
+        func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance')
+    ).filter(
+        extract('year', ExpenseSplit.due_date) == year,
+        extract('month', ExpenseSplit.due_date) == mon
+    ).group_by(ExpenseSplit.user_id).all()
+    balance_by_user = {r.user_id: Decimal(str(r.balance)) for r in rows}
+
     balances = {}
     for user in users:
-        result = db.query(
-            func.coalesce(func.sum(ExpenseSplit.balance), 0).label('balance')
-        ).filter(
-            ExpenseSplit.user_id == user.id,
-            extract('year', ExpenseSplit.due_date) == year,
-            extract('month', ExpenseSplit.due_date) == mon
-        ).first()
-        
-        balance = Decimal(str(result.balance)) if result.balance else Decimal('0')
-        
         balances[user.id] = {
             'name': user.name,
-            'balance': balance
+            'balance': balance_by_user.get(user.id, Decimal('0'))
         }
-    
+
     return balances, f"{year}-{mon:02d}"
 
 
