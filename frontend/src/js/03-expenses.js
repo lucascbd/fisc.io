@@ -327,4 +327,3 @@
             } catch(e) { alert(e.message || 'Erro ao salvar'); }
         }
 
-        async function loadCategories() {

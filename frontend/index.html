@@ -13,15 +13,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-    <script>
-        // Unregister datalabels globally — only use per-chart in inflation tab
-        if (window.ChartDataLabels) Chart.unregister(ChartDataLabels);
-    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     
+    <link rel="stylesheet" href="/tailwind.css">
     <link rel="stylesheet" href="/app.css">
     
     <!-- PWA Meta Tags -->
@@ -34,8 +30,8 @@
     <link rel="apple-touch-icon" href="/icon-192.png">
     
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 </head>
 <body class="bg-gray-100">
     <!-- Prevenir flash da tela de login ao recarregar com sessão ativa -->
@@ -266,6 +262,21 @@
                     gap: 2px;
                     min-width: 70px;
                 "><span style="font-size: 20px;">💸</span><span>Despesas</span></button>
+                <button onclick="showTab('openfinance', this)" id="tabOpenfinance" style="
+                    background-color: transparent;
+                    color: #5f6368;
+                    font-weight: 400;
+                    border: none;
+                    border-radius: 16px;
+                    padding: 8px 16px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 2px;
+                    min-width: 70px;
+                "><span style="font-size: 20px;">🏦</span><span>Pluggy</span></button>
                 <button onclick="showTab('charts', this)" id="tabCharts" style="
                     background-color: transparent;
                     color: #5f6368;
@@ -439,7 +450,13 @@
 
                 <!-- Gráfico de linha - Despesas por dia do mês -->
                 <div class="mb-6">
-                    <div class="mb-2"><h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3></div>
+                    <div class="mb-2 flex items-center justify-between">
+                        <h3 class="text-lg md:text-xl font-bold">Despesas por dia</h3>
+                        <div id="dailyModeToggle" style="display:flex;background:#f1f3f4;border-radius:20px;padding:2px;gap:2px;flex-shrink:0;">
+                            <button class="daily-mode-btn active" id="dailyModeBtn_dia" onclick="setDailyChartMode('dia')" style="border:none;border-radius:18px;padding:3px 12px;cursor:pointer;transition:.15s;">Dia</button>
+                            <button class="daily-mode-btn" id="dailyModeBtn_acum" onclick="setDailyChartMode('acum')" style="border:none;border-radius:18px;padding:3px 12px;cursor:pointer;transition:.15s;">Acum.</button>
+                        </div>
+                    </div>
                     <!-- Filtros distribuídos igualmente, PM icons à direita -->
                     <div class="flex gap-2 mb-3" style="flex-wrap:nowrap;align-items:flex-end;">
                         <!-- Categoria -->
@@ -551,8 +568,11 @@
 
                 <!-- Gráfico 1: Minha Inflação vs IPCA Índice Geral -->
                 <div class="mb-6">
-                    <div class="mb-3">
+                    <div class="mb-3 flex items-center justify-between">
                         <h3 class="text-lg md:text-xl font-bold">Minha inflação × IPCA Índice Geral</h3>
+                        <button id="ipcaIngestBtn" onclick="triggerIpcaIngest()" style="display:none;align-items:center;justify-content:center;background:#f1f3f4;border:none;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;flex-shrink:0;">
+                            <span id="ipcaIngestIcon">🔄</span>
+                        </button>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">
                         <p id="myInflationMsg" class="hidden text-gray-500 text-center py-8 text-sm"></p>
@@ -677,6 +697,42 @@
                         </button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Open Finance Tab -->
+            <div id="openfinanceTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow p-4 mb-4" id="ofAccountsCard">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <span class="font-semibold text-sm">🏦 Contas conectadas</span>
+                        <button onclick="ofConnect()" id="ofConnectBtn"
+                            style="background:#1a73e8;color:#fff;border:none;border-radius:16px;padding:6px 14px;font-size:12px;font-weight:500;cursor:pointer;">
+                            + Conectar banco
+                        </button>
+                    </div>
+                    <div id="ofAccountsList" style="display:flex;flex-direction:column;gap:6px;">
+                        <p class="text-gray-500 text-sm text-center py-2">Nenhuma conta conectada</p>
+                    </div>
+                </div>
+                <div class="mb-4" id="ofFiltersRow" style="display:none!important;">
+                    <!-- row 1: conta -->
+                    <div style="margin-bottom:6px;">
+                        <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Conta</label>
+                        <select id="ofAccountSelect" onchange="ofLoadTransactions()" class="filter-h border rounded-lg px-2 text-sm" style="width:100%;"></select>
+                    </div>
+                    <!-- row 2: datas + botão sempre na mesma linha -->
+                    <div style="display:flex;align-items:flex-end;gap:6px;">
+                        <div style="flex:1;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">De</label>
+                            <input type="date" id="ofDateFrom" onchange="ofLoadTransactions()" class="filter-h border rounded-lg px-2 text-sm" style="width:100%;">
+                        </div>
+                        <div style="flex:1;">
+                            <label class="block text-xs font-medium mb-1" style="color:#5f6368;">Até</label>
+                            <input type="date" id="ofDateTo" onchange="ofLoadTransactions()" class="filter-h border rounded-lg px-2 text-sm" style="width:100%;">
+                        </div>
+                        <button onclick="ofLoadTransactions()" style="height:38px;background:#1a73e8;color:#fff;border:none;border-radius:8px;padding:0 12px;font-size:13px;cursor:pointer;flex-shrink:0;">↺</button>
+                    </div>
+                </div>
+                <div id="ofTransactionsList"></div>
             </div>
 
         </div>
@@ -834,7 +890,8 @@
         <span style="font-size: 28px;">💸</span>
     </button>
 
-    <script src="/app.js"></script>
+
+    <script defer src="/app.js"></script>
 
 </body>
 </html>

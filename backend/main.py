@@ -20,7 +20,7 @@ from decimal import Decimal
 
 from config import settings
 from database import Base, engine, get_db
-from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income
+from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income, PluggyAccount
 from expense_service import ExpenseService
 from firebase_service import FirebaseService
 
@@ -45,6 +45,8 @@ def _safe_add_column(sql: str):
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
 _safe_add_column("ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS interval NUMERIC(4,2) NOT NULL DEFAULT 0")
 _safe_add_column("ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT FALSE")
+_safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
+_safe_add_column("ALTER TABLE incomes ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
 _safe_add_column("CREATE INDEX IF NOT EXISTS idx_expenses_created_by ON expenses (created_by_user_id)")
 _safe_add_column("CREATE INDEX IF NOT EXISTS idx_expenses_payment_method ON expenses (payment_method_id)")
 _safe_add_column("CREATE INDEX IF NOT EXISTS idx_recurring_created_by ON recurring_expenses (created_by_user_id)")
@@ -3222,7 +3224,7 @@ _AGENT_TOOLS = [{"function_declarations": [
 def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     import urllib.request as _urllib_req, time as _time
 
-    if not settings.GEMINI_API_KEY and not settings.GROQ_API_KEY:
+    if not settings.GEMINI_API_KEY:
         raise HTTPException(status_code=503, detail="Nenhuma chave de IA configurada no servidor")
 
     now = datetime.now()
@@ -3292,7 +3294,10 @@ REGRAS CRÍTICAS:
                     except Exception:
                         msg = body[:300]
                     if _attempt == 0 and ("high demand" in msg or "overloaded" in msg.lower() or e.code == 429):
-                        _time.sleep(3)
+                        import re as _re
+                        m = _re.search(r'retry in ([0-9.]+)s', msg)
+                        wait = min(float(m.group(1)), 55.0) if m else 5.0
+                        _time.sleep(wait)
                         continue
                     raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
                 except Exception as ex:
@@ -3311,91 +3316,10 @@ REGRAS CRÍTICAS:
             contents.append({"role": "user", "parts": fn_responses})
         return "Agente excedeu o limite de chamadas de ferramentas."
 
-    # ── DeepSeek implementation (OpenAI-compatible format) ────────────────────
-    def _run_deepseek() -> str:
-        key = settings.GROQ_API_KEY.strip()
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        messages = [{"role": "system", "content": system_prompt}]
-        for h in data.history[-10:]:
-            messages.append({"role": "assistant" if h.role == "model" else "user", "content": h.text})
-        messages.append({"role": "user", "content": data.message})
-        ds_tools = [{"type": "function",
-                     "function": {"name": fd["name"], "description": fd["description"], "parameters": fd["parameters"]}}
-                    for fd in _AGENT_TOOLS[0]["function_declarations"]]
-
-        _groq_model = "llama-3.3-70b-versatile"
-
-        def _dscall(msgs: list) -> dict:
-            nonlocal _groq_model
-            payload = json.dumps({"model": _groq_model, "messages": msgs, "tools": ds_tools,
-                                  "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
-            for _attempt in range(2):
-                req = _urllib_req.Request(url, data=payload,
-                                          headers={"Content-Type": "application/json",
-                                                   "Authorization": f"Bearer {key}",
-                                                   "User-Agent": "fisc.io/1.0",
-                                                   "Accept": "application/json"},
-                                          method="POST")
-                try:
-                    with _urllib_req.urlopen(req, timeout=30) as resp:
-                        return json.loads(resp.read())
-                except _urllib_req.HTTPError as e:
-                    body = e.read().decode("utf-8", errors="replace")
-                    try:
-                        msg = json.loads(body).get("error", {}).get("message", body[:300])
-                    except Exception:
-                        msg = body[:300]
-                    msg_lower = msg.lower()
-                    if _attempt == 0 and "failed to call a function" in msg_lower:
-                        _time.sleep(2)
-                        continue
-                    if "rate limit" in msg_lower and ("tokens per day" in msg_lower or "tpd" in msg_lower):
-                        if _groq_model != "llama-3.1-8b-instant":
-                            _groq_model = "llama-3.1-8b-instant"
-                            payload = json.dumps({"model": _groq_model, "messages": msgs, "tools": ds_tools,
-                                                  "tool_choice": "auto", "max_tokens": 2048, "temperature": 0.3}).encode()
-                            continue
-                    raise HTTPException(status_code=500, detail=f"Groq: {msg}")
-                except Exception as ex:
-                    raise HTTPException(status_code=500, detail=f"Erro ao chamar Groq: {ex}")
-
-        for _ in range(5):
-            result = _dscall(messages)
-            choice = result["choices"][0]
-            msg_obj = choice["message"]
-            tool_calls = msg_obj.get("tool_calls") or []
-            if not tool_calls or choice.get("finish_reason") == "stop":
-                return (msg_obj.get("content") or "").strip()
-            messages.append(msg_obj)
-            for tc in tool_calls:
-                try:
-                    tc_args = json.loads(tc["function"]["arguments"])
-                except Exception:
-                    tc_args = {}
-                res = _execute_tool(tc["function"]["name"], tc_args)
-                messages.append({"role": "tool", "tool_call_id": tc["id"],
-                                  "content": json.dumps(res, ensure_ascii=False)})
-        return "Agente excedeu o limite de chamadas de ferramentas."
-
-    # ── Orchestration: Gemini first, DeepSeek as fallback ────────────────────
-    _GEMINI_FALLBACK_PHRASES = ("high demand", "limit: 20", "overloaded", "quota exceeded")
-
-    if settings.GEMINI_API_KEY:
-        try:
-            return {"reply": _run_gemini()}
-        except HTTPException as e:
-            detail_lower = e.detail.lower()
-            has_deepseek = bool(settings.GROQ_API_KEY)
-            is_retryable = any(p in detail_lower for p in _GEMINI_FALLBACK_PHRASES)
-            if has_deepseek and is_retryable:
-                pass  # fall through to DeepSeek
-            else:
-                raise
-
-    if settings.GROQ_API_KEY:
-        return {"reply": _run_deepseek()}
-
-    raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Tente novamente mais tarde.")
+    # ── Orchestration ─────────────────────────────────────────────────────────
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Configure GEMINI_API_KEY.")
+    return {"reply": _run_gemini()}
 
 
 @app.get(f"{settings.API_V1_PREFIX}/agent/models")
@@ -3489,3 +3413,270 @@ async def audit_analyze(
             "micro":    len(result.micro_adjustments),
         },
     }
+
+
+# ── Open Finance (Pluggy) ─────────────────────────────────────────────────────
+
+def _pluggy_api_key() -> str:
+    """Authenticate with Pluggy and return a short-lived API key."""
+    if not settings.PLUGGY_CLIENT_ID or not settings.PLUGGY_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Open Finance não configurado no servidor.")
+    import pluggy_sdk
+    from uuid import UUID as _UUID
+    configuration = pluggy_sdk.Configuration()
+    with pluggy_sdk.ApiClient(configuration) as api_client:
+        auth = pluggy_sdk.AuthApi(api_client)
+        resp = auth.auth_create(
+            auth_request=pluggy_sdk.AuthRequest(
+                client_id=_UUID(settings.PLUGGY_CLIENT_ID),
+                client_secret=settings.PLUGGY_CLIENT_SECRET
+            )
+        )
+        return resp.api_key
+
+
+def _pluggy_client_with_key(api_key: str):
+    """Return a configured ApiClient using the Pluggy API key."""
+    import pluggy_sdk
+    cfg = pluggy_sdk.Configuration(api_key={"default": api_key})
+    return pluggy_sdk.ApiClient(cfg)
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/connect-token")
+def openfinance_connect_token(current_user: User = Depends(get_current_user)):
+    try:
+        import pluggy_sdk
+        api_key = _pluggy_api_key()
+        with _pluggy_client_with_key(api_key) as api_client:
+            auth = pluggy_sdk.AuthApi(api_client)
+            resp = auth.connect_token_create(
+                connect_token_request=pluggy_sdk.ConnectTokenRequest()
+            )
+            return {"access_token": resp.access_token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar token Pluggy: {e}")
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/accounts")
+def openfinance_list_accounts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    accounts = db.query(PluggyAccount).filter(PluggyAccount.user_id == current_user.id).all()
+    pm_map = {p.id: {"name": p.description, "icon": p.icon_path, "color": p.color}
+              for p in db.query(PaymentMethod).filter(PaymentMethod.user_id == current_user.id).all()}
+    return [{"id": a.id, "account_name": a.account_name, "account_type": a.account_type,
+             "pluggy_account_id": a.pluggy_account_id, "item_id": a.item_id,
+             "payment_method_id": a.payment_method_id,
+             "payment_method_name": pm_map.get(a.payment_method_id, {}).get("name"),
+             "payment_method_icon": pm_map.get(a.payment_method_id, {}).get("icon"),
+             "payment_method_color": pm_map.get(a.payment_method_id, {}).get("color")} for a in accounts]
+
+
+class PluggyItemRequest(BaseModel):
+    item_id: str
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/items/accounts")
+def openfinance_item_accounts(data: PluggyItemRequest, _: User = Depends(get_current_user)):
+    """Retorna as contas de um item Pluggy (após conexão via widget)."""
+    try:
+        import pluggy_sdk
+        from uuid import UUID as _UUID
+        api_key = _pluggy_api_key()
+        with _pluggy_client_with_key(api_key) as api_client:
+            acct_api = pluggy_sdk.AccountApi(api_client)
+            resp = acct_api.accounts_list(item_id=_UUID(data.item_id))
+            return {"accounts": [{"id": str(a.id), "name": a.name, "type": str(a.type),
+                     "balance": float(a.balance or 0)} for a in resp.results]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar contas Pluggy: {e}")
+
+
+class SavePluggyAccountRequest(BaseModel):
+    item_id: str
+    pluggy_account_id: str
+    account_name: str
+    account_type: str
+    payment_method_id: Optional[int] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/accounts")
+def openfinance_save_account(data: SavePluggyAccountRequest, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
+    existing = db.query(PluggyAccount).filter(
+        PluggyAccount.pluggy_account_id == data.pluggy_account_id).first()
+    if existing:
+        existing.payment_method_id = data.payment_method_id
+        existing.item_id = data.item_id
+        db.commit()
+        return {"id": existing.id}
+    acct = PluggyAccount(user_id=current_user.id, item_id=data.item_id,
+                         pluggy_account_id=data.pluggy_account_id,
+                         account_name=data.account_name, account_type=data.account_type,
+                         payment_method_id=data.payment_method_id)
+    db.add(acct)
+    db.commit()
+    db.refresh(acct)
+    return {"id": acct.id}
+
+
+@app.delete(f"{settings.API_V1_PREFIX}/openfinance/accounts/{{account_id}}")
+def openfinance_delete_account(account_id: int, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    acct = db.query(PluggyAccount).filter(PluggyAccount.id == account_id,
+                                           PluggyAccount.user_id == current_user.id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    db.delete(acct)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/transactions")
+def openfinance_transactions(account_id: int, date_from: str = None, date_to: str = None,
+                              db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    acct = db.query(PluggyAccount).filter(PluggyAccount.id == account_id,
+                                           PluggyAccount.user_id == current_user.id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    try:
+        import requests as _req
+        from datetime import date as _date, datetime as _dt
+        api_key = _pluggy_api_key()
+        df = date_from or _date.today().replace(day=1).isoformat()
+        dt = date_to or _date.today().isoformat()
+
+        all_txns = []
+        headers = {"X-API-KEY": api_key, "Accept": "application/json"}
+        cursor = None
+        for _ in range(10):
+            params = {"accountId": acct.pluggy_account_id, "dateFrom": df, "dateTo": dt}
+            if cursor:
+                params["after"] = cursor
+            r = _req.get("https://api.pluggy.ai/v2/transactions", headers=headers, params=params, timeout=30)
+            if not r.ok:
+                raise HTTPException(status_code=500, detail=f"Pluggy API: {r.status_code} — {r.text}")
+            page = r.json()
+            all_txns.extend(page.get("results", []))
+            cursor = page.get("next")
+            if not cursor:
+                break
+
+        # IDs já importados via pluggy_transaction_id
+        from sqlalchemy import text as _text
+        from decimal import Decimal as _Dec
+        imported = set()
+        for row in db.execute(_text("SELECT pluggy_transaction_id FROM expenses WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
+            imported.add(row[0])
+        for row in db.execute(_text("SELECT pluggy_transaction_id FROM incomes WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
+            imported.add(row[0])
+
+        # Duplicatas por (valor, data, método de pagamento)
+        dup_keys = set()
+        if acct.payment_method_id:
+            rows = db.execute(_text(
+                "SELECT total_amount::text, expense_date::text FROM expenses "
+                "WHERE payment_method_id = :pm AND pluggy_transaction_id IS NULL"
+            ), {"pm": acct.payment_method_id}).fetchall()
+            for r in rows:
+                dup_keys.add((str(r[0]), str(r[1])))
+
+        def _is_dup(tx):
+            if acct.payment_method_id is None:
+                return False
+            amt = f"{float(tx.get('amount') or 0):.2f}"
+            dt = str(tx.get("date", ""))[:10]
+            return (amt, dt) in dup_keys
+
+        return {"transactions": [{"id": str(tx.get("id", "")),
+                 "description": tx.get("description", ""),
+                 "amount": float(tx.get("amount") or 0),
+                 "date": str(tx.get("date", ""))[:10],
+                 "type": str(tx.get("type", "DEBIT")),
+                 "already_imported": str(tx.get("id", "")) in imported,
+                 "possible_duplicate": not (str(tx.get("id", "")) in imported) and _is_dup(tx)} for tx in all_txns]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar transações: {e}")
+
+
+class ImportExpenseRequest(BaseModel):
+    pluggy_transaction_id: str
+    description: str
+    amount: float
+    expense_date: str
+    category_id: int
+    split_profile_id: int
+    paid_by_user_id: Optional[int] = None
+    payment_method_id: Optional[int] = None
+    notes: Optional[str] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/import/expense")
+def openfinance_import_expense(data: ImportExpenseRequest, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    from sqlalchemy import text as _text
+    from datetime import date as _date
+    if db.execute(_text("SELECT id FROM expenses WHERE pluggy_transaction_id = :t"),
+                  {"t": data.pluggy_transaction_id}).fetchone():
+        raise HTTPException(status_code=409, detail="Transação já importada.")
+    from decimal import Decimal as _Dec
+    exp = ExpenseService.create_expense(
+        db,
+        paid_by_user_id=data.paid_by_user_id or current_user.id,
+        category_id=data.category_id,
+        split_profile_id=data.split_profile_id,
+        description=data.description,
+        total_amount=_Dec(str(data.amount)),
+        expense_date=_date.fromisoformat(data.expense_date),
+        notes=data.notes,
+        payment_method_id=data.payment_method_id,
+        created_by_user_id=current_user.id,
+    )
+    db.execute(_text("UPDATE expenses SET pluggy_transaction_id = :t WHERE id = :id"),
+               {"t": data.pluggy_transaction_id, "id": exp.id})
+    db.commit()
+    return {"id": exp.id}
+
+
+class ImportIncomeRequest(BaseModel):
+    pluggy_transaction_id: str
+    description: str
+    amount: float
+    income_date: str
+    notes: Optional[str] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/import/income")
+def openfinance_import_income(data: ImportIncomeRequest, db: Session = Depends(get_db),
+                               current_user: User = Depends(get_current_user)):
+    from sqlalchemy import text as _text
+    from datetime import date as _date
+    if db.execute(_text("SELECT id FROM incomes WHERE pluggy_transaction_id = :t"),
+                  {"t": data.pluggy_transaction_id}).fetchone():
+        raise HTTPException(status_code=409, detail="Transação já importada.")
+    inc = Income(description=data.description, amount=data.amount,
+                 income_date=_date.fromisoformat(data.income_date), notes=data.notes,
+                 user_id=current_user.id, pluggy_transaction_id=data.pluggy_transaction_id)
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+    return {"id": inc.id}
+
+
+@app.post(f"{settings.API_V1_PREFIX}/admin/ipca/ingest")
+async def trigger_ipca_ingest(current_user: User = Depends(get_current_user)):
+    """Manually trigger IPCA data ingestion — admin only"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    import subprocess, sys as _sys, os as _os
+    script = _os.path.join(_os.path.dirname(__file__), "ipca_ingest.py")
+    try:
+        result = subprocess.run(
+            [_sys.executable, script],
+            capture_output=True, text=True, timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Timeout ao executar ingestão IPCA.")
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=result.stderr.strip() or "Script falhou.")
+    return {"ok": True, "output": result.stdout.strip()}

@@ -1,3 +1,6 @@
+        // Unregister datalabels globally — only use per-chart in inflation tab
+        if (window.ChartDataLabels) Chart.unregister(ChartDataLabels);
+
         const API = '/api/v1';
         let token = localStorage.getItem('token');
         let user = null;
@@ -200,7 +203,7 @@
             return new Chart(context, config);
         }
 
-        // Versões debounced das funções de filtro pesado (definidas após os módulos de charts carregarem)
+        // Versões debounced das funções de filtro pesado
         const loadInflationDebounced        = debounce(() => loadInflation(), 250);
         const updatePieChartDebounced       = debounce(() => updatePieChart(), 250);
         const updatePmBarChartDebounced     = debounce(() => updatePmBarChart(), 250);
@@ -325,6 +328,11 @@
             document.getElementById('dashboardScreen').classList.remove('hidden');
             document.getElementById('userName').textContent = user.name;
             
+            // Mostrar botão de ingestão IPCA apenas para admins
+            if (user.is_admin) {
+                document.getElementById('ipcaIngestBtn').style.display = 'flex';
+            }
+
             // Ocultar funcionalidades de admin para usuários normais
             if (!user.is_admin) {
                 document.getElementById('usersBtn')?.classList.add('hidden');
@@ -375,7 +383,7 @@
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
 
             // Resetar todos os botões para estilo não selecionado
-            const allTabs = ['tabHome', 'tabExpenses', 'tabCharts', 'tabInflation', 'tabIncome', 'tabAgent'];
+            const allTabs = ['tabHome', 'tabExpenses', 'tabOpenfinance', 'tabCharts', 'tabInflation', 'tabIncome', 'tabAgent'];
             allTabs.forEach(id => {
                 const btn = document.getElementById(id);
                 if (btn) {
@@ -402,6 +410,7 @@
             else if (tab === 'inflation') loadInflation();
             else if (tab === 'income') loadIncome();
             // agent tab needs no initial load
+            else if (tab === 'openfinance') loadOpenFinance();
         }
 
         // ✅ 8️⃣ Carregar meses e iniciar no mês vigente
@@ -448,6 +457,15 @@
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
         let dailyCatMonth='';
+        let dailyChartMode='dia';
+
+        function setDailyChartMode(mode) {
+            dailyChartMode = mode;
+            document.querySelectorAll('.daily-mode-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById('dailyModeBtn_' + mode);
+            if (activeBtn) activeBtn.classList.add('active');
+            updateDailyChart();
+        }
 
         function toggleDailyCatFilterDropdown(){
             const dd=document.getElementById('dailyCatFilterDropdown');
@@ -612,152 +630,3 @@
             });
         }
 
-        async function loadDashboardData() {
-            try {
-                const month = document.getElementById('homeMonthFilter')?.value || '';
-                
-                // ✅ OTIMIZADO - Usa endpoint /dashboard agregado (1 request)
-                const data = await fetchDashboard(month);
-                const { expenses, balances } = data;
-                
-                // ✅ Calcular total apenas das parcelas do período (sem duplicação)
-                let totalPeriod = 0;
-                const [year, mon] = month.split('-').map(Number);
-                
-                // ✅ OTIMIZADO - Expenses já vêm com splits incluídos!
-                for (const expense of expenses) {
-                    expense.date = expense.original_date || expense.expense_date;
-                    
-                    // Somar apenas uma vez o installment_amount de cada parcela do mês
-                    const uniqueSplits = new Set();
-                    expense.splits.forEach(split => {
-                        const splitDate = new Date(split.due_date + 'T00:00:00');
-                        if (splitDate.getFullYear() === year && splitDate.getMonth() + 1 === mon) {
-                            const key = `${expense.id}-${split.installment_number}`;
-                            if (!uniqueSplits.has(key)) {
-                                uniqueSplits.add(key);
-                                totalPeriod += parseFloat(split.installment_amount);
-                            }
-                        }
-                    });
-                }
-                
-                const myBalance=balances.find(b=>b.user_id===user.id);
-                // effectivePm: se o usuário logado pagou  método da despesa
-                //              se outro usuário pagou   método preferencial de balanço do usuário logado
-                const effectivePm = (e) => e.paid_by_user_id === user.id
-                    ? e.payment_method_id
-                    : (user.preferred_balance_method || null);
-
-                // PMs com despesas neste mês (para filtrar os botões exibidos)
-                const _pmSetInicio = new Set();
-                for (const e of expenses) {
-                    const pmId = effectivePm(e);
-                    if (pmId == null) continue;
-                    const hasSplit = e.splits.some(s => {
-                        const d = new Date(s.due_date + 'T00:00:00');
-                        return d.getFullYear() === year && d.getMonth() + 1 === mon;
-                    });
-                    if (hasSplit) _pmSetInicio.add(pmId);
-                }
-                window._pmIdsInicio = _pmSetInicio.size > 0 ? _pmSetInicio : null;
-                // Remove filtros ativos de PMs que não existem neste mês
-                if (window._pmIdsInicio) activePmFilter = activePmFilter.filter(id => window._pmIdsInicio.has(id));
-
-                renderPmFilterButtons();
-                if(activePmFilter.length>0){
-                    let ft=0;
-                    for(const e of expenses){
-                        if(!activePmFilter.includes(effectivePm(e)))continue;
-                        for(const s of e.splits){
-                            if(s.user_id!==user.id)continue;
-                            const d=new Date(s.due_date+'T00:00:00');
-                            if(d.getFullYear()===year&&d.getMonth()+1===mon){ft+=parseFloat(s.user_amount);}}}
-                    _setTotalExpenses(`R$ ${formatBRL(ft)}`);
-                }else{_setTotalExpenses(`R$ ${formatBRL(myBalance?(myBalance.total_owed||0):totalPeriod)}`);}
-
-
-                // Classify: shared = another user also has splits in this month
-                const isSharedExpense = (expense) => {
-                    const usersThisMonth = new Set(
-                        expense.splits
-                            .filter(s => { const d = new Date(s.due_date + 'T00:00:00'); return d.getFullYear() === year && d.getMonth() + 1 === mon; })
-                            .map(s => s.user_id)
-                    );
-                    return usersThisMonth.size > 1 || (usersThisMonth.size === 1 && !usersThisMonth.has(user.id));
-                };
-                const sharedExpenses = expenses.filter(e => isSharedExpense(e) && (!activePmFilter.length || activePmFilter.includes(effectivePm(e))));
-                const personalExpenses = expenses.filter(e => !isSharedExpense(e) && (!activePmFilter.length || activePmFilter.includes(effectivePm(e))));
-
-                // Ordenar usuário logado no topo
-                const sortedBalances = [...balances].sort((a, b) => {
-                    if (a.user_id === user.id) return -1;
-                    if (b.user_id === user.id) return 1;
-                    return 0;
-                });
-                
-                const detailedBalancesHTML = await Promise.all(sortedBalances
-                  .filter(b => b.user_id === user.id)
-                  .map(async (balance) => {
-                    const allSplits = [];
-                    const [year, mon] = month.split('-').map(Number);
-                    
-                    // ✅ OTIMIZADO - Usar splits que já vêm com a despesa
-                    for (const expense of personalExpenses) {
-                        const userSplits = expense.splits.filter(s => {
-                            const splitDate = new Date(s.due_date + 'T00:00:00');
-                            return s.user_id === balance.user_id &&
-                                   splitDate.getFullYear() === year &&
-                                   splitDate.getMonth() + 1 === mon;
-                        });
-                        
-                        userSplits.forEach(split => {
-                            allSplits.push({
-                                ...split,
-                                expense_id: expense.id,
-                                expense_description: expense.description,
-                                expense_category: expense.category_name,
-                                expense_date: expense.expense_date,
-                                original_date: expense.original_date || expense.expense_date,
-                                expense_installments: expense.installments,
-                                expense_profile_name: expense.profile_name,
-                                expense_total_amount: expense.total_amount,
-                                category_emoji: expense.category_emoji
-                            });
-                        });
-                    }
-                    
-                    // ✅ 6️⃣ Não exibir usuários sem despesas
-                    if (allSplits.length === 0) {
-                        return '';
-                    }
-                    
-                    // Calcular total da parte do usuário (soma de user_amount)
-                    const totalUserAmount = allSplits.reduce((sum, s) => sum + parseFloat(s.user_amount), 0);
-                    
-                    // Agrupar por categoria, depois por despesa
-                    const groupedByCategory = {};
-                    allSplits.forEach(split => {
-                        const catKey = split.expense_category;
-                        if (!groupedByCategory[catKey]) {
-                            groupedByCategory[catKey] = {
-                                category: split.expense_category,
-                                category_emoji: split.category_emoji,
-                                expenses: {}
-                            };
-                        }
-                        
-                        const expKey = `${split.expense_id}`;
-                        if (!groupedByCategory[catKey].expenses[expKey]) {
-                            groupedByCategory[catKey].expenses[expKey] = {
-                                id: split.expense_id,
-                                description: split.expense_description,
-                                date: split.original_date||split.expense_date,
-                                profile_name: split.expense_profile_name,
-                                installments: split.expense_installments,
-                                total_amount: split.expense_total_amount,
-                                splits: []
-                            };
-                        }
-                        groupedByCategory[catKey].expenses[expKey].splits.push(split);
-                    });

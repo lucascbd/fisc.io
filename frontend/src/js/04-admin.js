@@ -1,3 +1,4 @@
+        async function loadCategories() {
             // Usar cache se válido, senão buscar
             if (!isStaticCacheValid() || !categories.length) {
                 const list = await api(`${API}/categories`);
@@ -1459,3 +1460,4 @@
             showUserModal(id);
         }
 
+        // ============================================================================

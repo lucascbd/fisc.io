@@ -1,4 +1,3 @@
-        // ============================================================================
         // GRÁFICOS - CHARTS
         // ============================================================================
         
@@ -222,7 +221,7 @@
             div.style.display = hidden ? '' : 'none';
             if (arrow) arrow.textContent = hidden ? '▼' : '▶';
         }
-        function toggleBarYear(year, checked) {  // called from onclick
+        function toggleBarYear(year, checked) {
             document.querySelectorAll(`.bar-chart-month[data-year="${year}"]`).forEach(cb => { cb.checked = checked; });
             updateBarChartSelectedText();
             updateBarChartFiltersDebounced();
@@ -410,12 +409,39 @@
         }
 
         // Oculta tooltips externos ao rolar a página (evita "tooltip voando")
+        // Elementos cacheados + flag: roda 1x por rolagem em vez de a cada evento de scroll
+        let _tooltipsHidden = false;
+        let _tooltipEls = null;
         window.addEventListener('scroll', () => {
-            ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.opacity = '0';
-            });
+            if (_tooltipsHidden) return;
+            _tooltipsHidden = true;
+            if (!_tooltipEls) _tooltipEls = ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip']
+                .map(id => document.getElementById(id)).filter(Boolean);
+            _tooltipEls.forEach(el => { el.style.opacity = '0'; });
+            setTimeout(() => { _tooltipsHidden = false; }, 150);
         }, { passive: true });
+
+        async function triggerIpcaIngest() {
+            const btn = document.getElementById('ipcaIngestBtn');
+            const icon = document.getElementById('ipcaIngestIcon');
+            btn.disabled = true;
+            icon.style.animation = 'spin 1s linear infinite';
+            icon.style.display = 'inline-block';
+            try {
+                const res = await api(`${API}/admin/ipca/ingest`, { method: 'POST' });
+                icon.style.animation = '';
+                icon.textContent = '✅';
+                setTimeout(() => { icon.textContent = '🔄'; }, 3000);
+                await loadInflation();
+            } catch(e) {
+                icon.style.animation = '';
+                icon.textContent = '❌';
+                alert('Erro ao atualizar IPCA: ' + e.message);
+                setTimeout(() => { icon.textContent = '🔄'; }, 3000);
+            } finally {
+                btn.disabled = false;
+            }
+        }
 
         async function loadInflation() {
             const isDark = document.body.classList.contains('dark-mode');
@@ -1671,15 +1697,19 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const selTarget = !isNaN(selTargetId) && selTargetId ? (targets||[]).find(t=>t.id===selTargetId) : null;
                 const fixedDailyLimit = selTarget ? selTarget.monthly_amount / daysInMonth : null;
 
+                const _nowD = new Date();
+                const _isCurMonD = _nowD.getFullYear() === year && _nowD.getMonth() + 1 === mon;
+                const _isPastMonD = year < _nowD.getFullYear() || (year === _nowD.getFullYear() && mon < _nowD.getMonth() + 1);
+                const todayDay = _isCurMonD ? _nowD.getDate() : (_isPastMonD ? daysInMonth : 0);
+
                 let tgtDisplayTotals = null;
                 let targetLineData = null;
                 let targetRawData = [];
                 let labelLimit = fixedDailyLimit; // valor exibido no label do gráfico
                 if (selTarget) {
-                    const now = new Date();
-                    const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === mon;
-                    const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && mon < now.getMonth() + 1);
-                    const todayDay = isCurrentMonth ? now.getDate() : (isPastMonth ? daysInMonth : 0);
+                    const now = _nowD;
+                    const isCurrentMonth = _isCurMonD;
+                    const isPastMonth = _isPastMonD;
 
                     const tgtCatIds = selTarget.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
                     const tgtPmIds = selTarget.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
@@ -1768,6 +1798,165 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
 
                 // Quando há target selecionado, usar totais filtrados pelo target para a linha azul
                 const activeTotals = tgtDisplayTotals ?? totals;
+
+                // ── MODO ACUMULADO ────────────────────────────────────────────────────────────
+                if (dailyChartMode === 'acum') {
+                    // Mesma lógica do Dia: parcelas pré-comprometidas no dia 1, gastos do mês por due_date
+                    const _aCatIds = selTarget?.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
+                    const _aPmIds  = selTarget?.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
+                    let _parcelas = 0;
+                    const _gastosDia = {};
+                    const _catDia = {};         // d -> { catName -> { total, emoji } }
+                    const _catParcelas = {};    // catName -> { total, emoji }
+                    for (let d = 1; d <= daysInMonth; d++) { _gastosDia[d] = 0; _catDia[d] = {}; }
+                    for (const expense of curExp) {
+                        if (_aCatIds && !_aCatIds.has(Number(expense.category_id))) continue;
+                        if (_aPmIds  && !_aPmIds.has(expense.payment_method_id)) continue;
+                        const origStr = expense.original_date || expense.expense_date;
+                        if (!origStr) continue;
+                        const origDate = new Date(origStr + 'T00:00:00');
+                        const isCurMonExp = origDate.getFullYear() === year && origDate.getMonth() + 1 === mon;
+                        const cat = byId(categories, expense.category_id);
+                        const catName = cat?.name || 'Outros';
+                        const catEmoji = cat?.icon || '📁';
+                        for (const split of expense.splits) {
+                            if (split.user_id !== user.id) continue;
+                            const dd = new Date(split.due_date + 'T00:00:00');
+                            if (dd.getFullYear() !== year || dd.getMonth() + 1 !== mon) continue;
+                            const amt = parseFloat(split.user_amount);
+                            if (isCurMonExp) {
+                                _gastosDia[dd.getDate()] += amt;
+                                const dc = _catDia[dd.getDate()];
+                                if (!dc[catName]) dc[catName] = { total: 0, emoji: catEmoji };
+                                dc[catName].total += amt;
+                            } else {
+                                _parcelas += amt;
+                                if (!_catParcelas[catName]) _catParcelas[catName] = { total: 0, emoji: catEmoji };
+                                _catParcelas[catName].total += amt;
+                            }
+                        }
+                    }
+                    // Linha acumulada: todos os dias (futuro tracejado)
+                    let runningSum = 0;
+                    const accumTotals = days.map(d => {
+                        runningSum += _gastosDia[d] ?? 0;
+                        return _parcelas + runningSum;
+                    });
+                    const monthlyTarget = selTarget?.monthly_amount ?? null;
+                    const targetHorizData = monthlyTarget != null ? days.map(() => monthlyTarget) : null;
+
+                    const allVals = [...accumTotals, ...(targetHorizData || [])];
+                    const yMax = allVals.length ? Math.ceil(Math.max(...allVals) * 1.08 / 10) * 10 : 100;
+
+                    const accumColor = v => monthlyTarget != null && v > monthlyTarget ? '#ef4444' : '#1a73e8';
+                    const accumDs = [{
+                        data: accumTotals,
+                        borderWidth: 2,
+                        borderColor: '#1a73e8',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        cubicInterpolationMode: 'monotone',
+                        // Bolinhas só até hoje; dias futuros sem ponto (linha tracejada fala por si)
+                        pointRadius: accumTotals.map((_, i) => days[i] <= todayDay ? 2.5 : 0),
+                        pointHoverRadius: 4,
+                        pointBackgroundColor: accumTotals.map((v, i) => days[i] <= todayDay ? accumColor(v) : 'transparent'),
+                        pointBorderColor: accumTotals.map(v => accumColor(v)),
+                        spanGaps: true,
+                        segment: {
+                            // Tracejado para dias futuros
+                            borderDash: ctx => ctx.p1DataIndex >= todayDay ? [5, 4] : undefined,
+                            // Vermelho só quando ambos os extremos estão acima do target
+                            borderColor: monthlyTarget != null
+                                ? ctx => (ctx.p0.parsed.y > monthlyTarget && ctx.p1.parsed.y > monthlyTarget) ? '#ef4444' : '#1a73e8'
+                                : undefined,
+                        },
+                    }];
+                    if (targetHorizData) {
+                        accumDs.push({
+                            data: targetHorizData,
+                            borderColor: '#f59e0b',
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            fill: false,
+                            tension: 0,
+                            spanGaps: true,
+                        });
+                    }
+
+                    const ctxA = document.getElementById('dailyLineChart').getContext('2d');
+                    dailyLineChart = new Chart(ctxA, {
+                        type: 'line',
+                        data: { labels: days.map(String), datasets: accumDs },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            layout: { padding: { top: 18, bottom: 12 } },
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    filter: item => item.raw != null,
+                                    callbacks: {
+                                        title: items => `Dia ${items[0].label}`,
+                                        label: () => null,
+                                        afterBody: items => {
+                                            const sp = items.find(i => i.datasetIndex === 0);
+                                            if (!sp || sp.raw == null) return [];
+                                            const over = monthlyTarget != null && sp.raw > monthlyTarget;
+                                            const lines = [];
+                                            lines.push(`${over ? '🔴' : '🔵'} Acumulado: R$ ${formatBRL(sp.raw)}`);
+                                            if (monthlyTarget != null) {
+                                                const diff = monthlyTarget - sp.raw;
+                                                lines.push(diff >= 0 ? `✅ Folga: R$ ${formatBRL(diff)}` : `⚠️ Estouro: R$ ${formatBRL(-diff)}`);
+                                            }
+                                            // Breakdown por categoria acumulado até este dia
+                                            const upToDay = days[sp.dataIndex];
+                                            const catAccum = {};
+                                            for (const [n, c] of Object.entries(_catParcelas)) {
+                                                catAccum[n] = { total: c.total, emoji: c.emoji };
+                                            }
+                                            for (let d = 1; d <= upToDay; d++) {
+                                                for (const [n, c] of Object.entries(_catDia[d] || {})) {
+                                                    if (!catAccum[n]) catAccum[n] = { total: 0, emoji: c.emoji };
+                                                    catAccum[n].total += c.total;
+                                                }
+                                            }
+                                            const sorted = Object.entries(catAccum).sort((a, b) => b[1].total - a[1].total);
+                                            const MAX_CATS = 7;
+                                            if (sorted.length > 0) lines.push('──────────────');
+                                            lines.push(...sorted.slice(0, MAX_CATS).map(([name, c]) => `${c.emoji} ${name}: R$ ${formatBRL(c.total)}`));
+                                            if (sorted.length > MAX_CATS) lines.push(`… e mais ${sorted.length - MAX_CATS} categorias`);
+                                            return lines;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    grid: { color: gridColor, drawTicks: false },
+                                    ticks: {
+                                        color: textColor, font: { size: 11 }, maxRotation: 0,
+                                        callback: (val, idx) => window.innerWidth < 640 && (idx + 1) % 2 === 0 ? '' : String(idx + 1)
+                                    }
+                                },
+                                y: {
+                                    min: 0,
+                                    max: yMax,
+                                    grid: { color: gridColor },
+                                    ticks: {
+                                        color: textColor, font: { size: 11 },
+                                        callback: v => v === 0 ? '' : Math.round(v).toLocaleString('pt-BR')
+                                    }
+                                }
+                            }
+                        },
+                        plugins: [weekBandsPlugin]
+                    });
+                    return;
+                }
+                // ── FIM MODO ACUMULADO ────────────────────────────────────────────────────────
 
                 // Coeficiente de desvio líquido: C = (área_verde − área_vermelha) / área_target
                 // Positivo = abaixo do target (criando folga), negativo = acima (estourando)
@@ -2141,3 +2330,4 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             time: '08:00'
         };
 
+        // Carregar configurações salvas

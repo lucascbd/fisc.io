@@ -4,7 +4,7 @@
             
             // Função para obter tabs disponíveis dinamicamente
             function getAvailableTabs() {
-                const allTabs = ['home', 'expenses', 'charts', 'inflation', 'income', 'agent'];
+                const allTabs = ['home', 'expenses', 'openfinance', 'charts', 'inflation', 'income', 'agent'];
                 const available = [];
                 for (const t of allTabs) {
                     const tab = document.getElementById(t + 'Tab');

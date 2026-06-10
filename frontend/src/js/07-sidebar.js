@@ -1,4 +1,3 @@
-        // Carregar configurações salvas
         async function loadNotificationSettings() {
             // Carregar enabled do localStorage (fonte principal)
             const savedEnabled = localStorage.getItem('notificationEnabled');
@@ -1108,3 +1107,4 @@
             }
         }
         
+        // ============================================

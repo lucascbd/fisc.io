@@ -759,7 +759,26 @@
         .dark-mode .agent-input-bar { border-top-color: #3c4043; }
         .dark-mode #agentInput { background: #3c4043; border-color: #5f6368; color: #e8eaed; }
         .dark-mode #agentInput::placeholder { color: #9aa0a6; }
+        /* Pluggy / Open Finance tab */
+        .dark-mode #ofAccountsCard { background: #292a2d !important; }
+        .dark-mode #ofAccountsList > div { background: #3c4043 !important; }
+        .dark-mode #ofAccountsList span { color: #9aa0a6 !important; }
+        .dark-mode #ofFiltersRow label { color: #9aa0a6 !important; }
+        .dark-mode #ofFiltersRow select,
+        .dark-mode #ofFiltersRow input[type="date"] { background: #3c4043 !important; color: #e8eaed !important; border-color: #5f6368 !important; }
+        .dark-mode #ofTransactionsList .bg-white { background: #292a2d !important; }
+        .dark-mode [id^="ofRow_"] { background: #292a2d !important; border-color: #3c4043 !important; }
+        .dark-mode [id^="ofRow_"] .of-desc { color: #e8eaed !important; }
+        .dark-mode [id^="ofRow_"] .of-date { color: #9aa0a6 !important; }
+        .dark-mode [id^="ofRow_"] .of-tag { background: #3c4043 !important; color: #9aa0a6 !important; }
         @keyframes typingBounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .dark-mode #ipcaIngestBtn { background: #3c4043 !important; }
+        .daily-mode-btn { background:transparent;color:#5f6368;font-weight:500;font-size:12px; }
+        .daily-mode-btn.active { background:#1a73e8 !important;color:#fff !important; }
+        .dark-mode #dailyModeToggle { background:#3c4043 !important; }
+        .dark-mode .daily-mode-btn { color:#9aa0a6; }
+        .dark-mode .daily-mode-btn.active { background:#8ab4f8 !important;color:#202124 !important; }
         .typing-dot { width: 7px; height: 7px; border-radius: 50%; background: #9aa0a6; display: inline-block; animation: typingBounce 1.2s infinite; }
         .typing-dot:nth-child(2) { animation-delay: .2s; }
         .typing-dot:nth-child(3) { animation-delay: .4s; }
