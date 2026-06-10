@@ -373,6 +373,13 @@ def match_transactions(
         Expense.payment_method_id == payment_method_id,
         Expense.installments > 1,
     )
+    if filt_year:
+        # Filtra no SQL: só expenses com parcela vencendo no mês auditado
+        month_split_ids = db.query(ExpenseSplit.expense_id).filter(
+            extract('year',  ExpenseSplit.due_date) == filt_year,
+            extract('month', ExpenseSplit.due_date) == filt_month,
+        ).distinct().subquery()
+        q_inst = q_inst.filter(Expense.id.in_(month_split_ids))
     inst_expenses: List[Expense] = q_inst.all()
 
     # Pre-load ALL splits for installment expenses
