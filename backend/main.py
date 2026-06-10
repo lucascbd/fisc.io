@@ -354,11 +354,11 @@ def _month_date_range(year: int, mon: int):
 # ============================================================================
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "healthy", "app": settings.APP_NAME}
 
 @app.get("/")
-async def root():
+def root():
     return {"app": settings.APP_NAME, "version": settings.APP_VERSION, "docs": "/docs"}
 
 # ============================================================================
@@ -366,7 +366,7 @@ async def root():
 # ============================================================================
 
 @app.post(f"{settings.API_V1_PREFIX}/auth/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login with email and password"""
     user = db.query(User).filter(User.email == form_data.username).first()
     
@@ -395,7 +395,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/auth/me")
-async def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user)):
     """Get current user info"""
     return {
         "id": current_user.id,
@@ -415,7 +415,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # ============================================================================
 
 @app.post(f"{settings.API_V1_PREFIX}/device-tokens")
-async def register_device_token(
+def register_device_token(
     data: DeviceTokenCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -456,7 +456,7 @@ async def register_device_token(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/users")
-async def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List all active users ordered by display_order"""
     users = db.query(User).filter(User.is_active == True).order_by(User.display_order).all()
     return [{
@@ -471,7 +471,7 @@ async def list_users(db: Session = Depends(get_db), _: User = Depends(get_curren
     } for u in users]
 
 @app.post(f"{settings.API_V1_PREFIX}/users")
-async def create_user(
+def create_user(
     name: str,
     email: str,
     password: str,
@@ -496,7 +496,7 @@ async def create_user(
     return {"id": user.id, "name": user.name, "email": user.email, "color": user.color, "emoji": user.emoji}
 
 @app.put(f"{settings.API_V1_PREFIX}/users/{{user_id}}")
-async def update_user(
+def update_user(
     user_id: int,
     data: UserUpdate,
     db: Session = Depends(get_db),
@@ -544,7 +544,7 @@ async def update_user(
     return {"message": "User updated"}
 
 @app.post(f"{settings.API_V1_PREFIX}/users/me/toggle-category/{{category_id}}")
-async def toggle_category_visibility(
+def toggle_category_visibility(
     category_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -560,7 +560,7 @@ async def toggle_category_visibility(
     return {"hidden_category_ids": hidden}
 
 @app.delete(f"{settings.API_V1_PREFIX}/users/{{user_id}}")
-async def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete user (admin only) - Soft delete se tiver expense_splits, erro se estiver em perfil"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -598,7 +598,7 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Dep
         return {"message": "User deleted", "soft_delete": False}
 
 @app.put(f"{settings.API_V1_PREFIX}/users/{{user_id}}/reorder")
-async def reorder_user(
+def reorder_user(
     user_id: int, 
     data: dict, 
     db: Session = Depends(get_db), 
@@ -618,7 +618,7 @@ async def reorder_user(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/categories")
-async def list_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List all active categories ordered by display_order (if exists) or id"""
     cached = _cache_get("categories:list", 300)
     if cached is not None:
@@ -632,7 +632,7 @@ async def list_categories(db: Session = Depends(get_db), _: User = Depends(get_c
     return _cache_set("categories:list", result)
 
 @app.get(f"{settings.API_V1_PREFIX}/ipca/categories")
-async def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List distinct D4C/D4N pairs from ipca table, ordered hierarchically by D4N prefix"""
     cached = _cache_get("ipca:categories", 21600)
     if cached is not None:
@@ -766,13 +766,13 @@ def _recurring_dict(r: RecurringExpense) -> dict:
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/recurring")
-async def list_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List all active recurring expenses visible to the current user."""
-    items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).order_by(RecurringExpense.id).all()
+    items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).order_by(RecurringExpense.id).limit(500).all()
     return [_recurring_dict(r) for r in items]
 
 @app.post(f"{settings.API_V1_PREFIX}/recurring")
-async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a new recurring expense template."""
     r = RecurringExpense(
         description=data.description,
@@ -790,7 +790,7 @@ async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(g
     return _recurring_dict(r)
 
 @app.put(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}")
-async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update a recurring expense template."""
     r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id, RecurringExpense.is_active == True).first()
     if not r:
@@ -808,7 +808,7 @@ async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: 
     return _recurring_dict(r)
 
 @app.delete(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}")
-async def delete_recurring(recurring_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_recurring(recurring_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Soft-delete a recurring expense template."""
     r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
     if not r:
@@ -818,7 +818,7 @@ async def delete_recurring(recurring_id: int, db: Session = Depends(get_db), cur
     return {"message": "Deleted"}
 
 @app.post(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}/toggle-enabled")
-async def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Ativa ou pausa uma despesa recorrente sem excluí-la."""
     r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id, RecurringExpense.is_active == True).first()
     if not r:
@@ -829,7 +829,7 @@ async def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_
     return _recurring_dict(r)
 
 @app.post(f"{settings.API_V1_PREFIX}/recurring/generate")
-async def generate_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def generate_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Generate expenses for the current month from all active recurring templates.
     Skips templates that have already been generated this month.
@@ -873,7 +873,7 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
     return {"generated": len(created_ids), "skipped": skipped, "expense_ids": created_ids}
 
 @app.get(f"{settings.API_V1_PREFIX}/inflation/locations")
-async def list_inflation_locations(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_inflation_locations(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List available D1C/D1N locations from ipca table"""
     cached = _cache_get("ipca:locations", 21600)
     if cached is not None:
@@ -883,7 +883,7 @@ async def list_inflation_locations(db: Session = Depends(get_db), _: User = Depe
     return _cache_set("ipca:locations", [{"code": row[0], "name": row[1]} for row in result])
 
 @app.get(f"{settings.API_V1_PREFIX}/inflation/months")
-async def list_inflation_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_inflation_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List available year-months from ipca table, most recent first"""
     cached = _cache_get("ipca:months", 21600)
     if cached is not None:
@@ -900,7 +900,7 @@ async def list_inflation_months(db: Session = Depends(get_db), _: User = Depends
     return _cache_set("ipca:months", {"months": months, "latest": months[0] if months else None})
 
 @app.get(f"{settings.API_V1_PREFIX}/inflation/data")
-async def get_inflation_data(
+def get_inflation_data(
     d1c: int = Query(1, description="D1C location code (1=Brasil, 4801=RJ)"),
     months: Optional[str] = Query(None, description="Comma-separated YYYY-MM months to include"),
     category_ids: Optional[str] = Query(None, description="Comma-separated category IDs"),
@@ -1174,7 +1174,7 @@ async def get_inflation_data(
     }
 
 @app.post(f"{settings.API_V1_PREFIX}/categories")
-async def create_category(
+def create_category(
     data: CategoryCreate,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin)
@@ -1211,7 +1211,7 @@ async def create_category(
     return {"id": category.id, "name": category.name}
 
 @app.put(f"{settings.API_V1_PREFIX}/categories/reorder")
-async def reorder_categories(
+def reorder_categories(
     data: CategoryReorder,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin)
@@ -1236,7 +1236,7 @@ async def reorder_categories(
         raise HTTPException(status_code=500, detail=f"Error reordering: {str(e)}")
 
 @app.put(f"{settings.API_V1_PREFIX}/categories/{{category_id}}")
-async def update_category(
+def update_category(
     category_id: int,
     data: CategoryCreate,
     db: Session = Depends(get_db),
@@ -1264,7 +1264,7 @@ async def update_category(
     return {"message": "Category updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/categories/{{category_id}}")
-async def delete_category(category_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_category(category_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete category (admin only) - Soft delete se tiver expenses"""
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
@@ -1288,7 +1288,7 @@ async def delete_category(category_id: int, db: Session = Depends(get_db), _: Us
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/payment-methods")
-async def list_payment_methods(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_payment_methods(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List payment methods for the current user, ordered by display_order."""
     methods = db.query(PaymentMethod).filter(
         PaymentMethod.user_id == current_user.id
@@ -1307,7 +1307,7 @@ async def list_payment_methods(db: Session = Depends(get_db), current_user: User
     return [_pm_dict(pm) for pm in methods]
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods")
-async def create_payment_method(
+def create_payment_method(
     data: PaymentMethodCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1331,7 +1331,7 @@ async def create_payment_method(
     return _pm_dict(pm)
 
 @app.put(f"{settings.API_V1_PREFIX}/payment-methods/reorder")
-async def reorder_payment_methods(
+def reorder_payment_methods(
     data: PaymentMethodReorder,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1348,7 +1348,7 @@ async def reorder_payment_methods(
     return {"message": "Reordered"}
 
 @app.put(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
-async def update_payment_method(
+def update_payment_method(
     pm_id: int,
     data: PaymentMethodCreate,
     db: Session = Depends(get_db),
@@ -1370,7 +1370,7 @@ async def update_payment_method(
     return _pm_dict(pm)
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}/toggle-closed")
-async def toggle_payment_method_closed(
+def toggle_payment_method_closed(
     pm_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1389,7 +1389,7 @@ async def toggle_payment_method_closed(
     return _pm_dict(pm)
 
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
-async def delete_payment_method(
+def delete_payment_method(
     pm_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1417,7 +1417,7 @@ def list_icons_library(current_user: User = Depends(get_current_user)):
     return {"icons": icons}
 
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/icons-library/{{filename}}")
-async def delete_library_icon(filename: str, current_user: User = Depends(get_current_user)):
+def delete_library_icon(filename: str, current_user: User = Depends(get_current_user)):
     """Delete an icon from the gallery. Admin only."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -1453,7 +1453,7 @@ async def upload_payment_method_icon(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/profiles")
-async def list_profiles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_profiles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List split profiles - admin vê todos, usuário comum vê apenas os que faz parte"""
     query = db.query(SplitProfile).options(
         joinedload(SplitProfile.users)
@@ -1477,7 +1477,7 @@ async def list_profiles(db: Session = Depends(get_db), current_user: User = Depe
     } for p in profiles]
 
 @app.post(f"{settings.API_V1_PREFIX}/profiles")
-async def create_profile(
+def create_profile(
     data: ProfileCreate,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin)
@@ -1503,7 +1503,7 @@ async def create_profile(
     return {"id": profile.id, "name": profile.name}
 
 @app.put(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}")
-async def update_profile(
+def update_profile(
     profile_id: int,
     data: ProfileCreate,
     db: Session = Depends(get_db),
@@ -1542,15 +1542,22 @@ async def update_profile(
             
             expenses = db.query(Expense).filter(Expense.split_profile_id == profile_id).all()
             new_users = [{"user_id": u.user_id, "percentage": float(u.percentage)} for u in data.users]
-            
+
+            # Batch: todos os splits afetados em 1 query, agrupados por expense
+            expense_ids_list = [e.id for e in expenses]
+            all_splits = db.query(ExpenseSplit).filter(
+                ExpenseSplit.expense_id.in_(expense_ids_list),
+                ExpenseSplit.due_date >= from_date
+            ).all() if expense_ids_list else []
+            splits_by_exp: dict = {}
+            for s in all_splits:
+                splits_by_exp.setdefault(s.expense_id, []).append(s)
+
             for expense in expenses:
-                splits_to_update = db.query(ExpenseSplit).filter(
-                    ExpenseSplit.expense_id == expense.id,
-                    ExpenseSplit.due_date >= from_date
-                ).all()
+                splits_to_update = splits_by_exp.get(expense.id)
                 if not splits_to_update:
                     continue
-                
+
                 # Agrupar por installment_number
                 installments_map: dict = {}
                 for s in splits_to_update:
@@ -1594,7 +1601,7 @@ async def update_profile(
     return {"message": "Profile updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}")
-async def delete_profile(profile_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_profile(profile_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete profile (admin only) - Soft delete se tiver expenses"""
     profile = db.query(SplitProfile).filter(SplitProfile.id == profile_id).first()
     if not profile:
@@ -1613,7 +1620,7 @@ async def delete_profile(profile_id: int, db: Session = Depends(get_db), _: User
         return {"message": "Profile deleted", "soft_delete": False}
 
 @app.put(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}/reorder")
-async def reorder_profile(
+def reorder_profile(
     profile_id: int, 
     data: dict, 
     db: Session = Depends(get_db), 
@@ -1629,7 +1636,7 @@ async def reorder_profile(
     return {"message": "Profile reordered successfully"}
 
 @app.get(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}/expense-months")
-async def list_profile_expense_months(profile_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_profile_expense_months(profile_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List all months that have expenses with this profile"""
     months = db.query(
         func.to_char(ExpenseSplit.due_date, 'YYYY-MM').label('month')
@@ -1639,7 +1646,7 @@ async def list_profile_expense_months(profile_id: int, db: Session = Depends(get
     return [{"value": m[0], "label": m[0]} for m in months]
 
 @app.put(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}/update-splits-from-month")
-async def update_profile_splits_from_month(profile_id: int, data: dict, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def update_profile_splits_from_month(profile_id: int, data: dict, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Update expense_splits for this profile starting from a specific month"""
     from_month = data.get("from_month")
     new_users = data.get("users", [])
@@ -1648,14 +1655,21 @@ async def update_profile_splits_from_month(profile_id: int, data: dict, db: Sess
     
     from_date = datetime.strptime(from_month + "-01", "%Y-%m-%d").date()
     expenses = db.query(Expense).filter(Expense.split_profile_id == profile_id).all()
-    
+
+    # Batch: todos os splits afetados em 1 query, agrupados por expense
+    expense_ids_list = [e.id for e in expenses]
+    all_splits = db.query(ExpenseSplit).filter(
+        ExpenseSplit.expense_id.in_(expense_ids_list),
+        ExpenseSplit.due_date >= from_date
+    ).all() if expense_ids_list else []
+    splits_by_exp = {}
+    for s in all_splits:
+        splits_by_exp.setdefault(s.expense_id, []).append(s)
+
     updated_count = 0
     for expense in expenses:
-        splits_to_update = db.query(ExpenseSplit).filter(
-            ExpenseSplit.expense_id == expense.id,
-            ExpenseSplit.due_date >= from_date
-        ).all()
-        
+        splits_to_update = splits_by_exp.get(expense.id)
+
         if not splits_to_update:
             continue
         
@@ -1718,7 +1732,7 @@ def _send_push_bg(profile_id, exclude_user_id, title, body, data, action_type):
         db.close()
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/months")
-async def list_expense_months(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_expense_months(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List all available year-months with expense splits (filtrado pelo usuário logado)"""
     vis = visible_expense_ids_subquery(db, current_user)
     months = db.query(
@@ -1729,7 +1743,7 @@ async def list_expense_months(db: Session = Depends(get_db), current_user: User 
     return [{"value": m[0], "label": m[0]} for m in months]
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/filters-for-month")
-async def get_filters_for_month(month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_filters_for_month(month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get available users and profiles for a specific month"""
     year, month_num = map(int, month.split('-'))
     start_date = date(year, month_num, 1)
@@ -1751,7 +1765,7 @@ async def get_filters_for_month(month: str = Query(...), db: Session = Depends(g
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/filters-for-period")
-async def get_filters_for_period(start_month: str = Query(...), end_month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_filters_for_period(start_month: str = Query(...), end_month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get available users and categories for a period"""
     sy, sm = map(int, start_month.split('-'))
     ey, em = map(int, end_month.split('-'))
@@ -1774,7 +1788,7 @@ async def get_filters_for_period(start_month: str = Query(...), end_month: str =
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses")
-async def list_expenses(
+def list_expenses(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     skip: int = Query(0, ge=0, description="Paginação: offset"),
     limit: int = Query(500, ge=1, le=1000, description="Paginação: limite"),
@@ -1825,7 +1839,7 @@ async def list_expenses(
     } for e in expenses]
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/with-splits")
-async def list_expenses_with_splits(
+def list_expenses_with_splits(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     skip: int = Query(0, ge=0, description="Paginação: offset"),
     limit: int = Query(500, ge=1, le=1000, description="Paginação: limite"),
@@ -1917,7 +1931,7 @@ async def list_expenses_with_splits(
     return result
 
 @app.post(f"{settings.API_V1_PREFIX}/expenses")
-async def create_expense(
+def create_expense(
     data: ExpenseCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -1962,7 +1976,7 @@ async def create_expense(
     return {"id": expense.id, "description": expense.description, "message": "Expense created"}
 
 @app.put(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}")
-async def update_expense(
+def update_expense(
     expense_id: int,
     data: ExpenseCreate,
     background_tasks: BackgroundTasks,
@@ -2010,7 +2024,7 @@ async def update_expense(
     return {"id": expense.id, "message": "Expense updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}")
-async def delete_expense(expense_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_expense(expense_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete expense"""
     # Buscar despesa antes de deletar (para enviar notificação)
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
@@ -2047,7 +2061,7 @@ def _add_one_month(d: date) -> date:
     return d.replace(year=year, month=month, day=min(d.day, max_day))
 
 @app.post(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/postpone")
-async def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     expense = db.query(Expense).filter(Expense.id == expense_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -2065,7 +2079,7 @@ async def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: Us
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/dashboard")
-async def get_dashboard(
+def get_dashboard(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2284,7 +2298,7 @@ async def get_dashboard(
 
 
 @app.get(f"{settings.API_V1_PREFIX}/balances")
-async def get_balances(
+def get_balances(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user)
@@ -2326,7 +2340,7 @@ async def get_balances(
     return balances
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/splits")
-async def get_expense_splits(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_expense_splits(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get splits for an expense"""
     splits = db.query(ExpenseSplit).options(joinedload(ExpenseSplit.user)).filter(ExpenseSplit.expense_id == expense_id).all()
     return [{
@@ -2348,7 +2362,7 @@ async def get_expense_splits(expense_id: int, db: Session = Depends(get_db), _: 
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/tokens")
-async def debug_list_tokens(
+def debug_list_tokens(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2374,7 +2388,7 @@ async def debug_list_tokens(
 
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/my-tokens")
-async def debug_my_tokens(
+def debug_my_tokens(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2397,7 +2411,7 @@ async def debug_my_tokens(
 
 
 @app.post(f"{settings.API_V1_PREFIX}/debug/test-push")
-async def debug_test_push(
+def debug_test_push(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2443,7 +2457,7 @@ async def debug_test_push(
 
 
 @app.post(f"{settings.API_V1_PREFIX}/debug/test-push-self")
-async def debug_test_push_self(
+def debug_test_push_self(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2490,7 +2504,7 @@ async def debug_test_push_self(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/notification-preferences")
-async def get_notification_preferences(
+def get_notification_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2521,7 +2535,7 @@ async def get_notification_preferences(
 
 
 @app.put(f"{settings.API_V1_PREFIX}/notification-preferences")
-async def update_notification_preferences(
+def update_notification_preferences(
     data: NotificationPreferencesUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2558,7 +2572,7 @@ async def update_notification_preferences(
 
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/firebase-status")
-async def debug_firebase_status():
+def debug_firebase_status():
     """Verifica status do Firebase Admin SDK"""
     return {
         "firebase_initialized": FirebaseService._app is not None,
@@ -2567,7 +2581,7 @@ async def debug_firebase_status():
 
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/cross-user-check")
-async def debug_cross_user_check(
+def debug_cross_user_check(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2693,7 +2707,7 @@ def _target_dict(t: Target) -> dict:
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/targets")
-async def list_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List targets for the current user, ordered by sort_order."""
     targets = db.query(Target).filter(
         Target.user_id == current_user.id, Target.is_active == True
@@ -2701,7 +2715,7 @@ async def list_targets(db: Session = Depends(get_db), current_user: User = Depen
     return [_target_dict(t) for t in targets]
 
 @app.post(f"{settings.API_V1_PREFIX}/targets")
-async def create_target(data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_target(data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a new target for the current user."""
     max_order = db.query(func.max(Target.sort_order)).filter(Target.user_id == current_user.id).scalar() or 0
     target = Target(
@@ -2721,7 +2735,7 @@ async def create_target(data: TargetCreate, db: Session = Depends(get_db), curre
     return _target_dict(target)
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
-async def update_target(target_id: int, data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_target(target_id: int, data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update a target (owner only)."""
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
@@ -2737,7 +2751,7 @@ async def update_target(target_id: int, data: TargetCreate, db: Session = Depend
     return _target_dict(target)
 
 @app.delete(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
-async def delete_target(target_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_target(target_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete (soft) a target (owner only)."""
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
@@ -2747,7 +2761,7 @@ async def delete_target(target_id: int, db: Session = Depends(get_db), current_u
     return {"message": "Target deleted"}
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/reorder")
-async def reorder_target(target_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def reorder_target(target_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update sort_order of a target (owner only)."""
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
@@ -2757,7 +2771,7 @@ async def reorder_target(target_id: int, data: dict, db: Session = Depends(get_d
     return {"message": "Reordered"}
 
 @app.get(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/stats")
-async def get_target_stats(
+def get_target_stats(
     target_id: int,
     month: str = Query(..., description="Current month YYYY-MM"),
     db: Session = Depends(get_db),
@@ -2919,7 +2933,7 @@ def _income_dict(inc: Income) -> dict:
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/income/months")
-async def list_income_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_income_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     from sqlalchemy import func as sqlfunc, extract
     rows = db.query(
         sqlfunc.to_char(Income.income_date, 'YYYY-MM').label('month')
@@ -2933,7 +2947,7 @@ async def list_income_months(db: Session = Depends(get_db), _: User = Depends(ge
     return result
 
 @app.get(f"{settings.API_V1_PREFIX}/income")
-async def list_income(
+def list_income(
     month: Optional[str] = Query(None, description="YYYY-MM"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2951,7 +2965,7 @@ async def list_income(
     return [_income_dict(i) for i in items]
 
 @app.post(f"{settings.API_V1_PREFIX}/income", status_code=201)
-async def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     inc = Income(
         description=data.description,
         amount=data.amount,
@@ -2965,7 +2979,7 @@ async def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: Us
     return _income_dict(inc)
 
 @app.put(f"{settings.API_V1_PREFIX}/income/{{income_id}}")
-async def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     inc = db.query(Income).filter(Income.id == income_id).first()
     if not inc:
         raise HTTPException(status_code=404, detail="Income not found")
@@ -2979,7 +2993,7 @@ async def update_income(income_id: int, data: IncomeUpdate, db: Session = Depend
     return _income_dict(inc)
 
 @app.delete(f"{settings.API_V1_PREFIX}/income/{{income_id}}")
-async def delete_income(income_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def delete_income(income_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     inc = db.query(Income).filter(Income.id == income_id).first()
     if not inc:
         raise HTTPException(status_code=404, detail="Income not found")
@@ -3664,7 +3678,7 @@ def openfinance_import_income(data: ImportIncomeRequest, db: Session = Depends(g
 
 
 @app.post(f"{settings.API_V1_PREFIX}/admin/ipca/ingest")
-async def trigger_ipca_ingest(current_user: User = Depends(get_current_user)):
+def trigger_ipca_ingest(current_user: User = Depends(get_current_user)):
     """Manually trigger IPCA data ingestion — admin only"""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")

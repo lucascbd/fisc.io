@@ -472,8 +472,11 @@
 
             // Drag-and-drop reorder
             if (window.Sortable) {
-                if (window._pmSortable) window._pmSortable.destroy();
-                window._pmSortable = Sortable.create(list, {
+                if (window._pmSortable && window._pmSortable.el !== list) {
+                    try { window._pmSortable.destroy(); } catch(e) {}
+                    window._pmSortable = null;
+                }
+                if (!window._pmSortable) window._pmSortable = Sortable.create(list, {
                     animation: 150,
                     handle: 'span[style*="cursor:grab"]',
                     onEnd: async function() {
@@ -949,10 +952,11 @@
             
             // Drag and drop
             if (user.is_admin && window.Sortable) {
-                if (window.sidebarCategoriesSortable) {
-                    window.sidebarCategoriesSortable.destroy();
+                if (window.sidebarCategoriesSortable && window.sidebarCategoriesSortable.el !== container) {
+                    try { window.sidebarCategoriesSortable.destroy(); } catch(e) {}
+                    window.sidebarCategoriesSortable = null;
                 }
-                window.sidebarCategoriesSortable = Sortable.create(container, {
+                if (!window.sidebarCategoriesSortable) window.sidebarCategoriesSortable = Sortable.create(container, {
                     animation: 150,
                     handle: 'span[style*="cursor: grab"]',
                     onEnd: async function(evt) {
@@ -1024,10 +1028,11 @@
             
             // Drag and drop
             if (user.is_admin && window.Sortable) {
-                if (window.sidebarProfilesSortable) {
-                    window.sidebarProfilesSortable.destroy();
+                if (window.sidebarProfilesSortable && window.sidebarProfilesSortable.el !== container) {
+                    try { window.sidebarProfilesSortable.destroy(); } catch(e) {}
+                    window.sidebarProfilesSortable = null;
                 }
-                window.sidebarProfilesSortable = Sortable.create(container, {
+                if (!window.sidebarProfilesSortable) window.sidebarProfilesSortable = Sortable.create(container, {
                     animation: 150,
                     handle: 'span[style*="cursor: grab"]',
                     onEnd: async function(evt) {
@@ -1085,10 +1090,11 @@
             
             // Drag and drop
             if (user.is_admin && window.Sortable) {
-                if (window.sidebarUsersSortable) {
-                    window.sidebarUsersSortable.destroy();
+                if (window.sidebarUsersSortable && window.sidebarUsersSortable.el !== container) {
+                    try { window.sidebarUsersSortable.destroy(); } catch(e) {}
+                    window.sidebarUsersSortable = null;
                 }
-                window.sidebarUsersSortable = Sortable.create(container, {
+                if (!window.sidebarUsersSortable) window.sidebarUsersSortable = Sortable.create(container, {
                     animation: 150,
                     handle: 'span[style*="cursor: grab"]',
                     onEnd: async function(evt) {

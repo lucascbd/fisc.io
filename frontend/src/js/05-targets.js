@@ -29,8 +29,11 @@
             `).join('');
 
             // Drag-and-drop
-            if (targetsSortable) targetsSortable.destroy();
-            targetsSortable = Sortable.create(list, {
+            if (targetsSortable && targetsSortable.el !== list) {
+                try { targetsSortable.destroy(); } catch(e) {}
+                targetsSortable = null;
+            }
+            if (!targetsSortable) targetsSortable = Sortable.create(list, {
                 animation: 150,
                 handle: '.cursor-move',
                 ghostClass: 'opacity-50',

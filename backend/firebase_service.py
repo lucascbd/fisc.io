@@ -92,36 +92,37 @@ class FirebaseService:
         success_count = 0
         failure_count = 0
         invalid_tokens_removed = 0
-        
-        for token in tokens:
-            message = messaging.Message(
-                data={
-                    "title": title,
-                    "body": body,
-                    **(data or {})
-                },
-                token=token,
-                webpush=messaging.WebpushConfig(
-                    fcm_options=messaging.WebpushFCMOptions(
-                        link="https://splitmate.lucascbd.app.br/"
-                    )
-                )
+
+        # Batch via send_each_for_multicast: 1 request HTTP para até 500 tokens
+        # (em vez de 1 round-trip por token)
+        payload = {"title": title, "body": body, **(data or {})}
+        webpush_cfg = messaging.WebpushConfig(
+            fcm_options=messaging.WebpushFCMOptions(
+                link="https://splitmate.lucascbd.app.br/"
             )
-            
+        )
+        for i in range(0, len(tokens), 500):
+            chunk = tokens[i:i + 500]
+            message = messaging.MulticastMessage(
+                data=payload,
+                tokens=chunk,
+                webpush=webpush_cfg,
+            )
             try:
-                response = messaging.send(message)
-                logger.info(f"✅ Push enviado: {token[:30]}... -> {response}")
-                success_count += 1
-                
+                batch = messaging.send_each_for_multicast(message)
+                success_count += batch.success_count
+                failure_count += batch.failure_count
+                for token, resp in zip(chunk, batch.responses):
+                    if resp.success:
+                        continue
+                    error_str = str(resp.exception)
+                    logger.warning(f"❌ Falha push para {token[:30]}...: {error_str}")
+                    if db and cls._is_invalid_token_error(error_str):
+                        cls._remove_invalid_token(db, token)
+                        invalid_tokens_removed += 1
             except Exception as e:
-                error_str = str(e)
-                logger.warning(f"❌ Falha push para {token[:30]}...: {error_str}")
-                failure_count += 1
-                
-                # Remover tokens inválidos
-                if db and cls._is_invalid_token_error(error_str):
-                    cls._remove_invalid_token(db, token)
-                    invalid_tokens_removed += 1
+                logger.warning(f"❌ Falha no batch de push ({len(chunk)} tokens): {e}")
+                failure_count += len(chunk)
         
         log_msg = f"📤 Push: {success_count} ok, {failure_count} falhas"
         if invalid_tokens_removed > 0:

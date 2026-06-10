@@ -29,11 +29,11 @@
             if (user.is_admin) {
                 const categoriesList = document.getElementById('categoriesList');
                 if (categoriesList && window.Sortable) {
-                    // Destruir instância anterior se existir
-                    if (categoriesSortable) {
-                        categoriesSortable.destroy();
+                    if (categoriesSortable && categoriesSortable.el !== categoriesList) {
+                        try { categoriesSortable.destroy(); } catch(e) {}
+                        categoriesSortable = null;
                     }
-                    categoriesSortable = Sortable.create(categoriesList, {
+                    if (!categoriesSortable) categoriesSortable = Sortable.create(categoriesList, {
                         animation: 150,
                         handle: '.cursor-move',
                         onEnd: async function(evt) {
@@ -112,11 +112,11 @@
             // Adicionar drag-and-drop se for admin
             if (user.is_admin) {
                 const profilesList = document.getElementById('profilesList');
-                // Destruir instância anterior se existir
-                if (profilesSortable) {
-                    profilesSortable.destroy();
+                if (profilesSortable && profilesSortable.el !== profilesList) {
+                    try { profilesSortable.destroy(); } catch(e) {}
+                    profilesSortable = null;
                 }
-                profilesSortable = new Sortable(profilesList, {
+                if (!profilesSortable) profilesSortable = new Sortable(profilesList, {
                     animation: 150,
                     handle: '.cursor-move',
                     onEnd: async function(evt) {
@@ -169,11 +169,11 @@
             // Adicionar drag-and-drop se for admin
             if (user.is_admin) {
                 const usersList = document.getElementById('usersList');
-                // Destruir instância anterior se existir
-                if (usersSortable) {
-                    usersSortable.destroy();
+                if (usersSortable && usersSortable.el !== usersList) {
+                    try { usersSortable.destroy(); } catch(e) {}
+                    usersSortable = null;
                 }
-                usersSortable = new Sortable(usersList, {
+                if (!usersSortable) usersSortable = new Sortable(usersList, {
                     animation: 150,
                     handle: '.cursor-move',
                     onEnd: async function(evt) {
