@@ -22,8 +22,8 @@ cat src/js/01-core.js \
 cp src/css/app.css dist/app.css
 
 if [ "$MINIFY" = "1" ]; then
-    npx -y esbuild dist/app.js  --minify --target=es2020 --outfile=dist/app.min.js
-    npx -y esbuild dist/app.css --minify --outfile=dist/app.min.css
+    npx -y esbuild@0.24.2 dist/app.js  --minify --target=es2020 --outfile=dist/app.min.js
+    npx -y esbuild@0.24.2 dist/app.css --minify --outfile=dist/app.min.css
     npx -y tailwindcss@3.4.17 -c tailwind.config.js -i tailwind.input.css -o dist/tailwind.css --minify
 
     JS_HASH=$(md5sum dist/app.min.js   | cut -c1-8)

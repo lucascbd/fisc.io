@@ -331,6 +331,22 @@ def visible_expense_ids_subquery(db: Session, current_user: User):
     ).subquery()
 
 
+def _ensure_expense_visible(db: Session, expense_id: int, current_user: User) -> "Expense":
+    """Carrega a expense e valida que o current_user pode vê-la (mesma regra dos GETs).
+    404 se não existe, 403 se não é o pagador nem membro do perfil de split."""
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    if expense.paid_by_user_id != current_user.id:
+        is_member = db.query(SplitProfileUser.id).filter(
+            SplitProfileUser.profile_id == expense.split_profile_id,
+            SplitProfileUser.user_id == current_user.id,
+        ).first() is not None
+        if not is_member:
+            raise HTTPException(status_code=403, detail="Not allowed")
+    return expense
+
+
 def _expense_pm_fields(e: "Expense") -> dict:
     pm = e.payment_method_rel
     return {
@@ -619,17 +635,17 @@ def reorder_user(
 
 @app.get(f"{settings.API_V1_PREFIX}/categories")
 def list_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """List all active categories ordered by display_order (if exists) or id"""
-    cached = _cache_get("categories:list", 300)
-    if cached is not None:
-        return cached
+    """List all active categories ordered by display_order (if exists) or id
+
+    Sem cache em memória: com múltiplos workers uvicorn, a invalidação só atinge
+    o worker que processou a mutação — outro worker serviria dados stale após edição.
+    """
     try:
         cats = db.query(Category).filter(Category.is_active == True).order_by(Category.display_order, Category.id).all()
     except Exception:
         cats = db.query(Category).filter(Category.is_active == True).order_by(Category.id).all()
-    result = [{"id": c.id, "name": c.name, "description": c.description, "icon": c.icon, "color": c.color,
-               "ipca_category_code": c.ipca_category_code, "ipca_category_name": c.ipca_category_name} for c in cats]
-    return _cache_set("categories:list", result)
+    return [{"id": c.id, "name": c.name, "description": c.description, "icon": c.icon, "color": c.color,
+             "ipca_category_code": c.ipca_category_code, "ipca_category_name": c.ipca_category_name} for c in cats]
 
 @app.get(f"{settings.API_V1_PREFIX}/ipca/categories")
 def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
@@ -1207,7 +1223,6 @@ def create_category(
     db.add(category)
     db.commit()
     db.refresh(category)
-    _cache_invalidate("categories:")
     return {"id": category.id, "name": category.name}
 
 @app.put(f"{settings.API_V1_PREFIX}/categories/reorder")
@@ -1224,7 +1239,6 @@ def reorder_categories(
                 cats[category_id].display_order = index
 
         db.commit()
-        _cache_invalidate("categories:")
         return {"message": "Categories reordered successfully"}
     except Exception as e:
         db.rollback()
@@ -1260,7 +1274,6 @@ def update_category(
     category.ipca_category_name = data.ipca_category_name
     
     db.commit()
-    _cache_invalidate("categories:")
     return {"message": "Category updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/categories/{{category_id}}")
@@ -1275,12 +1288,10 @@ def delete_category(category_id: int, db: Session = Depends(get_db), _: User = D
     if has_expenses:
         category.is_active = False
         db.commit()
-        _cache_invalidate("categories:")
         return {"message": "Category deactivated", "soft_delete": True}
     else:
         db.delete(category)
         db.commit()
-        _cache_invalidate("categories:")
         return {"message": "Category deleted", "soft_delete": False}
 
 # ============================================================================
@@ -1984,6 +1995,7 @@ def update_expense(
     current_user: User = Depends(get_current_user)
 ):
     """Update expense - mantém o ID original (UPDATE real)"""
+    _ensure_expense_visible(db, expense_id, current_user)
     expense_date_obj = date.fromisoformat(data.expense_date)
 
     original_date = expense_date_obj
@@ -2026,27 +2038,23 @@ def update_expense(
 @app.delete(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}")
 def delete_expense(expense_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete expense"""
-    # Buscar despesa antes de deletar (para enviar notificação)
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
-    
-    if expense:
-        # Salvar info para notificação
-        profile_id = expense.split_profile_id
-        description = expense.description
-        
-        # Deletar despesa
-        ExpenseService.delete_expense(db, expense_id)
-        
-        background_tasks.add_task(
-            _send_push_bg,
-            profile_id, current_user.id,
-            "🗑️ Despesa deletada",
-            f"{current_user.name} deletou: {expense.category.icon or ''} {description}",
-            {"action": "delete_expense"},
-            "delete",
-        )
-    else:
-        ExpenseService.delete_expense(db, expense_id)
+    expense = _ensure_expense_visible(db, expense_id, current_user)
+
+    # Salvar info para notificação
+    profile_id = expense.split_profile_id
+    description = expense.description
+    category_icon = expense.category.icon or ''
+
+    ExpenseService.delete_expense(db, expense_id)
+
+    background_tasks.add_task(
+        _send_push_bg,
+        profile_id, current_user.id,
+        "🗑️ Despesa deletada",
+        f"{current_user.name} deletou: {category_icon} {description}",
+        {"action": "delete_expense"},
+        "delete",
+    )
 
     return {"message": "Expense deleted"}
 
@@ -2061,10 +2069,8 @@ def _add_one_month(d: date) -> date:
     return d.replace(year=year, month=month, day=min(d.day, max_day))
 
 @app.post(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/postpone")
-def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
-    if not expense:
-        raise HTTPException(status_code=404, detail="Expense not found")
+def postpone_expense(expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    expense = _ensure_expense_visible(db, expense_id, current_user)
     expense.expense_date = _add_one_month(expense.expense_date)
     # original_date preserved intentionally — it reflects the real purchase date
     splits = db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
@@ -2708,16 +2714,15 @@ def _target_dict(t: Target) -> dict:
 
 @app.get(f"{settings.API_V1_PREFIX}/targets")
 def list_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """List targets for the current user, ordered by sort_order."""
-    cache_key = f"targets:user:{current_user.id}"
-    cached = _cache_get(cache_key, 300)
-    if cached is not None:
-        return cached
+    """List targets for the current user, ordered by sort_order.
+
+    Sem cache em memória: com múltiplos workers, a invalidação pós-edição só
+    atinge um worker — o usuário veria o target antigo logo após salvar.
+    """
     targets = db.query(Target).filter(
         Target.user_id == current_user.id, Target.is_active == True
     ).order_by(Target.sort_order).all()
-    result = [_target_dict(t) for t in targets]
-    return _cache_set(cache_key, result)
+    return [_target_dict(t) for t in targets]
 
 @app.post(f"{settings.API_V1_PREFIX}/targets")
 def create_target(data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -2737,7 +2742,6 @@ def create_target(data: TargetCreate, db: Session = Depends(get_db), current_use
     db.add(target)
     db.commit()
     db.refresh(target)
-    _cache_invalidate(f"targets:user:{current_user.id}")
     return _target_dict(target)
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
@@ -2754,7 +2758,6 @@ def update_target(target_id: int, data: TargetCreate, db: Session = Depends(get_
     target.display_mode = data.display_mode
     target.ticket_months = data.ticket_months
     db.commit()
-    _cache_invalidate(f"targets:user:{current_user.id}")
     return _target_dict(target)
 
 @app.delete(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
@@ -2765,7 +2768,6 @@ def delete_target(target_id: int, db: Session = Depends(get_db), current_user: U
         raise HTTPException(status_code=404, detail="Target not found")
     db.delete(target)
     db.commit()
-    _cache_invalidate(f"targets:user:{current_user.id}")
     return {"message": "Target deleted"}
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/reorder")
@@ -2776,7 +2778,6 @@ def reorder_target(target_id: int, data: dict, db: Session = Depends(get_db), cu
         raise HTTPException(status_code=404, detail="Target not found")
     target.sort_order = data.get("sort_order", 0)
     db.commit()
-    _cache_invalidate(f"targets:user:{current_user.id}")
     return {"message": "Reordered"}
 
 @app.get(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/stats")

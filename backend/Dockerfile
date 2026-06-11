@@ -22,6 +22,10 @@ COPY config.py database.py models.py main.py \
 
 RUN chmod +x /app/cron_entrypoint.sh
 
+# Alembic (migrações versionadas) — necessário para `alembic upgrade head` no container
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
+
 COPY seeds/ ./seeds/
 
 # Criar diretório de ícones e copiar os ícones iniciais (library + system)

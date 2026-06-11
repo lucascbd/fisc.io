@@ -112,6 +112,30 @@
                 }
             }
         };
+
+        // Plugin: coeficiente de orçamento ("C +x,xx") no canto do gráfico diário.
+        // Lê chart.options.budgetCoeff (não closure) — obrigatório porque upsertChart
+        // reutiliza a instância e plugins inline só são registrados na criação.
+        const budgetCoeffPlugin = {
+            id: 'budgetCoeff',
+            afterDraw(chart) {
+                const coeff = chart.options.budgetCoeff;
+                if (coeff == null) return;
+                const { ctx, chartArea } = chart;
+                if (!chartArea) return;
+                const sign = coeff >= 0 ? '+' : '';
+                const label = 'C ' + sign + coeff.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const color = coeff >= 0 ? '#22c55e' : '#ef4444';
+                ctx.save();
+                ctx.font = 'bold 11px sans-serif';
+                ctx.fillStyle = color;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'top';
+                ctx.fillText(label, chartArea.right - 6, chartArea.top + 4);
+                ctx.restore();
+            }
+        };
+
         let myInflationChart = null;
         let adjustedBarChart = null;
         let adjustedDonutChart = null;
@@ -1951,7 +1975,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                 }
                             }
                         },
-                        plugins: [weekBandsPlugin]
+                        plugins: [weekBandsPlugin, budgetCoeffPlugin]
                     });
                     return;
                 }
@@ -2053,6 +2077,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        budgetCoeff: budgetCoeff,
                         layout: { padding: { top: 18, bottom: 12 } },
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
@@ -2121,24 +2146,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             }
                         }
                     },
-                    plugins: [weekBandsPlugin, {
-                        id: 'budgetCoeff',
-                        afterDraw(chart) {
-                            if (budgetCoeff === null) return;
-                            const { ctx, chartArea } = chart;
-                            if (!chartArea) return;
-                            const sign = budgetCoeff >= 0 ? '+' : '';
-                            const label = 'C ' + sign + budgetCoeff.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                            const color = budgetCoeff >= 0 ? '#22c55e' : '#ef4444';
-                            ctx.save();
-                            ctx.font = 'bold 11px sans-serif';
-                            ctx.fillStyle = color;
-                            ctx.textAlign = 'right';
-                            ctx.textBaseline = 'top';
-                            ctx.fillText(label, chartArea.right - 6, chartArea.top + 4);
-                            ctx.restore();
-                        }
-                    }]
+                    plugins: [weekBandsPlugin, budgetCoeffPlugin]
                 });
             } catch (err) {
                 console.error('Erro ao atualizar gráfico diário:', err);
