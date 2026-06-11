@@ -405,7 +405,7 @@
                 el.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.6;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3);transition:opacity 0.1s;';
                 document.body.appendChild(el);
             }
-            if (tooltip.opacity === 0) { el.style.opacity = '0'; return; }
+            if (tooltip.opacity === 0 || _suppressTooltips) { el.style.opacity = '0'; return; }
 
             const dark = document.body.classList.contains('dark-mode');
             el.style.background = dark ? '#3c4043' : '#fff';
@@ -432,18 +432,24 @@
             el.style.top  = y + 'px';
         }
 
-        // Oculta tooltips externos ao rolar a página (evita "tooltip voando")
-        // Elementos cacheados + flag: roda 1x por rolagem em vez de a cada evento de scroll
-        let _tooltipsHidden = false;
+        // Oculta tooltips externos ao rolar ou trocar de aba (evita tooltip "voando")
+        let _suppressTooltips = false;
+        let _suppressTooltipTimer = null;
         let _tooltipEls = null;
-        window.addEventListener('scroll', () => {
-            if (_tooltipsHidden) return;
-            _tooltipsHidden = true;
+        function _hideCustomTooltips() {
             if (!_tooltipEls) _tooltipEls = ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip']
                 .map(id => document.getElementById(id)).filter(Boolean);
             _tooltipEls.forEach(el => { el.style.opacity = '0'; });
-            setTimeout(() => { _tooltipsHidden = false; }, 150);
+        }
+        window.addEventListener('scroll', () => {
+            _hideCustomTooltips();
+            _suppressTooltips = true;
+            clearTimeout(_suppressTooltipTimer);
+            _suppressTooltipTimer = setTimeout(() => { _suppressTooltips = false; }, 300);
         }, { passive: true });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) _hideCustomTooltips();
+        });
 
         async function triggerIpcaIngest() {
             const btn = document.getElementById('ipcaIngestBtn');
