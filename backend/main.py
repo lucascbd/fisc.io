@@ -1,5 +1,5 @@
 """Budget System - FastAPI Main Application - UPDATED"""
-from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -13,13 +13,14 @@ import os
 import uuid
 import glob
 import calendar
+import time as _time
 from pydantic import BaseModel
 import bcrypt
 from decimal import Decimal
 
 from config import settings
 from database import Base, engine, get_db
-from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income
+from models import User, Category, SplitProfile, SplitProfileUser, Expense, ExpenseSplit, DeviceToken, Target, RecurringExpense, PaymentMethod, Income, PluggyAccount
 from expense_service import ExpenseService
 from firebase_service import FirebaseService
 
@@ -44,6 +45,32 @@ def _safe_add_column(sql: str):
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
 _safe_add_column("ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS interval NUMERIC(4,2) NOT NULL DEFAULT 0")
 _safe_add_column("ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT FALSE")
+_safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
+_safe_add_column("ALTER TABLE incomes ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
+_safe_add_column("CREATE INDEX IF NOT EXISTS idx_expenses_created_by ON expenses (created_by_user_id)")
+_safe_add_column("CREATE INDEX IF NOT EXISTS idx_expenses_payment_method ON expenses (payment_method_id)")
+_safe_add_column("CREATE INDEX IF NOT EXISTS idx_recurring_created_by ON recurring_expenses (created_by_user_id)")
+_safe_add_column('CREATE INDEX IF NOT EXISTS idx_ipca_d1 ON ipca ("D1C", "D1N")')
+_safe_add_column('CREATE INDEX IF NOT EXISTS idx_ipca_d3 ON ipca ("D3C")')
+_safe_add_column('CREATE INDEX IF NOT EXISTS idx_ipca_d4 ON ipca ("D4C", "D4N")')
+
+# ── TTL cache em memória (invalida por prefixo) ──────────────────────────────
+_ttl_cache: dict = {}
+
+def _cache_get(key: str, ttl_seconds: int):
+    entry = _ttl_cache.get(key)
+    if entry and (_time.time() - entry[0]) < ttl_seconds:
+        return entry[1]
+    return None
+
+def _cache_set(key: str, value):
+    _ttl_cache[key] = (_time.time(), value)
+    return value
+
+def _cache_invalidate(*prefixes: str):
+    for k in list(_ttl_cache.keys()):
+        if any(k.startswith(p) for p in prefixes):
+            _ttl_cache.pop(k, None)
 
 # Seed: cria usuário admin padrão e carrega dados iniciais se o banco estiver vazio
 def run_seeds():
@@ -270,11 +297,15 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
             raise HTTPException(status_code=401, detail="Invalid credentials")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    user = db.query(User).filter(User.email == email).first()
+
+    # PK lookup is O(1); fall back to email scan if user_id missing or stale
+    user_id = payload.get("user_id")
+    user = db.get(User, user_id) if user_id else None
+    if user is None or user.email != email:
+        user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
-    
+
     return user
 
 def require_admin(current_user: User = Depends(get_current_user)):
@@ -300,6 +331,22 @@ def visible_expense_ids_subquery(db: Session, current_user: User):
     ).subquery()
 
 
+def _ensure_expense_visible(db: Session, expense_id: int, current_user: User) -> "Expense":
+    """Carrega a expense e valida que o current_user pode vê-la (mesma regra dos GETs).
+    404 se não existe, 403 se não é o pagador nem membro do perfil de split."""
+    expense = db.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    if expense.paid_by_user_id != current_user.id:
+        is_member = db.query(SplitProfileUser.id).filter(
+            SplitProfileUser.profile_id == expense.split_profile_id,
+            SplitProfileUser.user_id == current_user.id,
+        ).first() is not None
+        if not is_member:
+            raise HTTPException(status_code=403, detail="Not allowed")
+    return expense
+
+
 def _expense_pm_fields(e: "Expense") -> dict:
     pm = e.payment_method_rel
     return {
@@ -323,11 +370,11 @@ def _month_date_range(year: int, mon: int):
 # ============================================================================
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "healthy", "app": settings.APP_NAME}
 
 @app.get("/")
-async def root():
+def root():
     return {"app": settings.APP_NAME, "version": settings.APP_VERSION, "docs": "/docs"}
 
 # ============================================================================
@@ -335,7 +382,7 @@ async def root():
 # ============================================================================
 
 @app.post(f"{settings.API_V1_PREFIX}/auth/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login with email and password"""
     user = db.query(User).filter(User.email == form_data.username).first()
     
@@ -364,7 +411,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/auth/me")
-async def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user)):
     """Get current user info"""
     return {
         "id": current_user.id,
@@ -384,7 +431,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # ============================================================================
 
 @app.post(f"{settings.API_V1_PREFIX}/device-tokens")
-async def register_device_token(
+def register_device_token(
     data: DeviceTokenCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -425,7 +472,7 @@ async def register_device_token(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/users")
-async def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List all active users ordered by display_order"""
     users = db.query(User).filter(User.is_active == True).order_by(User.display_order).all()
     return [{
@@ -440,7 +487,7 @@ async def list_users(db: Session = Depends(get_db), _: User = Depends(get_curren
     } for u in users]
 
 @app.post(f"{settings.API_V1_PREFIX}/users")
-async def create_user(
+def create_user(
     name: str,
     email: str,
     password: str,
@@ -465,7 +512,7 @@ async def create_user(
     return {"id": user.id, "name": user.name, "email": user.email, "color": user.color, "emoji": user.emoji}
 
 @app.put(f"{settings.API_V1_PREFIX}/users/{{user_id}}")
-async def update_user(
+def update_user(
     user_id: int,
     data: UserUpdate,
     db: Session = Depends(get_db),
@@ -513,7 +560,7 @@ async def update_user(
     return {"message": "User updated"}
 
 @app.post(f"{settings.API_V1_PREFIX}/users/me/toggle-category/{{category_id}}")
-async def toggle_category_visibility(
+def toggle_category_visibility(
     category_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -529,7 +576,7 @@ async def toggle_category_visibility(
     return {"hidden_category_ids": hidden}
 
 @app.delete(f"{settings.API_V1_PREFIX}/users/{{user_id}}")
-async def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete user (admin only) - Soft delete se tiver expense_splits, erro se estiver em perfil"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -567,7 +614,7 @@ async def delete_user(user_id: int, db: Session = Depends(get_db), _: User = Dep
         return {"message": "User deleted", "soft_delete": False}
 
 @app.put(f"{settings.API_V1_PREFIX}/users/{{user_id}}/reorder")
-async def reorder_user(
+def reorder_user(
     user_id: int, 
     data: dict, 
     db: Session = Depends(get_db), 
@@ -587,8 +634,12 @@ async def reorder_user(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/categories")
-async def list_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    """List all active categories ordered by display_order (if exists) or id"""
+def list_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """List all active categories ordered by display_order (if exists) or id
+
+    Sem cache em memória: com múltiplos workers uvicorn, a invalidação só atinge
+    o worker que processou a mutação — outro worker serviria dados stale após edição.
+    """
     try:
         cats = db.query(Category).filter(Category.is_active == True).order_by(Category.display_order, Category.id).all()
     except Exception:
@@ -597,8 +648,11 @@ async def list_categories(db: Session = Depends(get_db), _: User = Depends(get_c
              "ipca_category_code": c.ipca_category_code, "ipca_category_name": c.ipca_category_name} for c in cats]
 
 @app.get(f"{settings.API_V1_PREFIX}/ipca/categories")
-async def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List distinct D4C/D4N pairs from ipca table, ordered hierarchically by D4N prefix"""
+    cached = _cache_get("ipca:categories", 21600)
+    if cached is not None:
+        return cached
     from sqlalchemy import text
     import re
     try:
@@ -631,7 +685,7 @@ async def list_ipca_categories(db: Session = Depends(get_db), _: User = Depends(
             return segments
         
         sorted_rows = sorted(result, key=sort_key)
-        return [{"code": row[0], "name": row[1]} for row in sorted_rows]
+        return _cache_set("ipca:categories", [{"code": row[0], "name": row[1]} for row in sorted_rows])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao consultar IPCA: {str(e)}")
 
@@ -728,13 +782,13 @@ def _recurring_dict(r: RecurringExpense) -> dict:
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/recurring")
-async def list_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List all active recurring expenses visible to the current user."""
-    items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).order_by(RecurringExpense.id).all()
+    items = db.query(RecurringExpense).filter(RecurringExpense.is_active == True).order_by(RecurringExpense.id).limit(500).all()
     return [_recurring_dict(r) for r in items]
 
 @app.post(f"{settings.API_V1_PREFIX}/recurring")
-async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a new recurring expense template."""
     r = RecurringExpense(
         description=data.description,
@@ -752,7 +806,7 @@ async def create_recurring(data: RecurringExpenseCreate, db: Session = Depends(g
     return _recurring_dict(r)
 
 @app.put(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}")
-async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update a recurring expense template."""
     r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id, RecurringExpense.is_active == True).first()
     if not r:
@@ -770,7 +824,7 @@ async def update_recurring(recurring_id: int, data: RecurringExpenseCreate, db: 
     return _recurring_dict(r)
 
 @app.delete(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}")
-async def delete_recurring(recurring_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_recurring(recurring_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Soft-delete a recurring expense template."""
     r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id).first()
     if not r:
@@ -780,7 +834,7 @@ async def delete_recurring(recurring_id: int, db: Session = Depends(get_db), cur
     return {"message": "Deleted"}
 
 @app.post(f"{settings.API_V1_PREFIX}/recurring/{{recurring_id}}/toggle-enabled")
-async def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Ativa ou pausa uma despesa recorrente sem excluí-la."""
     r = db.query(RecurringExpense).filter(RecurringExpense.id == recurring_id, RecurringExpense.is_active == True).first()
     if not r:
@@ -791,7 +845,7 @@ async def toggle_recurring_enabled(recurring_id: int, db: Session = Depends(get_
     return _recurring_dict(r)
 
 @app.post(f"{settings.API_V1_PREFIX}/recurring/generate")
-async def generate_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def generate_recurring(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Generate expenses for the current month from all active recurring templates.
     Skips templates that have already been generated this month.
@@ -835,29 +889,34 @@ async def generate_recurring(db: Session = Depends(get_db), current_user: User =
     return {"generated": len(created_ids), "skipped": skipped, "expense_ids": created_ids}
 
 @app.get(f"{settings.API_V1_PREFIX}/inflation/locations")
-async def list_inflation_locations(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_inflation_locations(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List available D1C/D1N locations from ipca table"""
+    cached = _cache_get("ipca:locations", 21600)
+    if cached is not None:
+        return cached
     from sqlalchemy import text
     result = db.execute(text('SELECT DISTINCT "D1C", "D1N" FROM ipca WHERE "D1C" IS NOT NULL ORDER BY "D1C"')).fetchall()
-    return [{"code": row[0], "name": row[1]} for row in result]
+    return _cache_set("ipca:locations", [{"code": row[0], "name": row[1]} for row in result])
 
 @app.get(f"{settings.API_V1_PREFIX}/inflation/months")
-async def list_inflation_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_inflation_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List available year-months from ipca table, most recent first"""
+    cached = _cache_get("ipca:months", 21600)
+    if cached is not None:
+        return cached
     from sqlalchemy import text
     result = db.execute(text(
         'SELECT DISTINCT "D3C" FROM ipca WHERE "D3C" IS NOT NULL ORDER BY "D3C" DESC'
     )).fetchall()
-    # D3C is YYYYMM integer, convert to YYYY-MM string
     months = []
     for row in result:
         d3c = str(row[0])
         if len(d3c) == 6:
             months.append(f"{d3c[:4]}-{d3c[4:]}")
-    return {"months": months, "latest": months[0] if months else None}
+    return _cache_set("ipca:months", {"months": months, "latest": months[0] if months else None})
 
 @app.get(f"{settings.API_V1_PREFIX}/inflation/data")
-async def get_inflation_data(
+def get_inflation_data(
     d1c: int = Query(1, description="D1C location code (1=Brasil, 4801=RJ)"),
     months: Optional[str] = Query(None, description="Comma-separated YYYY-MM months to include"),
     category_ids: Optional[str] = Query(None, description="Comma-separated category IDs"),
@@ -908,25 +967,20 @@ async def get_inflation_data(
     """), sql_params).fetchall()
 
     filtered = []
-    # Track ALL splits per expense per month to detect shared expenses
+    # Track ALL splits per expense per month to detect shared expenses (needs full scan before filtering)
     expense_month_users = defaultdict(lambda: defaultdict(set))  # {expense_id: {month_str: set(user_ids)}}
-    all_splits_full = []  # all rows with full data
 
     for r in splits_raw:
         user_id, user_amount, due_date, category_id, ipca_code, cat_name, cat_icon, user_pct, expense_id, user_name = r
         month_str = f"{due_date.year}-{str(due_date.month).zfill(2)}"
         expense_month_users[expense_id][month_str].add(user_id)
-        all_splits_full.append((user_id, float(user_amount), due_date, category_id, ipca_code, cat_name, cat_icon or '📁', month_str, float(user_pct), expense_id, user_name))
-
-    for row in all_splits_full:
-        user_id, user_amount, due_date, category_id, ipca_code, cat_name, cat_icon, month_str, user_pct, expense_id, user_name = row
         if filter_months and month_str not in filter_months:
             continue
         if filter_cat_ids and category_id not in filter_cat_ids:
             continue
         if filter_user_ids and user_id not in filter_user_ids:
             continue
-        filtered.append((user_id, user_amount, due_date, category_id, ipca_code, cat_name, cat_icon, month_str, user_pct, expense_id, user_name))
+        filtered.append((user_id, float(user_amount), due_date, category_id, ipca_code, cat_name, cat_icon or '📁', month_str, float(user_pct), expense_id, user_name))
 
     if not filtered:
         return {"my_inflation": [], "ipca_geral": [], "adjusted_by_month": [],
@@ -1136,7 +1190,7 @@ async def get_inflation_data(
     }
 
 @app.post(f"{settings.API_V1_PREFIX}/categories")
-async def create_category(
+def create_category(
     data: CategoryCreate,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin)
@@ -1172,7 +1226,7 @@ async def create_category(
     return {"id": category.id, "name": category.name}
 
 @app.put(f"{settings.API_V1_PREFIX}/categories/reorder")
-async def reorder_categories(
+def reorder_categories(
     data: CategoryReorder,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin)
@@ -1196,7 +1250,7 @@ async def reorder_categories(
         raise HTTPException(status_code=500, detail=f"Error reordering: {str(e)}")
 
 @app.put(f"{settings.API_V1_PREFIX}/categories/{{category_id}}")
-async def update_category(
+def update_category(
     category_id: int,
     data: CategoryCreate,
     db: Session = Depends(get_db),
@@ -1223,7 +1277,7 @@ async def update_category(
     return {"message": "Category updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/categories/{{category_id}}")
-async def delete_category(category_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_category(category_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete category (admin only) - Soft delete se tiver expenses"""
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
@@ -1245,7 +1299,7 @@ async def delete_category(category_id: int, db: Session = Depends(get_db), _: Us
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/payment-methods")
-async def list_payment_methods(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_payment_methods(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List payment methods for the current user, ordered by display_order."""
     methods = db.query(PaymentMethod).filter(
         PaymentMethod.user_id == current_user.id
@@ -1264,7 +1318,7 @@ async def list_payment_methods(db: Session = Depends(get_db), current_user: User
     return [_pm_dict(pm) for pm in methods]
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods")
-async def create_payment_method(
+def create_payment_method(
     data: PaymentMethodCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1288,7 +1342,7 @@ async def create_payment_method(
     return _pm_dict(pm)
 
 @app.put(f"{settings.API_V1_PREFIX}/payment-methods/reorder")
-async def reorder_payment_methods(
+def reorder_payment_methods(
     data: PaymentMethodReorder,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1305,7 +1359,7 @@ async def reorder_payment_methods(
     return {"message": "Reordered"}
 
 @app.put(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
-async def update_payment_method(
+def update_payment_method(
     pm_id: int,
     data: PaymentMethodCreate,
     db: Session = Depends(get_db),
@@ -1327,7 +1381,7 @@ async def update_payment_method(
     return _pm_dict(pm)
 
 @app.post(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}/toggle-closed")
-async def toggle_payment_method_closed(
+def toggle_payment_method_closed(
     pm_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1346,7 +1400,7 @@ async def toggle_payment_method_closed(
     return _pm_dict(pm)
 
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/{{pm_id}}")
-async def delete_payment_method(
+def delete_payment_method(
     pm_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -1374,7 +1428,7 @@ def list_icons_library(current_user: User = Depends(get_current_user)):
     return {"icons": icons}
 
 @app.delete(f"{settings.API_V1_PREFIX}/payment-methods/icons-library/{{filename}}")
-async def delete_library_icon(filename: str, current_user: User = Depends(get_current_user)):
+def delete_library_icon(filename: str, current_user: User = Depends(get_current_user)):
     """Delete an icon from the gallery. Admin only."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -1410,7 +1464,7 @@ async def upload_payment_method_icon(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/profiles")
-async def list_profiles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_profiles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List split profiles - admin vê todos, usuário comum vê apenas os que faz parte"""
     query = db.query(SplitProfile).options(
         joinedload(SplitProfile.users)
@@ -1434,7 +1488,7 @@ async def list_profiles(db: Session = Depends(get_db), current_user: User = Depe
     } for p in profiles]
 
 @app.post(f"{settings.API_V1_PREFIX}/profiles")
-async def create_profile(
+def create_profile(
     data: ProfileCreate,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin)
@@ -1460,7 +1514,7 @@ async def create_profile(
     return {"id": profile.id, "name": profile.name}
 
 @app.put(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}")
-async def update_profile(
+def update_profile(
     profile_id: int,
     data: ProfileCreate,
     db: Session = Depends(get_db),
@@ -1499,15 +1553,22 @@ async def update_profile(
             
             expenses = db.query(Expense).filter(Expense.split_profile_id == profile_id).all()
             new_users = [{"user_id": u.user_id, "percentage": float(u.percentage)} for u in data.users]
-            
+
+            # Batch: todos os splits afetados em 1 query, agrupados por expense
+            expense_ids_list = [e.id for e in expenses]
+            all_splits = db.query(ExpenseSplit).filter(
+                ExpenseSplit.expense_id.in_(expense_ids_list),
+                ExpenseSplit.due_date >= from_date
+            ).all() if expense_ids_list else []
+            splits_by_exp: dict = {}
+            for s in all_splits:
+                splits_by_exp.setdefault(s.expense_id, []).append(s)
+
             for expense in expenses:
-                splits_to_update = db.query(ExpenseSplit).filter(
-                    ExpenseSplit.expense_id == expense.id,
-                    ExpenseSplit.due_date >= from_date
-                ).all()
+                splits_to_update = splits_by_exp.get(expense.id)
                 if not splits_to_update:
                     continue
-                
+
                 # Agrupar por installment_number
                 installments_map: dict = {}
                 for s in splits_to_update:
@@ -1551,7 +1612,7 @@ async def update_profile(
     return {"message": "Profile updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}")
-async def delete_profile(profile_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_profile(profile_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete profile (admin only) - Soft delete se tiver expenses"""
     profile = db.query(SplitProfile).filter(SplitProfile.id == profile_id).first()
     if not profile:
@@ -1570,7 +1631,7 @@ async def delete_profile(profile_id: int, db: Session = Depends(get_db), _: User
         return {"message": "Profile deleted", "soft_delete": False}
 
 @app.put(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}/reorder")
-async def reorder_profile(
+def reorder_profile(
     profile_id: int, 
     data: dict, 
     db: Session = Depends(get_db), 
@@ -1586,7 +1647,7 @@ async def reorder_profile(
     return {"message": "Profile reordered successfully"}
 
 @app.get(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}/expense-months")
-async def list_profile_expense_months(profile_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_profile_expense_months(profile_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """List all months that have expenses with this profile"""
     months = db.query(
         func.to_char(ExpenseSplit.due_date, 'YYYY-MM').label('month')
@@ -1596,7 +1657,7 @@ async def list_profile_expense_months(profile_id: int, db: Session = Depends(get
     return [{"value": m[0], "label": m[0]} for m in months]
 
 @app.put(f"{settings.API_V1_PREFIX}/profiles/{{profile_id}}/update-splits-from-month")
-async def update_profile_splits_from_month(profile_id: int, data: dict, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def update_profile_splits_from_month(profile_id: int, data: dict, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Update expense_splits for this profile starting from a specific month"""
     from_month = data.get("from_month")
     new_users = data.get("users", [])
@@ -1605,14 +1666,21 @@ async def update_profile_splits_from_month(profile_id: int, data: dict, db: Sess
     
     from_date = datetime.strptime(from_month + "-01", "%Y-%m-%d").date()
     expenses = db.query(Expense).filter(Expense.split_profile_id == profile_id).all()
-    
+
+    # Batch: todos os splits afetados em 1 query, agrupados por expense
+    expense_ids_list = [e.id for e in expenses]
+    all_splits = db.query(ExpenseSplit).filter(
+        ExpenseSplit.expense_id.in_(expense_ids_list),
+        ExpenseSplit.due_date >= from_date
+    ).all() if expense_ids_list else []
+    splits_by_exp = {}
+    for s in all_splits:
+        splits_by_exp.setdefault(s.expense_id, []).append(s)
+
     updated_count = 0
     for expense in expenses:
-        splits_to_update = db.query(ExpenseSplit).filter(
-            ExpenseSplit.expense_id == expense.id,
-            ExpenseSplit.due_date >= from_date
-        ).all()
-        
+        splits_to_update = splits_by_exp.get(expense.id)
+
         if not splits_to_update:
             continue
         
@@ -1655,8 +1723,27 @@ async def update_profile_splits_from_month(profile_id: int, data: dict, db: Sess
 # EXPENSE ENDPOINTS - COM UPDATE E FILTRO POR MÊS
 # ============================================================================
 
+def _send_push_bg(profile_id, exclude_user_id, title, body, data, action_type):
+    """Envia push em background thread com sua própria sessão de DB."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        FirebaseService.send_to_profile_users(
+            db=db,
+            profile_id=profile_id,
+            exclude_user_id=exclude_user_id,
+            title=title,
+            body=body,
+            data=data,
+            action_type=action_type,
+        )
+    except Exception as e:
+        print(f"⚠️ Erro ao enviar push: {e}")
+    finally:
+        db.close()
+
 @app.get(f"{settings.API_V1_PREFIX}/expenses/months")
-async def list_expense_months(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_expense_months(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List all available year-months with expense splits (filtrado pelo usuário logado)"""
     vis = visible_expense_ids_subquery(db, current_user)
     months = db.query(
@@ -1667,7 +1754,7 @@ async def list_expense_months(db: Session = Depends(get_db), current_user: User 
     return [{"value": m[0], "label": m[0]} for m in months]
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/filters-for-month")
-async def get_filters_for_month(month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_filters_for_month(month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get available users and profiles for a specific month"""
     year, month_num = map(int, month.split('-'))
     start_date = date(year, month_num, 1)
@@ -1689,7 +1776,7 @@ async def get_filters_for_month(month: str = Query(...), db: Session = Depends(g
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/filters-for-period")
-async def get_filters_for_period(start_month: str = Query(...), end_month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_filters_for_period(start_month: str = Query(...), end_month: str = Query(...), db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get available users and categories for a period"""
     sy, sm = map(int, start_month.split('-'))
     ey, em = map(int, end_month.split('-'))
@@ -1712,7 +1799,7 @@ async def get_filters_for_period(start_month: str = Query(...), end_month: str =
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses")
-async def list_expenses(
+def list_expenses(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     skip: int = Query(0, ge=0, description="Paginação: offset"),
     limit: int = Query(500, ge=1, le=1000, description="Paginação: limite"),
@@ -1758,11 +1845,12 @@ async def list_expenses(
         "category_emoji": e.category.icon,
         "split_profile_id": e.split_profile_id,
         "profile_name": e.split_profile.name,
-        "notes": e.notes
+        "notes": e.notes,
+        "created_by_user_id": e.created_by_user_id
     } for e in expenses]
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/with-splits")
-async def list_expenses_with_splits(
+def list_expenses_with_splits(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     skip: int = Query(0, ge=0, description="Paginação: offset"),
     limit: int = Query(500, ge=1, le=1000, description="Paginação: limite"),
@@ -1836,6 +1924,7 @@ async def list_expenses_with_splits(
             "split_profile_id": e.split_profile_id,
             "profile_name": e.split_profile.name,
             "notes": e.notes,
+            "created_by_user_id": e.created_by_user_id,
             "splits": [{
                 "id": s.id,
                 "user_id": s.user_id,
@@ -1853,8 +1942,9 @@ async def list_expenses_with_splits(
     return result
 
 @app.post(f"{settings.API_V1_PREFIX}/expenses")
-async def create_expense(
+def create_expense(
     data: ExpenseCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -1880,36 +1970,32 @@ async def create_expense(
         original_date=original_date
     )
     
-    # Enviar push notification para outros usuários do perfil
-    try:
-        FirebaseService.send_to_profile_users(
-            db=db,
-            profile_id=expense.split_profile_id,
-            exclude_user_id=current_user.id,
-            title="💸 Despesa adicionada",
-            body=("{current_user.name} adicionou:\n{icon} {desc} - R$ {amt}\n⚖️ {profile}".format(
-                current_user=current_user,
-                icon=expense.category.icon or '',
-                desc=expense.description,
-                amt=f"{float(expense.total_amount):.2f}".replace('.', ','),
-                profile=expense.split_profile.name if expense.split_profile else ''
-            )),
-            data={"expense_id": str(expense.id), "action": "new_expense"},
-            action_type="new"
-        )
-    except Exception as e:
-        print(f"⚠️ Erro ao enviar push: {e}")
-    
+    background_tasks.add_task(
+        _send_push_bg,
+        expense.split_profile_id, current_user.id,
+        "💸 Despesa adicionada",
+        "{name} adicionou:\n{icon} {desc} - R$ {amt}\n⚖️ {profile}".format(
+            name=current_user.name,
+            icon=expense.category.icon or '',
+            desc=expense.description,
+            amt=f"{float(expense.total_amount):.2f}".replace('.', ','),
+            profile=expense.split_profile.name if expense.split_profile else '',
+        ),
+        {"expense_id": str(expense.id), "action": "new_expense"},
+        "new",
+    )
     return {"id": expense.id, "description": expense.description, "message": "Expense created"}
 
 @app.put(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}")
-async def update_expense(
+def update_expense(
     expense_id: int,
     data: ExpenseCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Update expense - mantém o ID original (UPDATE real)"""
+    _ensure_expense_visible(db, expense_id, current_user)
     expense_date_obj = date.fromisoformat(data.expense_date)
 
     original_date = expense_date_obj
@@ -1933,57 +2019,42 @@ async def update_expense(
         original_date=original_date
     )
     
-    # Enviar push notification para outros usuários do perfil
-    try:
-        FirebaseService.send_to_profile_users(
-            db=db,
-            profile_id=expense.split_profile_id,
-            exclude_user_id=current_user.id,
-            title="✏️ Despesa editada",
-            body=("{current_user.name} editou:\n{icon} {desc} - R$ {amt}\n⚖️ {profile}".format(
-                current_user=current_user,
-                icon=expense.category.icon or '',
-                desc=expense.description,
-                amt=f"{float(expense.total_amount):.2f}".replace('.', ','),
-                profile=expense.split_profile.name if expense.split_profile else ''
-            )),
-            data={"expense_id": str(expense.id), "action": "edit_expense"},
-            action_type="edit"
-        )
-    except Exception as e:
-        print(f"⚠️ Erro ao enviar push: {e}")
-    
+    background_tasks.add_task(
+        _send_push_bg,
+        expense.split_profile_id, current_user.id,
+        "✏️ Despesa editada",
+        "{name} editou:\n{icon} {desc} - R$ {amt}\n⚖️ {profile}".format(
+            name=current_user.name,
+            icon=expense.category.icon or '',
+            desc=expense.description,
+            amt=f"{float(expense.total_amount):.2f}".replace('.', ','),
+            profile=expense.split_profile.name if expense.split_profile else '',
+        ),
+        {"expense_id": str(expense.id), "action": "edit_expense"},
+        "edit",
+    )
     return {"id": expense.id, "message": "Expense updated"}
 
 @app.delete(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}")
-async def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_expense(expense_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete expense"""
-    # Buscar despesa antes de deletar (para enviar notificação)
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
-    
-    if expense:
-        # Salvar info para notificação
-        profile_id = expense.split_profile_id
-        description = expense.description
-        
-        # Deletar despesa
-        ExpenseService.delete_expense(db, expense_id)
-        
-        # Enviar push notification
-        try:
-            FirebaseService.send_to_profile_users(
-                db=db,
-                profile_id=profile_id,
-                exclude_user_id=current_user.id,
-                title="🗑️ Despesa deletada",
-                body=f"{current_user.name} deletou: {expense.category.icon or ''} {description}",
-                data={"action": "delete_expense"},
-                action_type="delete"
-            )
-        except Exception as e:
-            print(f"⚠️ Erro ao enviar push: {e}")
-    else:
-        ExpenseService.delete_expense(db, expense_id)
+    expense = _ensure_expense_visible(db, expense_id, current_user)
+
+    # Salvar info para notificação
+    profile_id = expense.split_profile_id
+    description = expense.description
+    category_icon = expense.category.icon or ''
+
+    ExpenseService.delete_expense(db, expense_id)
+
+    background_tasks.add_task(
+        _send_push_bg,
+        profile_id, current_user.id,
+        "🗑️ Despesa deletada",
+        f"{current_user.name} deletou: {category_icon} {description}",
+        {"action": "delete_expense"},
+        "delete",
+    )
 
     return {"message": "Expense deleted"}
 
@@ -1998,10 +2069,8 @@ def _add_one_month(d: date) -> date:
     return d.replace(year=year, month=month, day=min(d.day, max_day))
 
 @app.post(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/postpone")
-async def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    expense = db.query(Expense).filter(Expense.id == expense_id).first()
-    if not expense:
-        raise HTTPException(status_code=404, detail="Expense not found")
+def postpone_expense(expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    expense = _ensure_expense_visible(db, expense_id, current_user)
     expense.expense_date = _add_one_month(expense.expense_date)
     # original_date preserved intentionally — it reflects the real purchase date
     splits = db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
@@ -2016,7 +2085,7 @@ async def postpone_expense(expense_id: int, db: Session = Depends(get_db), _: Us
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/dashboard")
-async def get_dashboard(
+def get_dashboard(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2156,6 +2225,7 @@ async def get_dashboard(
             "split_profile_id": e.split_profile_id,
             "profile_name": e.split_profile.name,
             "notes": e.notes,
+            "created_by_user_id": e.created_by_user_id,
             "splits": [{
                 "id": s.id,
                 "user_id": s.user_id,
@@ -2234,7 +2304,7 @@ async def get_dashboard(
 
 
 @app.get(f"{settings.API_V1_PREFIX}/balances")
-async def get_balances(
+def get_balances(
     month: Optional[str] = Query(None, description="Filter by YYYY-MM"),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user)
@@ -2276,9 +2346,9 @@ async def get_balances(
     return balances
 
 @app.get(f"{settings.API_V1_PREFIX}/expenses/{{expense_id}}/splits")
-async def get_expense_splits(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def get_expense_splits(expense_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Get splits for an expense"""
-    splits = db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
+    splits = db.query(ExpenseSplit).options(joinedload(ExpenseSplit.user)).filter(ExpenseSplit.expense_id == expense_id).all()
     return [{
         "id": s.id,
         "user_id": s.user_id,
@@ -2298,7 +2368,7 @@ async def get_expense_splits(expense_id: int, db: Session = Depends(get_db), _: 
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/tokens")
-async def debug_list_tokens(
+def debug_list_tokens(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2324,7 +2394,7 @@ async def debug_list_tokens(
 
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/my-tokens")
-async def debug_my_tokens(
+def debug_my_tokens(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2347,7 +2417,7 @@ async def debug_my_tokens(
 
 
 @app.post(f"{settings.API_V1_PREFIX}/debug/test-push")
-async def debug_test_push(
+def debug_test_push(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2393,7 +2463,7 @@ async def debug_test_push(
 
 
 @app.post(f"{settings.API_V1_PREFIX}/debug/test-push-self")
-async def debug_test_push_self(
+def debug_test_push_self(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2440,7 +2510,7 @@ async def debug_test_push_self(
 # ============================================================================
 
 @app.get(f"{settings.API_V1_PREFIX}/notification-preferences")
-async def get_notification_preferences(
+def get_notification_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2471,7 +2541,7 @@ async def get_notification_preferences(
 
 
 @app.put(f"{settings.API_V1_PREFIX}/notification-preferences")
-async def update_notification_preferences(
+def update_notification_preferences(
     data: NotificationPreferencesUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2508,7 +2578,7 @@ async def update_notification_preferences(
 
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/firebase-status")
-async def debug_firebase_status():
+def debug_firebase_status():
     """Verifica status do Firebase Admin SDK"""
     return {
         "firebase_initialized": FirebaseService._app is not None,
@@ -2517,7 +2587,7 @@ async def debug_firebase_status():
 
 
 @app.get(f"{settings.API_V1_PREFIX}/debug/cross-user-check")
-async def debug_cross_user_check(
+def debug_cross_user_check(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -2643,15 +2713,19 @@ def _target_dict(t: Target) -> dict:
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/targets")
-async def list_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """List targets for the current user, ordered by sort_order."""
+def list_targets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """List targets for the current user, ordered by sort_order.
+
+    Sem cache em memória: com múltiplos workers, a invalidação pós-edição só
+    atinge um worker — o usuário veria o target antigo logo após salvar.
+    """
     targets = db.query(Target).filter(
         Target.user_id == current_user.id, Target.is_active == True
     ).order_by(Target.sort_order).all()
     return [_target_dict(t) for t in targets]
 
 @app.post(f"{settings.API_V1_PREFIX}/targets")
-async def create_target(data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_target(data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a new target for the current user."""
     max_order = db.query(func.max(Target.sort_order)).filter(Target.user_id == current_user.id).scalar() or 0
     target = Target(
@@ -2671,7 +2745,7 @@ async def create_target(data: TargetCreate, db: Session = Depends(get_db), curre
     return _target_dict(target)
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
-async def update_target(target_id: int, data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_target(target_id: int, data: TargetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update a target (owner only)."""
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
@@ -2687,7 +2761,7 @@ async def update_target(target_id: int, data: TargetCreate, db: Session = Depend
     return _target_dict(target)
 
 @app.delete(f"{settings.API_V1_PREFIX}/targets/{{target_id}}")
-async def delete_target(target_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_target(target_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete (soft) a target (owner only)."""
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
@@ -2697,7 +2771,7 @@ async def delete_target(target_id: int, db: Session = Depends(get_db), current_u
     return {"message": "Target deleted"}
 
 @app.put(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/reorder")
-async def reorder_target(target_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def reorder_target(target_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update sort_order of a target (owner only)."""
     target = db.query(Target).filter(Target.id == target_id, Target.user_id == current_user.id).first()
     if not target:
@@ -2707,7 +2781,7 @@ async def reorder_target(target_id: int, data: dict, db: Session = Depends(get_d
     return {"message": "Reordered"}
 
 @app.get(f"{settings.API_V1_PREFIX}/targets/{{target_id}}/stats")
-async def get_target_stats(
+def get_target_stats(
     target_id: int,
     month: str = Query(..., description="Current month YYYY-MM"),
     db: Session = Depends(get_db),
@@ -2869,7 +2943,7 @@ def _income_dict(inc: Income) -> dict:
     }
 
 @app.get(f"{settings.API_V1_PREFIX}/income/months")
-async def list_income_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def list_income_months(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     from sqlalchemy import func as sqlfunc, extract
     rows = db.query(
         sqlfunc.to_char(Income.income_date, 'YYYY-MM').label('month')
@@ -2883,7 +2957,7 @@ async def list_income_months(db: Session = Depends(get_db), _: User = Depends(ge
     return result
 
 @app.get(f"{settings.API_V1_PREFIX}/income")
-async def list_income(
+def list_income(
     month: Optional[str] = Query(None, description="YYYY-MM"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2901,7 +2975,7 @@ async def list_income(
     return [_income_dict(i) for i in items]
 
 @app.post(f"{settings.API_V1_PREFIX}/income", status_code=201)
-async def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     inc = Income(
         description=data.description,
         amount=data.amount,
@@ -2915,7 +2989,7 @@ async def create_income(data: IncomeCreate, db: Session = Depends(get_db), _: Us
     return _income_dict(inc)
 
 @app.put(f"{settings.API_V1_PREFIX}/income/{{income_id}}")
-async def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def update_income(income_id: int, data: IncomeUpdate, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     inc = db.query(Income).filter(Income.id == income_id).first()
     if not inc:
         raise HTTPException(status_code=404, detail="Income not found")
@@ -2929,13 +3003,370 @@ async def update_income(income_id: int, data: IncomeUpdate, db: Session = Depend
     return _income_dict(inc)
 
 @app.delete(f"{settings.API_V1_PREFIX}/income/{{income_id}}")
-async def delete_income(income_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def delete_income(income_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     inc = db.query(Income).filter(Income.id == income_id).first()
     if not inc:
         raise HTTPException(status_code=404, detail="Income not found")
     db.delete(inc)
     db.commit()
     return {"ok": True}
+
+# ============================================================================
+# AGENT ENDPOINT — Gemini AI financial assistant with function calling
+# ============================================================================
+
+class AgentMessage(BaseModel):
+    role: str   # "user" | "model"
+    text: str
+
+class AgentChatRequest(BaseModel):
+    message: str
+    history: List[AgentMessage] = []
+
+# ── Agent DB tool implementations ────────────────────────────────────────────
+
+def _agent_monthly_expenses(year: int, month: int, user_id: int, db) -> dict:
+    from collections import defaultdict as _dd
+    month_str = f"{year}-{month:02d}"
+    rows = (db.query(Category.name, func.sum(ExpenseSplit.user_amount))
+            .join(Expense, Expense.id == ExpenseSplit.expense_id)
+            .join(Category, Category.id == Expense.category_id)
+            .filter(ExpenseSplit.user_id == user_id,
+                    func.to_char(ExpenseSplit.due_date, 'YYYY-MM') == month_str)
+            .group_by(Category.name)
+            .order_by(func.sum(ExpenseSplit.user_amount).desc())
+            .all())
+    if not rows:
+        return {"mes": month_str, "total": 0.0, "por_categoria": [],
+                "observacao": "Nenhuma despesa registrada neste mês."}
+    cats = [{"categoria": r[0], "total": round(float(r[1]), 2)} for r in rows]
+    return {"mes": month_str, "total": round(sum(c["total"] for c in cats), 2), "por_categoria": cats}
+
+
+def _agent_expenses_by_category(category_name: str, start_date: str, end_date: str, user_id: int, db) -> dict:
+    rows = (db.query(func.to_char(ExpenseSplit.due_date, 'YYYY-MM'), Category.name,
+                     func.sum(ExpenseSplit.user_amount))
+            .join(Expense, Expense.id == ExpenseSplit.expense_id)
+            .join(Category, Category.id == Expense.category_id)
+            .filter(ExpenseSplit.user_id == user_id,
+                    func.to_char(ExpenseSplit.due_date, 'YYYY-MM') >= start_date[:7],
+                    func.to_char(ExpenseSplit.due_date, 'YYYY-MM') <= end_date[:7],
+                    func.lower(Category.name).contains(category_name.lower()))
+            .group_by(func.to_char(ExpenseSplit.due_date, 'YYYY-MM'), Category.name)
+            .order_by(func.to_char(ExpenseSplit.due_date, 'YYYY-MM'))
+            .all())
+    if not rows:
+        return {"erro": f"Nenhum gasto encontrado para '{category_name}' no período {start_date} a {end_date}."}
+    by_month: dict = {}
+    cat_names: set = set()
+    for mes, cat, total in rows:
+        cat_names.add(cat)
+        by_month[mes] = by_month.get(mes, 0.0) + float(total)
+    monthly = [{"mes": k, "total": round(v, 2)} for k, v in sorted(by_month.items())]
+    total = sum(v["total"] for v in monthly)
+    return {"categorias_encontradas": list(cat_names), "periodo": f"{start_date} a {end_date}",
+            "total": round(total, 2),
+            "media_mensal": round(total / len(monthly), 2) if monthly else 0,
+            "por_mes": monthly}
+
+
+def _agent_financial_summary(start_date: str, end_date: str, user_id: int, db) -> dict:
+    """Retorna resumo completo: despesas por categoria por mês + IPCA correlacionado + receitas."""
+    from sqlalchemy import text as _text
+    try:
+        sy, sm = map(int, start_date[:7].split('-'))
+        ey, em = map(int, end_date[:7].split('-'))
+        start_int, end_int = sy * 100 + sm, ey * 100 + em
+    except Exception:
+        return {"erro": "Formato de data inválido. Use YYYY-MM."}
+
+    # Despesas por mês e categoria (com código IPCA mapeado)
+    rows = db.execute(_text("""
+        SELECT to_char(es.due_date,'YYYY-MM') as mes,
+               c.name as categoria, c.ipca_category_code, c.ipca_category_name,
+               SUM(es.user_amount) as total
+        FROM expense_splits es
+        JOIN expenses e ON es.expense_id = e.id
+        JOIN categories c ON e.category_id = c.id
+        WHERE es.user_id = :uid
+          AND to_char(es.due_date,'YYYY-MM') >= :start
+          AND to_char(es.due_date,'YYYY-MM') <= :end
+        GROUP BY mes, c.name, c.ipca_category_code, c.ipca_category_name
+        ORDER BY mes, total DESC
+    """), {"uid": user_id, "start": start_date[:7], "end": end_date[:7]}).fetchall()
+
+    # IPCA por código de categoria (lookup em lote)
+    ipca_codes = list({r[2] for r in rows if r[2]})
+    ipca_by_code_month: dict = {}
+    if ipca_codes:
+        ipca_rows = db.execute(_text(
+            'SELECT "D4C","D3C","D4N","V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+            'AND "D4C"=ANY(:codes)'
+        ), {"s": start_int, "e": end_int, "codes": ipca_codes}).fetchall()
+        for d4c, d3c, d4n, v in ipca_rows:
+            mes_str = f"{d3c//100}-{d3c%100:02d}"
+            ipca_by_code_month[(d4c, mes_str)] = {"variacao_pct": float(v) if v is not None else None, "nome_ipca": d4n}
+
+    # IPCA geral
+    gen_rows = db.execute(_text(
+        'SELECT "D3C","V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e AND lower("D4N") LIKE \'%geral%\''
+    ), {"s": start_int, "e": end_int}).fetchall()
+    ipca_geral = {f"{r[0]//100}-{r[0]%100:02d}": (float(r[1]) if r[1] is not None else None) for r in gen_rows}
+
+    # Receitas por mês
+    inc_rows = (db.query(func.to_char(Income.income_date, 'YYYY-MM'), func.sum(Income.amount))
+                .filter(Income.user_id == user_id,
+                        func.to_char(Income.income_date, 'YYYY-MM') >= start_date[:7],
+                        func.to_char(Income.income_date, 'YYYY-MM') <= end_date[:7])
+                .group_by(func.to_char(Income.income_date, 'YYYY-MM')).all())
+    receitas = {r[0]: round(float(r[1]), 2) for r in inc_rows}
+
+    # Montar resultado por mês
+    months: dict = {}
+    for mes, cat, ipca_code, ipca_cat_name, total in rows:
+        if mes not in months:
+            months[mes] = {"mes": mes, "despesa_total": 0.0, "receita": receitas.get(mes, 0.0),
+                           "ipca_geral_pct": ipca_geral.get(mes), "categorias": []}
+        cat_ipca = ipca_by_code_month.get((ipca_code, mes)) if ipca_code else None
+        months[mes]["categorias"].append({
+            "categoria": cat, "total": round(float(total), 2),
+            "ipca_pct": cat_ipca["variacao_pct"] if cat_ipca else None,
+            "ipca_nome": cat_ipca["nome_ipca"] if cat_ipca else (ipca_cat_name or None)
+        })
+        months[mes]["despesa_total"] = round(months[mes]["despesa_total"] + float(total), 2)
+
+    result = sorted(months.values(), key=lambda x: x["mes"])
+    return {
+        "periodo": f"{start_date} a {end_date}",
+        "meses": result,
+        "total_despesas": round(sum(m["despesa_total"] for m in result), 2),
+        "total_receitas": round(sum(receitas.values()), 2),
+        "fonte_ipca": "IBGE/SIDRA"
+    }
+
+
+def _agent_historical_inflation(start_date: str, end_date: str, db, category_name: str = "") -> dict:
+    from sqlalchemy import text as _text
+    try:
+        sy, sm = map(int, start_date[:7].split('-'))
+        ey, em = map(int, end_date[:7].split('-'))
+    except Exception:
+        return {"erro": "Formato de data inválido. Use YYYY-MM."}
+    start_int, end_int = sy * 100 + sm, ey * 100 + em
+
+    if category_name:
+        # 1º: tentar encontrar a categoria de despesa no app e usar seu código IPCA mapeado
+        cat_obj = (db.query(Category)
+                   .filter(func.lower(Category.name).contains(category_name.lower()),
+                           Category.ipca_category_code.isnot(None))
+                   .first())
+        if cat_obj and cat_obj.ipca_category_code:
+            rows = db.execute(_text(
+                'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+                'AND "D4C"=:d4c ORDER BY "D3C"'
+            ), {"s": start_int, "e": end_int, "d4c": cat_obj.ipca_category_code}).fetchall()
+            if rows:
+                data = [{"mes": f"{r[0]//100}-{r[0]%100:02d}", "categoria_ipca": r[1],
+                         "categoria_app": cat_obj.name, "variacao_pct": float(r[2]) if r[2] is not None else None}
+                        for r in rows]
+                return {"periodo": f"{start_date} a {end_date}", "fonte": "IBGE/SIDRA",
+                        "categoria_buscada": category_name, "dados": data}
+        # 2º: buscar diretamente pelo nome na tabela IPCA
+        rows = db.execute(_text(
+            'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+            'AND lower("D4N") LIKE :cat ORDER BY "D3C","D4C"'
+        ), {"s": start_int, "e": end_int, "cat": f"%{category_name.lower()}%"}).fetchall()
+        if not rows:
+            mappings = (db.query(Category.name, Category.ipca_category_name)
+                        .filter(Category.ipca_category_code.isnot(None), Category.is_active == True)
+                        .all())
+            avail = db.execute(_text(
+                'SELECT DISTINCT "D4N" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e ORDER BY "D4N" LIMIT 30'
+            ), {"s": start_int, "e": end_int}).fetchall()
+            return {"erro": f"Categoria '{category_name}' não encontrada no IPCA.",
+                    "categorias_app_mapeadas": [{"categoria_app": m[0], "ipca": m[1]} for m in mappings],
+                    "subcategorias_ipca_disponiveis": [r[0] for r in avail if r[0]]}
+    else:
+        rows = db.execute(_text(
+            'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+            'AND lower("D4N") LIKE \'%geral%\' ORDER BY "D3C"'
+        ), {"s": start_int, "e": end_int}).fetchall()
+        if not rows:
+            rows = db.execute(_text(
+                'SELECT "D3C", "D4N", "V" FROM ipca WHERE "D1C"=1 AND "D3C">=:s AND "D3C"<=:e '
+                'ORDER BY "D3C","D4C" LIMIT 60'
+            ), {"s": start_int, "e": end_int}).fetchall()
+
+    if not rows:
+        return {"observacao": "Sem dados IPCA disponíveis para o período.", "periodo": f"{start_date} a {end_date}"}
+    data = [{"mes": f"{r[0]//100}-{r[0]%100:02d}", "categoria": r[1],
+             "variacao_pct": float(r[2]) if r[2] is not None else None} for r in rows]
+    return {"periodo": f"{start_date} a {end_date}", "fonte": "IBGE/SIDRA", "dados": data}
+
+
+# ── Gemini tools declaration ──────────────────────────────────────────────────
+
+_AGENT_TOOLS = [{"function_declarations": [
+    {
+        "name": "get_monthly_expenses",
+        "description": "Retorna o total de despesas e o detalhamento por categoria de um mês específico do usuário. Use sempre que precisar de dados de um mês concreto.",
+        "parameters": {"type": "object",
+                       "properties": {"year":  {"type": "integer", "description": "Ano (ex: 2025)"},
+                                      "month": {"type": "integer", "description": "Mês de 1 a 12"}},
+                       "required": ["year", "month"]}
+    },
+    {
+        "name": "get_expenses_by_category",
+        "description": "Retorna os gastos de uma categoria mês a mês em um intervalo de tempo. Use para tendências e comparações ao longo do tempo.",
+        "parameters": {"type": "object",
+                       "properties": {"category_name": {"type": "string", "description": "Nome ou parte do nome da categoria (ex: 'Alimentação')"},
+                                      "start_date":    {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":      {"type": "string", "description": "Data final YYYY-MM"}},
+                       "required": ["category_name", "start_date", "end_date"]}
+    },
+    {
+        "name": "get_financial_summary",
+        "description": "Retorna resumo financeiro COMPLETO de um período: TODAS as categorias de despesa por mês com valores, IPCA já correlacionado por categoria, receitas e IPCA geral. Use este tool PRIMEIRO para qualquer análise que envolva múltiplas categorias, comparações entre meses, inflação ponderada, ou visão geral das finanças.",
+        "parameters": {"type": "object",
+                       "properties": {"start_date": {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":   {"type": "string", "description": "Data final YYYY-MM"}},
+                       "required": ["start_date", "end_date"]}
+    },
+    {
+        "name": "get_historical_inflation",
+        "description": "Retorna dados do IPCA (inflação oficial brasileira) de um período. Sem category_name retorna o índice geral. Com category_name filtra por subcategoria IPCA (ex: 'Transporte', 'Alimentação', 'Uber'). Se a categoria não for encontrada, retorna lista de categorias disponíveis.",
+        "parameters": {"type": "object",
+                       "properties": {"start_date":    {"type": "string", "description": "Data inicial YYYY-MM"},
+                                      "end_date":      {"type": "string", "description": "Data final YYYY-MM"},
+                                      "category_name": {"type": "string", "description": "Nome ou parte do nome da subcategoria IPCA (opcional)"}},
+                       "required": ["start_date", "end_date"]}
+    }
+]}]
+
+
+@app.post(f"{settings.API_V1_PREFIX}/agent/chat")
+def agent_chat(data: AgentChatRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    import urllib.request as _urllib_req, time as _time
+
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Nenhuma chave de IA configurada no servidor")
+
+    now = datetime.now()
+    current_month_str = f"{now.year}-{now.month:02d}"
+
+    system_prompt = f"""Você é um assistente financeiro pessoal integrado ao app fisc.io.
+Responda sempre em português do Brasil, de forma clara e objetiva.
+Use markdown (negrito, listas, tabelas) quando útil para organizar a informação.
+
+Usuário: {current_user.name}
+Mês atual: {current_month_str}
+
+Você tem acesso a ferramentas para consultar o banco de dados financeiro completo:
+- get_financial_summary(start_date, end_date): TODAS as categorias + IPCA por categoria + receitas em uma única chamada. Use SEMPRE que a pergunta envolver múltiplas categorias, visão geral, inflação ponderada ou comparação entre meses.
+- get_monthly_expenses(year, month): despesas totais e por categoria de um único mês específico
+- get_expenses_by_category(category_name, start_date, end_date): evolução de uma categoria ao longo do tempo
+- get_historical_inflation(start_date, end_date, category_name?): IPCA mensal; com category_name busca o código IPCA mapeado para aquela categoria do app
+
+REGRAS CRÍTICAS:
+1. Para qualquer análise geral ou que envolva múltiplas categorias, chame get_financial_summary PRIMEIRO — ele retorna tudo de uma vez, incluindo IPCA já correlacionado por categoria.
+2. NUNCA afirme variações percentuais sem antes ter dados reais das ferramentas
+3. NUNCA diga que dados não estão disponíveis sem antes tentar buscar com as ferramentas
+4. Se get_historical_inflation retornar categorias_app_mapeadas, use essa lista para encontrar a categoria correta e buscar novamente
+5. Sempre consulte as ferramentas antes de responder — jamais deduza dados financeiros"""
+
+    def _execute_tool(name: str, args: dict) -> dict:
+        try:
+            if name == "get_monthly_expenses":
+                return _agent_monthly_expenses(int(args["year"]), int(args["month"]), current_user.id, db)
+            elif name == "get_expenses_by_category":
+                return _agent_expenses_by_category(str(args["category_name"]), str(args["start_date"]),
+                                                   str(args["end_date"]), current_user.id, db)
+            elif name == "get_historical_inflation":
+                return _agent_historical_inflation(str(args["start_date"]), str(args["end_date"]), db,
+                                                   str(args.get("category_name", "")))
+            elif name == "get_financial_summary":
+                return _agent_financial_summary(str(args["start_date"]), str(args["end_date"]), current_user.id, db)
+            return {"erro": f"Ferramenta '{name}' não reconhecida."}
+        except Exception as ex:
+            return {"erro": f"Erro ao executar {name}: {ex}"}
+
+    # ── Gemini implementation (custom format) ─────────────────────────────────
+    def _run_gemini() -> str:
+        key = settings.GEMINI_API_KEY.strip()
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+        contents = []
+        for h in data.history[-10:]:
+            contents.append({"role": h.role, "parts": [{"text": h.text}]})
+        contents.append({"role": "user", "parts": [{"text": data.message}]})
+        base = {"system_instruction": {"parts": [{"text": system_prompt}]},
+                "tools": _AGENT_TOOLS,
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 2048}}
+
+        def _gcall(payload_dict: dict) -> dict:
+            payload = json.dumps(payload_dict).encode()
+            for _attempt in range(2):
+                req = _urllib_req.Request(url, data=payload,
+                                          headers={"Content-Type": "application/json", "x-goog-api-key": key},
+                                          method="POST")
+                try:
+                    with _urllib_req.urlopen(req, timeout=20) as resp:
+                        return json.loads(resp.read())
+                except _urllib_req.HTTPError as e:
+                    body = e.read().decode("utf-8", errors="replace")
+                    try:
+                        msg = json.loads(body).get("error", {}).get("message", body[:300])
+                    except Exception:
+                        msg = body[:300]
+                    if _attempt == 0 and ("high demand" in msg or "overloaded" in msg.lower() or e.code == 429):
+                        import re as _re
+                        m = _re.search(r'retry in ([0-9.]+)s', msg)
+                        wait = min(float(m.group(1)), 55.0) if m else 5.0
+                        _time.sleep(wait)
+                        continue
+                    raise HTTPException(status_code=500, detail=f"Gemini: {msg}")
+                except Exception as ex:
+                    raise HTTPException(status_code=500, detail=f"Erro ao chamar Gemini: {ex}")
+
+        for _ in range(5):
+            result = _gcall({**base, "contents": contents})
+            parts = result["candidates"][0]["content"]["parts"]
+            fn_calls = [p["functionCall"] for p in parts if "functionCall" in p]
+            if not fn_calls:
+                return "\n".join(p.get("text", "") for p in parts if "text" in p).strip()
+            contents.append({"role": "model", "parts": parts})
+            fn_responses = [{"functionResponse": {"name": fn["name"],
+                                                   "response": {"result": _execute_tool(fn["name"], fn.get("args", {}))}}}
+                            for fn in fn_calls]
+            contents.append({"role": "user", "parts": fn_responses})
+        return "Agente excedeu o limite de chamadas de ferramentas."
+
+    # ── Orchestration ─────────────────────────────────────────────────────────
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Serviço de IA indisponível. Configure GEMINI_API_KEY.")
+    return {"reply": _run_gemini()}
+
+
+@app.get(f"{settings.API_V1_PREFIX}/agent/models")
+def agent_list_models(_: User = Depends(get_current_user)):
+    """Lista modelos disponíveis para a API key configurada (diagnóstico)."""
+    import urllib.request as _ur
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY não configurada")
+    k = settings.GEMINI_API_KEY.strip()
+    if k.startswith("AQ."):
+        list_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        list_req = _ur.Request(list_url, headers={"Authorization": f"Bearer {k}"})
+    else:
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={k}"
+        list_req = list_url
+    try:
+        with _ur.urlopen(list_req, timeout=10) as r:
+            data = json.loads(r.read())
+        names = [m["name"] for m in data.get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
+        return {"models": names}
+    except _ur.HTTPError as e:
+        raise HTTPException(status_code=500, detail=e.read().decode()[:300])
+
 
 # ============================================================================
 # AUDIT ENDPOINT — reconcile CSV/OFX bank files against DB expenses
@@ -3006,3 +3437,270 @@ async def audit_analyze(
             "micro":    len(result.micro_adjustments),
         },
     }
+
+
+# ── Open Finance (Pluggy) ─────────────────────────────────────────────────────
+
+def _pluggy_api_key() -> str:
+    """Authenticate with Pluggy and return a short-lived API key."""
+    if not settings.PLUGGY_CLIENT_ID or not settings.PLUGGY_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Open Finance não configurado no servidor.")
+    import pluggy_sdk
+    from uuid import UUID as _UUID
+    configuration = pluggy_sdk.Configuration()
+    with pluggy_sdk.ApiClient(configuration) as api_client:
+        auth = pluggy_sdk.AuthApi(api_client)
+        resp = auth.auth_create(
+            auth_request=pluggy_sdk.AuthRequest(
+                client_id=_UUID(settings.PLUGGY_CLIENT_ID),
+                client_secret=settings.PLUGGY_CLIENT_SECRET
+            )
+        )
+        return resp.api_key
+
+
+def _pluggy_client_with_key(api_key: str):
+    """Return a configured ApiClient using the Pluggy API key."""
+    import pluggy_sdk
+    cfg = pluggy_sdk.Configuration(api_key={"default": api_key})
+    return pluggy_sdk.ApiClient(cfg)
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/connect-token")
+def openfinance_connect_token(current_user: User = Depends(get_current_user)):
+    try:
+        import pluggy_sdk
+        api_key = _pluggy_api_key()
+        with _pluggy_client_with_key(api_key) as api_client:
+            auth = pluggy_sdk.AuthApi(api_client)
+            resp = auth.connect_token_create(
+                connect_token_request=pluggy_sdk.ConnectTokenRequest()
+            )
+            return {"access_token": resp.access_token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar token Pluggy: {e}")
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/accounts")
+def openfinance_list_accounts(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    accounts = db.query(PluggyAccount).filter(PluggyAccount.user_id == current_user.id).all()
+    pm_map = {p.id: {"name": p.description, "icon": p.icon_path, "color": p.color}
+              for p in db.query(PaymentMethod).filter(PaymentMethod.user_id == current_user.id).all()}
+    return [{"id": a.id, "account_name": a.account_name, "account_type": a.account_type,
+             "pluggy_account_id": a.pluggy_account_id, "item_id": a.item_id,
+             "payment_method_id": a.payment_method_id,
+             "payment_method_name": pm_map.get(a.payment_method_id, {}).get("name"),
+             "payment_method_icon": pm_map.get(a.payment_method_id, {}).get("icon"),
+             "payment_method_color": pm_map.get(a.payment_method_id, {}).get("color")} for a in accounts]
+
+
+class PluggyItemRequest(BaseModel):
+    item_id: str
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/items/accounts")
+def openfinance_item_accounts(data: PluggyItemRequest, _: User = Depends(get_current_user)):
+    """Retorna as contas de um item Pluggy (após conexão via widget)."""
+    try:
+        import pluggy_sdk
+        from uuid import UUID as _UUID
+        api_key = _pluggy_api_key()
+        with _pluggy_client_with_key(api_key) as api_client:
+            acct_api = pluggy_sdk.AccountApi(api_client)
+            resp = acct_api.accounts_list(item_id=_UUID(data.item_id))
+            return {"accounts": [{"id": str(a.id), "name": a.name, "type": str(a.type),
+                     "balance": float(a.balance or 0)} for a in resp.results]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar contas Pluggy: {e}")
+
+
+class SavePluggyAccountRequest(BaseModel):
+    item_id: str
+    pluggy_account_id: str
+    account_name: str
+    account_type: str
+    payment_method_id: Optional[int] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/accounts")
+def openfinance_save_account(data: SavePluggyAccountRequest, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
+    existing = db.query(PluggyAccount).filter(
+        PluggyAccount.pluggy_account_id == data.pluggy_account_id).first()
+    if existing:
+        existing.payment_method_id = data.payment_method_id
+        existing.item_id = data.item_id
+        db.commit()
+        return {"id": existing.id}
+    acct = PluggyAccount(user_id=current_user.id, item_id=data.item_id,
+                         pluggy_account_id=data.pluggy_account_id,
+                         account_name=data.account_name, account_type=data.account_type,
+                         payment_method_id=data.payment_method_id)
+    db.add(acct)
+    db.commit()
+    db.refresh(acct)
+    return {"id": acct.id}
+
+
+@app.delete(f"{settings.API_V1_PREFIX}/openfinance/accounts/{{account_id}}")
+def openfinance_delete_account(account_id: int, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    acct = db.query(PluggyAccount).filter(PluggyAccount.id == account_id,
+                                           PluggyAccount.user_id == current_user.id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    db.delete(acct)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get(f"{settings.API_V1_PREFIX}/openfinance/transactions")
+def openfinance_transactions(account_id: int, date_from: str = None, date_to: str = None,
+                              db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    acct = db.query(PluggyAccount).filter(PluggyAccount.id == account_id,
+                                           PluggyAccount.user_id == current_user.id).first()
+    if not acct:
+        raise HTTPException(status_code=404, detail="Conta não encontrada.")
+    try:
+        import requests as _req
+        from datetime import date as _date, datetime as _dt
+        api_key = _pluggy_api_key()
+        df = date_from or _date.today().replace(day=1).isoformat()
+        dt = date_to or _date.today().isoformat()
+
+        all_txns = []
+        headers = {"X-API-KEY": api_key, "Accept": "application/json"}
+        cursor = None
+        for _ in range(10):
+            params = {"accountId": acct.pluggy_account_id, "dateFrom": df, "dateTo": dt}
+            if cursor:
+                params["after"] = cursor
+            r = _req.get("https://api.pluggy.ai/v2/transactions", headers=headers, params=params, timeout=30)
+            if not r.ok:
+                raise HTTPException(status_code=500, detail=f"Pluggy API: {r.status_code} — {r.text}")
+            page = r.json()
+            all_txns.extend(page.get("results", []))
+            cursor = page.get("next")
+            if not cursor:
+                break
+
+        # IDs já importados via pluggy_transaction_id
+        from sqlalchemy import text as _text
+        from decimal import Decimal as _Dec
+        imported = set()
+        for row in db.execute(_text("SELECT pluggy_transaction_id FROM expenses WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
+            imported.add(row[0])
+        for row in db.execute(_text("SELECT pluggy_transaction_id FROM incomes WHERE pluggy_transaction_id IS NOT NULL")).fetchall():
+            imported.add(row[0])
+
+        # Duplicatas por (valor, data, método de pagamento)
+        dup_keys = set()
+        if acct.payment_method_id:
+            rows = db.execute(_text(
+                "SELECT total_amount::text, expense_date::text FROM expenses "
+                "WHERE payment_method_id = :pm AND pluggy_transaction_id IS NULL"
+            ), {"pm": acct.payment_method_id}).fetchall()
+            for r in rows:
+                dup_keys.add((str(r[0]), str(r[1])))
+
+        def _is_dup(tx):
+            if acct.payment_method_id is None:
+                return False
+            amt = f"{float(tx.get('amount') or 0):.2f}"
+            dt = str(tx.get("date", ""))[:10]
+            return (amt, dt) in dup_keys
+
+        return {"transactions": [{"id": str(tx.get("id", "")),
+                 "description": tx.get("description", ""),
+                 "amount": float(tx.get("amount") or 0),
+                 "date": str(tx.get("date", ""))[:10],
+                 "type": str(tx.get("type", "DEBIT")),
+                 "already_imported": str(tx.get("id", "")) in imported,
+                 "possible_duplicate": not (str(tx.get("id", "")) in imported) and _is_dup(tx)} for tx in all_txns]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar transações: {e}")
+
+
+class ImportExpenseRequest(BaseModel):
+    pluggy_transaction_id: str
+    description: str
+    amount: float
+    expense_date: str
+    category_id: int
+    split_profile_id: int
+    paid_by_user_id: Optional[int] = None
+    payment_method_id: Optional[int] = None
+    notes: Optional[str] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/import/expense")
+def openfinance_import_expense(data: ImportExpenseRequest, db: Session = Depends(get_db),
+                                current_user: User = Depends(get_current_user)):
+    from sqlalchemy import text as _text
+    from datetime import date as _date
+    if db.execute(_text("SELECT id FROM expenses WHERE pluggy_transaction_id = :t"),
+                  {"t": data.pluggy_transaction_id}).fetchone():
+        raise HTTPException(status_code=409, detail="Transação já importada.")
+    from decimal import Decimal as _Dec
+    exp = ExpenseService.create_expense(
+        db,
+        paid_by_user_id=data.paid_by_user_id or current_user.id,
+        category_id=data.category_id,
+        split_profile_id=data.split_profile_id,
+        description=data.description,
+        total_amount=_Dec(str(data.amount)),
+        expense_date=_date.fromisoformat(data.expense_date),
+        notes=data.notes,
+        payment_method_id=data.payment_method_id,
+        created_by_user_id=current_user.id,
+    )
+    db.execute(_text("UPDATE expenses SET pluggy_transaction_id = :t WHERE id = :id"),
+               {"t": data.pluggy_transaction_id, "id": exp.id})
+    db.commit()
+    return {"id": exp.id}
+
+
+class ImportIncomeRequest(BaseModel):
+    pluggy_transaction_id: str
+    description: str
+    amount: float
+    income_date: str
+    notes: Optional[str] = None
+
+@app.post(f"{settings.API_V1_PREFIX}/openfinance/import/income")
+def openfinance_import_income(data: ImportIncomeRequest, db: Session = Depends(get_db),
+                               current_user: User = Depends(get_current_user)):
+    from sqlalchemy import text as _text
+    from datetime import date as _date
+    if db.execute(_text("SELECT id FROM incomes WHERE pluggy_transaction_id = :t"),
+                  {"t": data.pluggy_transaction_id}).fetchone():
+        raise HTTPException(status_code=409, detail="Transação já importada.")
+    inc = Income(description=data.description, amount=data.amount,
+                 income_date=_date.fromisoformat(data.income_date), notes=data.notes,
+                 user_id=current_user.id, pluggy_transaction_id=data.pluggy_transaction_id)
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+    return {"id": inc.id}
+
+
+@app.post(f"{settings.API_V1_PREFIX}/admin/ipca/ingest")
+def trigger_ipca_ingest(current_user: User = Depends(get_current_user)):
+    """Manually trigger IPCA data ingestion — admin only"""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+    import subprocess, sys as _sys, os as _os
+    script = _os.path.join(_os.path.dirname(__file__), "ipca_ingest.py")
+    try:
+        result = subprocess.run(
+            [_sys.executable, script],
+            capture_output=True, text=True, timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=504, detail="Timeout ao executar ingestão IPCA.")
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=result.stderr.strip() or "Script falhou.")
+    return {"ok": True, "output": result.stdout.strip()}
