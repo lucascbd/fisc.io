@@ -435,18 +435,24 @@
         // Oculta tooltips externos ao rolar ou trocar de aba (evita tooltip "voando")
         let _suppressTooltips = false;
         let _suppressTooltipTimer = null;
-        let _tooltipEls = null;
         function _hideCustomTooltips() {
-            if (!_tooltipEls) _tooltipEls = ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip']
-                .map(id => document.getElementById(id)).filter(Boolean);
-            _tooltipEls.forEach(el => { el.style.opacity = '0'; });
+            // Sem cache: os elementos são criados sob demanda em showChartTooltip
+            ['inflTooltip','catInflTooltip','pvTooltip','mvmTooltip'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.opacity = '0';
+            });
         }
-        window.addEventListener('scroll', () => {
+        function _suppressTooltipsNow() {
             _hideCustomTooltips();
             _suppressTooltips = true;
             clearTimeout(_suppressTooltipTimer);
             _suppressTooltipTimer = setTimeout(() => { _suppressTooltips = false; }, 300);
-        }, { passive: true });
+        }
+        // capture:true pega scroll de containers internos; touchmove cobre o caso
+        // mobile em que a página não rola mais (sem evento scroll) mas o Chart.js
+        // continua re-exibindo o tooltip a cada movimento do dedo sobre o canvas
+        window.addEventListener('scroll', _suppressTooltipsNow, { capture: true, passive: true });
+        window.addEventListener('touchmove', _suppressTooltipsNow, { capture: true, passive: true });
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) _hideCustomTooltips();
         });
