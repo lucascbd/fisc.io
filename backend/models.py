@@ -18,6 +18,7 @@ class PaymentMethod(Base):
     user_id       = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     due_day       = Column(Integer)          # dia de vencimento — só relevante quando is_card = True
     is_closed     = Column(Boolean, nullable=False, default=False)  # fatura fechada manualmente ou pelo cron
+    is_active     = Column(Boolean, nullable=False, default=True)   # False = arquivado (não aparece na lista)
     display_order = Column(Integer, default=0)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
 

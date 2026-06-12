@@ -45,6 +45,7 @@ def _safe_add_column(sql: str):
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE")
 _safe_add_column("ALTER TABLE recurring_expenses ADD COLUMN IF NOT EXISTS interval NUMERIC(4,2) NOT NULL DEFAULT 0")
 _safe_add_column("ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_closed BOOLEAN NOT NULL DEFAULT FALSE")
+_safe_add_column("ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE")
 _safe_add_column("ALTER TABLE expenses ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
 _safe_add_column("ALTER TABLE incomes ADD COLUMN IF NOT EXISTS pluggy_transaction_id VARCHAR(36)")
 _safe_add_column("CREATE INDEX IF NOT EXISTS idx_expenses_created_by ON expenses (created_by_user_id)")
@@ -1302,7 +1303,8 @@ def delete_category(category_id: int, db: Session = Depends(get_db), _: User = D
 def list_payment_methods(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List payment methods for the current user, ordered by display_order."""
     methods = db.query(PaymentMethod).filter(
-        PaymentMethod.user_id == current_user.id
+        PaymentMethod.user_id == current_user.id,
+        PaymentMethod.is_active == True,
     ).order_by(PaymentMethod.display_order).all()
     today = date.today()
     dirty = False
@@ -1405,15 +1407,20 @@ def delete_payment_method(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a payment method (owner only). Fails if in use by expenses."""
+    """Delete a payment method (owner only).
+    Se houver despesas associadas faz soft-delete (is_active=False),
+    preservando o histórico. Se não houver, remove da base definitivamente.
+    """
     pm = db.query(PaymentMethod).filter(
         PaymentMethod.id == pm_id, PaymentMethod.user_id == current_user.id
     ).first()
     if not pm:
         raise HTTPException(status_code=404, detail="Payment method not found")
-    in_use = db.query(Expense).filter(Expense.payment_method_id == pm_id).first()
+    in_use = db.query(Expense.id).filter(Expense.payment_method_id == pm_id).first()
     if in_use:
-        raise HTTPException(status_code=400, detail="Método em uso por despesas. Remova ou reassocie as despesas antes de excluir.")
+        pm.is_active = False
+        db.commit()
+        return {"message": "Payment method archived"}
     db.delete(pm)
     db.commit()
     return {"message": "Payment method deleted"}
