@@ -502,11 +502,15 @@
         // quando o conteúdo está maior que a área visível (overflow-x).
         function _syncPmFade(el) {
             if (!el) return;
-            const overflow = el.scrollWidth > el.clientWidth + 1;
-            const atEnd = overflow && (el.scrollWidth - el.scrollLeft <= el.clientWidth + 2);
-            const grad = (overflow && !atEnd)
-                ? 'linear-gradient(to right, #000 calc(100% - 52px), transparent 100%)'
-                : '';
+            const hasLeft  = el.scrollLeft > 2;
+            const hasRight = el.scrollWidth - el.scrollLeft > el.clientWidth + 2;
+            let grad = '';
+            if (hasLeft && hasRight)
+                grad = 'linear-gradient(to right, transparent 0, #000 52px, #000 calc(100% - 52px), transparent 100%)';
+            else if (hasLeft)
+                grad = 'linear-gradient(to right, transparent 0, #000 52px)';
+            else if (hasRight)
+                grad = 'linear-gradient(to right, #000 calc(100% - 52px), transparent 100%)';
             el.style.webkitMaskImage = grad;
             el.style.maskImage = grad;
         }
