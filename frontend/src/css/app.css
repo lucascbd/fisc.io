@@ -1,4 +1,9 @@
 
+        /* PM filter icon row: sem scrollbar visível */
+        #pmFiltersContainer::-webkit-scrollbar,
+        #dailyPmFiltersContainer::-webkit-scrollbar,
+        #expensePmFiltersContainer::-webkit-scrollbar { display: none; }
+
         /* Scrollbar - prevenir jump */
         html {
             overflow-y: scroll;

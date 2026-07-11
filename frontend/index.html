@@ -352,8 +352,8 @@
                         <div class="ms-wrap"><button type="button" class="ms-btn" onclick="stepMonth('homeMonthFilter',-1)" ontouchstart="event.preventDefault();stepMonth('homeMonthFilter',-1);">❮</button><select id="homeMonthFilter" onchange="loadDashboardData()" class="filter-h border rounded-lg px-2 text-sm ms-select"></select><button type="button" class="ms-btn" onclick="stepMonth('homeMonthFilter',1)" ontouchstart="event.preventDefault();stepMonth('homeMonthFilter',1);">❯</button></div>
                     </div>
                     <div style="flex:1;"></div>
-                    <div style="display:flex;align-items:flex-end;gap:6px;height:38px;">
-                        <div id="pmFiltersContainer" style="display:contents;"></div>
+                    <div style="min-width:0;flex-shrink:1;overflow-x:clip;">
+                        <div id="pmFiltersContainer" style="display:flex;gap:6px;align-items:flex-end;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;"></div>
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -397,8 +397,8 @@
                 <div class="mb-4 flex items-end gap-2" style="flex-wrap:nowrap;">
                     <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Pago por</label><select id="expensePaidByFilter" onchange="loadExpenses()" class="filter-h w-full px-2 border rounded-lg text-sm"><option value="">Todos</option></select></div>
                     <div style="flex:1;min-width:0;"><label class="block text-xs font-medium mb-1" style="color:#5f6368;">Perfil</label><select id="expenseProfileFilter" onchange="loadExpenses()" class="filter-h w-full px-2 border rounded-lg text-sm"><option value="">Todos</option></select></div>
-                    <div style="flex-shrink:0;padding-bottom:1px;display:flex;align-items:flex-end;">
-                        <div id="expensePmFiltersContainer" style="display:flex;gap:4px;"></div>
+                    <div style="flex-shrink:1;min-width:0;padding-bottom:1px;display:flex;align-items:flex-end;overflow-x:clip;">
+                        <div id="expensePmFiltersContainer" style="display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;"></div>
                     </div>
                 </div>
                 <div id="expensesList"></div>
@@ -479,8 +479,8 @@
                             </select>
                         </div>
                         <!-- Ícones de forma de pagamento (sem título, alinhados à direita) -->
-                        <div class="flex gap-2 items-center" style="flex-shrink:0;padding-bottom:1px;">
-                            <div id="dailyPmFiltersContainer" style="display:contents;"></div>
+                        <div class="flex gap-2 items-center" style="flex-shrink:1;min-width:0;padding-bottom:1px;overflow-x:clip;">
+                            <div id="dailyPmFiltersContainer" style="display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;"></div>
                         </div>
                     </div>
                     <div class="bg-white rounded-lg shadow p-3 md:p-6">

@@ -498,6 +498,19 @@
             if(dd&&btn&&!dd.contains(e.target)&&!btn.contains(e.target)) dd.classList.add('hidden');
         });
 
+        // Aplica/remove o degradê fade no lado direito de um container de ícones PM
+        // quando o conteúdo está maior que a área visível (overflow-x).
+        function _syncPmFade(el) {
+            if (!el) return;
+            const overflow = el.scrollWidth > el.clientWidth + 1;
+            const atEnd = overflow && (el.scrollWidth - el.scrollLeft <= el.clientWidth + 2);
+            const grad = (overflow && !atEnd)
+                ? 'linear-gradient(to right, #000 calc(100% - 52px), transparent 100%)'
+                : '';
+            el.style.webkitMaskImage = grad;
+            el.style.maskImage = grad;
+        }
+
         function renderPmFilterButtons() {
             // Filtra métodos do usuário logado
             const myPms = userPms(user.id);
@@ -526,6 +539,7 @@
                             style="width:38px;height:38px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>
                     </div>`;
                 }).join('');
+                requestAnimationFrame(() => { _syncPmFade(cont); cont.onscroll = () => _syncPmFade(cont); });
             }
 
             // Botões daily chart (só PMs com despesas no mês atual)
@@ -540,6 +554,7 @@
                     return `<button onclick="toggleDailyPmFilter(${pm.id})" id="dailyPmFilter_${pm.id}" title="${pm.description}"
                         style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
+                requestAnimationFrame(() => { _syncPmFade(dcont); dcont.onscroll = () => _syncPmFade(dcont); });
             }
 
             // Botões aba Despesas (apenas PMs com despesas no mês filtrado)
@@ -554,6 +569,7 @@
                     return `<button onclick="toggleExpensePmFilter(${pm.id})" id="expensePmFilter_${pm.id}" title="${pm.description}"
                         style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
+                requestAnimationFrame(() => { _syncPmFade(econt); econt.onscroll = () => _syncPmFade(econt); });
             }
         }
 
