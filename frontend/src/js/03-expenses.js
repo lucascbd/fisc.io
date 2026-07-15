@@ -17,12 +17,12 @@
                 });
             }
             
-            // Separar passado/hoje de futuro
-            const _today = new Date(); _today.setHours(0, 0, 0, 0);
+            // Separar passado/hoje de futuro (comparação de string YYYY-MM-DD evita ambiguidade de horário)
+            const _todayStr = new Date().toISOString().slice(0, 10);
             const pastList = [], futureList = [];
             list.forEach(e => {
-                const d = new Date((e.original_date || e.expense_date) + 'T12:00:00');
-                (d > _today ? futureList : pastList).push(e);
+                const dateStr = e.original_date || e.expense_date;
+                (dateStr > _todayStr ? futureList : pastList).push(e);
             });
 
             // Passado: mais recentes primeiro; futuro: mais próximo primeiro
