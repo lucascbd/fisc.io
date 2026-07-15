@@ -17,16 +17,25 @@
                 });
             }
             
-            // Ordenar por data (mais recentes primeiro) e depois por ID (mais recentes primeiro)
-            list.sort((a, b) => {
+            // Separar passado/hoje de futuro
+            const _today = new Date(); _today.setHours(0, 0, 0, 0);
+            const pastList = [], futureList = [];
+            list.forEach(e => {
+                const d = new Date((e.original_date || e.expense_date) + 'T12:00:00');
+                (d > _today ? futureList : pastList).push(e);
+            });
+
+            // Passado: mais recentes primeiro; futuro: mais próximo primeiro
+            const sortDesc = (a, b) => {
                 const da = a.original_date || a.expense_date;
                 const db = b.original_date || b.expense_date;
-                const dateCompare = new Date(db + 'T12:00:00') - new Date(da + 'T12:00:00');
-                if (dateCompare !== 0) return dateCompare;
-                return b.id - a.id; // Mesmo dia: ID maior (mais recente) primeiro
-            });
-            
-            document.getElementById('expensesList').innerHTML = list.length ? list.map(e => {
+                const cmp = new Date(db + 'T12:00:00') - new Date(da + 'T12:00:00');
+                return cmp !== 0 ? cmp : b.id - a.id;
+            };
+            pastList.sort(sortDesc);
+            futureList.sort((a, b) => -sortDesc(a, b));
+
+            const renderExpense = (e) => {
                 // ✅ Emoji antes do nome
                 const category = byId(categories, e.category_id);
                 const emoji = category?.icon || '📁';
@@ -73,7 +82,18 @@
                         </div>
                     </div>
                 </div>
-            `}).join('') : '<p class="text-gray-500 text-center py-8">Nenhuma despesa</p>';
+            `;
+            };
+
+            const futureDivider = futureList.length ? `
+                <div class="flex items-center gap-2 my-4">
+                    <div style="flex:1;height:1px;background:#dadce0;"></div>
+                    <span class="text-sm font-semibold px-2 whitespace-nowrap" style="color:#5f6368;">📅 Lançamentos futuros</span>
+                    <div style="flex:1;height:1px;background:#dadce0;"></div>
+                </div>` : '';
+
+            const allHtml = pastList.map(renderExpense).join('') + futureDivider + futureList.map(renderExpense).join('');
+            document.getElementById('expensesList').innerHTML = allHtml || '<p class="text-gray-500 text-center py-8">Nenhuma despesa</p>';
         }
 
         window.postponeExpense = async function postponeExpense(id) {
