@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY config.py database.py models.py main.py \
      expense_service.py firebase_service.py audit_service.py \
      generate_recurring.py send_reminders.py \
-     ipca_ingest.py \
+     ipca_ingest.py close_faturas.py \
      cron_entrypoint.sh ./
 
 RUN chmod +x /app/cron_entrypoint.sh

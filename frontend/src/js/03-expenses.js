@@ -17,8 +17,9 @@
                 });
             }
             
-            // Separar passado/hoje de futuro (comparação de string YYYY-MM-DD evita ambiguidade de horário)
-            const _todayStr = new Date().toISOString().slice(0, 10);
+            // Separar passado/hoje de futuro — usa data LOCAL (toISOString seria UTC e quebraria perto da meia-noite)
+            const _now = new Date();
+            const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
             const pastList = [], futureList = [];
             list.forEach(e => {
                 const dateStr = e.original_date || e.expense_date;
