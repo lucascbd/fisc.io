@@ -1094,6 +1094,12 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
         }
 
         async function updateMvMChart() {
+            // Suppress tooltips during chart rebuild to prevent phantom tooltip popups
+            _hideCustomTooltips();
+            clearTimeout(_suppressTooltipTimer);
+            _suppressTooltips = true;
+            _suppressTooltipTimer = setTimeout(() => { _suppressTooltips = false; }, 1500);
+
             const selA = document.getElementById('mvmMonthA');
             const selB = document.getElementById('mvmMonthB');
             const msgEl = document.getElementById('mvmMsg');
