@@ -569,7 +569,7 @@
                         ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
                         : `<span style="font-size:11px;">💳</span>`;
                     return `<button onclick="toggleDailyPmFilter(${pm.id})" id="dailyPmFilter_${pm.id}" title="${pm.description}"
-                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                        style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
                 requestAnimationFrame(() => { _syncPmFade(dcont); dcont.onscroll = () => _syncPmFade(dcont); });
             }
@@ -584,7 +584,7 @@
                         ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
                         : `<span style="font-size:11px;">💳</span>`;
                     return `<button onclick="toggleExpensePmFilter(${pm.id})" id="expensePmFilter_${pm.id}" title="${pm.description}"
-                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                        style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
                 requestAnimationFrame(() => { _syncPmFade(econt); econt.onscroll = () => _syncPmFade(econt); });
             }
@@ -598,7 +598,7 @@
                         ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
                         : `<span style="font-size:11px;">💳</span>`;
                     return `<button onclick="toggleMvmPmFilter(${pm.id})" id="mvmPmFilter_${pm.id}" title="${pm.description}"
-                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                        style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
                 requestAnimationFrame(() => { _syncPmFade(mcont); mcont.onscroll = () => _syncPmFade(mcont); });
             }
@@ -612,7 +612,7 @@
                         ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
                         : `<span style="font-size:11px;">💳</span>`;
                     return `<button onclick="togglePvPmFilter(${pm.id})" id="pvPmFilter_${pm.id}" title="${pm.description}"
-                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                        style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
                 }).join('');
                 requestAnimationFrame(() => { _syncPmFade(pvcont); pvcont.onscroll = () => _syncPmFade(pvcont); });
             }
