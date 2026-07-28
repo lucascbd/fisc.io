@@ -395,7 +395,18 @@
             
             // Mostrar conteúdo selecionado
             document.getElementById(tab + 'Tab').classList.remove('hidden');
-            
+
+            // Re-sync PM fade masks after tab becomes visible (clientWidth was 0 while hidden)
+            requestAnimationFrame(() => {
+                if (tab === 'home') _syncPmFade(document.getElementById('pmFiltersContainer'));
+                else if (tab === 'expenses') _syncPmFade(document.getElementById('expensePmFiltersContainer'));
+                else if (tab === 'charts') {
+                    _syncPmFade(document.getElementById('dailyPmFiltersContainer'));
+                    _syncPmFade(document.getElementById('mvmPmFiltersContainer'));
+                }
+                else if (tab === 'inflation') _syncPmFade(document.getElementById('pvPmFiltersContainer'));
+            });
+
             // Aplicar estilo selecionado ao botão clicado
             if (button) {
                 button.style.backgroundColor = '#e8f0fe';
@@ -454,6 +465,8 @@
         let activePmFilter=[]; // [] = all selected (IDs inteiros)
         let activeDailyPmFilter=[]; // [] = all selected (IDs inteiros)
         let activeExpensePmFilter=[]; // [] = all selected (IDs inteiros)
+        let activeMvmPmFilter=[]; // [] = all selected (IDs inteiros)
+        let activePvPmFilter=[]; // [] = all selected (IDs inteiros)
         let selectedDailyCatIds=null; // null = nunca inicializado (selecionar tudo); [] = usuário desmarcou tudo
         let dailyTargetInitialized=false;
         let dailyCatMonth='';
@@ -575,6 +588,34 @@
                 }).join('');
                 requestAnimationFrame(() => { _syncPmFade(econt); econt.onscroll = () => _syncPmFade(econt); });
             }
+
+            // Botões MvM chart (aba Gráficos)
+            const mcont = document.getElementById('mvmPmFiltersContainer');
+            if (mcont) {
+                mcont.innerHTML = myPms.map(pm => {
+                    const on = activeMvmPmFilter.length > 0 && activeMvmPmFilter.includes(pm.id);
+                    const iconHtml = pm.icon_path
+                        ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
+                        : `<span style="font-size:11px;">💳</span>`;
+                    return `<button onclick="toggleMvmPmFilter(${pm.id})" id="mvmPmFilter_${pm.id}" title="${pm.description}"
+                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                }).join('');
+                requestAnimationFrame(() => { _syncPmFade(mcont); mcont.onscroll = () => _syncPmFade(mcont); });
+            }
+
+            // Botões PV chart (aba Inflação)
+            const pvcont = document.getElementById('pvPmFiltersContainer');
+            if (pvcont) {
+                pvcont.innerHTML = myPms.map(pm => {
+                    const on = activePvPmFilter.length > 0 && activePvPmFilter.includes(pm.id);
+                    const iconHtml = pm.icon_path
+                        ? `<img src="${pm.icon_path}" style="width:18px;height:18px;object-fit:contain;">`
+                        : `<span style="font-size:11px;">💳</span>`;
+                    return `<button onclick="togglePvPmFilter(${pm.id})" id="pvPmFilter_${pm.id}" title="${pm.description}"
+                        style="width:34px;height:34px;border-radius:50%;border:2px solid ${on?'#1a73e8':'transparent'};background:${on?sg:db};padding:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .15s,background .15s;">${iconHtml}</button>`;
+                }).join('');
+                requestAnimationFrame(() => { _syncPmFade(pvcont); pvcont.onscroll = () => _syncPmFade(pvcont); });
+            }
         }
 
         function toggleExpensePmFilter(id) {
@@ -647,6 +688,48 @@
                 if(!btn)return;
                 const on=activePmFilter.length>0&&activePmFilter.includes(pm.id);
                 btn.style.borderColor=on?sb:'transparent';btn.style.background=on?sg:db;
+            });
+        }
+
+        function toggleMvmPmFilter(id) {
+            id = parseInt(id);
+            const idx = activeMvmPmFilter.indexOf(id);
+            if (idx > -1) activeMvmPmFilter.splice(idx, 1); else activeMvmPmFilter.push(id);
+            const total = userPms(user.id).length;
+            if (activeMvmPmFilter.length === total) activeMvmPmFilter = [];
+            applyMvmPmFilterStyles();
+            updateMvMChart();
+        }
+        function applyMvmPmFilterStyles() {
+            const isDark = document.body.classList.contains('dark-mode');
+            const sb = '#1a73e8', sg = isDark ? '#1e3a5f' : '#e8f0fe', db = isDark ? '#3c4043' : '#f1f3f4';
+            userPms(user.id).forEach(pm => {
+                const btn = document.getElementById('mvmPmFilter_' + pm.id);
+                if (!btn) return;
+                const on = activeMvmPmFilter.length > 0 && activeMvmPmFilter.includes(pm.id);
+                btn.style.borderColor = on ? sb : 'transparent';
+                btn.style.background = on ? sg : db;
+            });
+        }
+
+        function togglePvPmFilter(id) {
+            id = parseInt(id);
+            const idx = activePvPmFilter.indexOf(id);
+            if (idx > -1) activePvPmFilter.splice(idx, 1); else activePvPmFilter.push(id);
+            const total = userPms(user.id).length;
+            if (activePvPmFilter.length === total) activePvPmFilter = [];
+            applyPvPmFilterStyles();
+            loadInflationDebounced();
+        }
+        function applyPvPmFilterStyles() {
+            const isDark = document.body.classList.contains('dark-mode');
+            const sb = '#1a73e8', sg = isDark ? '#1e3a5f' : '#e8f0fe', db = isDark ? '#3c4043' : '#f1f3f4';
+            userPms(user.id).forEach(pm => {
+                const btn = document.getElementById('pvPmFilter_' + pm.id);
+                if (!btn) return;
+                const on = activePvPmFilter.length > 0 && activePvPmFilter.includes(pm.id);
+                btn.style.borderColor = on ? sb : 'transparent';
+                btn.style.background = on ? sg : db;
             });
         }
 

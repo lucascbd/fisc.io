@@ -480,6 +480,12 @@
         }
 
         async function loadInflation() {
+            // Suppress tooltips during load/rebuild to prevent phantom tooltips
+            _hideCustomTooltips();
+            clearTimeout(_suppressTooltipTimer);
+            _suppressTooltips = true;
+            _suppressTooltipTimer = setTimeout(() => { _suppressTooltips = false; }, 1500);
+
             const isDark = document.body.classList.contains('dark-mode');
             const textColor = isDark ? '#e8eaed' : '#202124';
             const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
@@ -603,6 +609,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
             if (monthsToSend.length) params.set('months', monthsToSend.join(','));
             if (inflSelectedCatIds !== null && inflSelectedCatIds.length > 0) params.set('category_ids', inflSelectedCatIds.join(','));
             if (inflSelectedCatIds !== null && inflSelectedCatIds.length === 0) { showInflMsg('myInflation',''); showInflMsg('categoryInflation',''); showInflMsg('adjustedBar',''); showInflMsg('priceVolume',''); return; }
+            if (activePvPmFilter.length > 0) params.set('pm_ids', activePvPmFilter.join(','));
 
             try {
                 const data = await api(`${API}/inflation/data?${params}`);
@@ -1114,6 +1121,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 // Enviar [B, A] ordenado — B é referência (prev), A é comparação (last)
                 const orderedMonths = [monthB, monthA].sort((a,b) => a.localeCompare(b));
                 const params = new URLSearchParams({ d1c: '1', no_adjust: 'true', months: orderedMonths.join(',') });
+                if (activeMvmPmFilter.length > 0) params.set('pm_ids', activeMvmPmFilter.join(','));
                 const data = await api(`${API}/inflation/data?${params}`);
 
 

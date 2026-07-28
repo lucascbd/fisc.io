@@ -924,6 +924,7 @@ def get_inflation_data(
     user_ids: Optional[str] = Query(None, description="Comma-separated user IDs"),
     expense_type: Optional[str] = Query(None, description="Filter: 'individual', 'shared', or None for all"),
     no_adjust: bool = Query(False, description="If true, use raw amounts (no inflation adjustment) in price_volume"),
+    pm_ids: Optional[str] = Query(None, description="Comma-separated payment method IDs"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -933,10 +934,12 @@ def get_inflation_data(
     filter_months = set(months.split(',')) if months else None
     filter_cat_ids = set(int(x) for x in category_ids.split(',')) if category_ids else None
     filter_user_ids = set(int(x) for x in user_ids.split(',')) if user_ids else None
+    filter_pm_ids = set(int(x) for x in pm_ids.split(',')) if pm_ids else None
 
     # 1. Buscar parcelas visíveis com categoria e código IPCA
     # Quando filter_months é informado, filtra no SQL para evitar carregar toda a tabela
     sql_date_filter = ""
+    sql_pm_filter = ""
     sql_params: dict = {"uid": current_user.id}
     if filter_months:
         parsed = sorted(filter_months)
@@ -948,6 +951,9 @@ def get_inflation_data(
         sql_date_filter = "AND es.due_date >= :sql_start AND es.due_date < :sql_end"
         sql_params["sql_start"] = sql_start
         sql_params["sql_end"] = sql_end
+    if filter_pm_ids:
+        sql_pm_filter = "AND e.payment_method_id = ANY(:pm_ids)"
+        sql_params["pm_ids"] = list(filter_pm_ids)
 
     splits_raw = db.execute(text(f"""
         SELECT es.user_id, es.user_amount, es.due_date, e.category_id,
@@ -964,6 +970,7 @@ def get_inflation_data(
             WHERE e2.paid_by_user_id = :uid OR spu.user_id = :uid
         )
         {sql_date_filter}
+        {sql_pm_filter}
         ORDER BY es.due_date
     """), sql_params).fetchall()
 
