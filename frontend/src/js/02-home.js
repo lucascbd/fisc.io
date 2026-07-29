@@ -302,20 +302,20 @@
                                                             return `
                                                                 <div class="border rounded-lg p-3">
                                                                     <div class="flex justify-between items-start mb-2">
-                                                                        <div class="flex-1">
+                                                                        <div class="flex-1 min-w-0">
                                                                             <div class="flex items-center gap-2">
-                                                                                <p class="font-medium">${displayName}</p>
-                                                                                <button onclick="editExpense(${expense.id})" style="background:none;border:none;cursor:pointer;padding:0;font-size:13px;line-height:1;opacity:0.7;" title="Editar">✏️</button>
+                                                                                <p class="font-medium" style="word-break:break-all;">${displayName}</p>
+                                                                                <button onclick="editExpense(${expense.id})" style="flex-shrink:0;background:none;border:none;cursor:pointer;padding:0;font-size:13px;line-height:1;opacity:0.7;" title="Editar">✏️</button>
                                                                             </div>
                                                                             <p class="text-xs text-gray-500">${new Date((expense.original_date || expense.date) + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
                                                                             <p class="text-xs text-gray-500">⚖️ ${expense.profile_name}</p>
                                                                         </div>
-                                                                        <div class="text-right ml-4">
-                                                                            <p class="font-bold">R$ ${formatBRL(parcelaValor)}</p>
+                                                                        <div class="text-right ml-4" style="flex-shrink:0;">
+                                                                            <p class="font-bold" style="white-space:nowrap;">R$ ${formatBRL(parcelaValor)}</p>
                                                                             ${totalPaidAmount > 0 ? `
-                                                                                <p class="text-xs text-blue-600">Pagou: R$ ${formatBRL(totalPaidAmount)}</p>
+                                                                                <p class="text-xs text-blue-600" style="white-space:nowrap;">Pagou: R$ ${formatBRL(totalPaidAmount)}</p>
                                                                             ` : ''}
-                                                                            <p class="text-xs font-bold ${totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                                                            <p class="text-xs font-bold ${totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}" style="white-space:nowrap;">
                                                                                 ${totalBalance >= 0 ? '+' : ''}R$ ${formatBRL(totalBalance)}
                                                                             </p>
                                                                         </div>
