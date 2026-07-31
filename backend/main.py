@@ -3457,6 +3457,165 @@ async def audit_analyze(
     }
 
 
+@app.get(f"{settings.API_V1_PREFIX}/audit/export")
+async def audit_export(
+    payment_method_id: int,
+    audit_month: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return an XLSX of all expenses for a payment method and month."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from fastapi.responses import StreamingResponse
+    import io as _io
+
+    try:
+        filt_year  = int(audit_month[:4])
+        filt_month = int(audit_month[5:7])
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="audit_month deve ser YYYY-MM")
+
+    # ── Load single expenses ────────────────────────────────────────────────
+    single = db.query(Expense).filter(
+        Expense.payment_method_id == payment_method_id,
+        Expense.installments == 1,
+        extract('year',  Expense.expense_date) == filt_year,
+        extract('month', Expense.expense_date) == filt_month,
+    ).all()
+
+    # ── Load installment expenses with a split due this month ───────────────
+    month_split_ids = db.query(ExpenseSplit.expense_id).filter(
+        extract('year',  ExpenseSplit.due_date) == filt_year,
+        extract('month', ExpenseSplit.due_date) == filt_month,
+    ).distinct().subquery()
+
+    inst = db.query(Expense).filter(
+        Expense.payment_method_id == payment_method_id,
+        Expense.installments > 1,
+        Expense.id.in_(month_split_ids),
+    ).all()
+
+    # Pre-load splits
+    inst_ids = [e.id for e in inst]
+    splits_map: dict = {}
+    if inst_ids:
+        for sp in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id.in_(inst_ids)).all():
+            splits_map.setdefault(sp.expense_id, []).append(sp)
+
+    # Lookup maps
+    cats     = {c.id: c for c in db.query(Category).all()}
+    pm_obj   = db.query(PaymentMethod).filter(PaymentMethod.id == payment_method_id).first()
+    pm_name  = pm_obj.description if pm_obj else str(payment_method_id)
+
+    import calendar
+    month_name = calendar.month_abbr[filt_month].upper()
+
+    # ── Build row list ──────────────────────────────────────────────────────
+    rows = []
+    for exp in single:
+        cat_name = cats[exp.category_id].name if exp.category_id and exp.category_id in cats else ''
+        cat_icon = cats[exp.category_id].icon if exp.category_id and exp.category_id in cats else ''
+        rows.append((
+            exp.expense_date,
+            exp.description,
+            float(exp.total_amount),
+            '',
+            f"{cat_icon} {cat_name}".strip(),
+            exp.notes or '',
+        ))
+
+    for exp in inst:
+        month_sp = [s for s in splits_map.get(exp.id, [])
+                    if s.due_date.year == filt_year and s.due_date.month == filt_month]
+        active   = month_sp[0] if month_sp else None
+        amt      = float(active.installment_amount) if active else float(exp.total_amount) / exp.installments
+        parc     = f"{active.installment_number}/{exp.installments}" if active else ''
+        ref_date = active.due_date if active else exp.expense_date
+        cat_name = cats[exp.category_id].name if exp.category_id and exp.category_id in cats else ''
+        cat_icon = cats[exp.category_id].icon if exp.category_id and exp.category_id in cats else ''
+        rows.append((
+            ref_date,
+            exp.description,
+            amt,
+            parc,
+            f"{cat_icon} {cat_name}".strip(),
+            exp.notes or '',
+        ))
+
+    rows.sort(key=lambda r: r[0])
+
+    # ── Build XLSX ──────────────────────────────────────────────────────────
+    wb  = openpyxl.Workbook()
+    ws  = wb.active
+    ws.title = f"{month_name} {filt_year}"
+
+    blue_fill   = PatternFill("solid", fgColor="1A73E8")
+    header_font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+    title_font  = Font(name="Arial", bold=True, size=12, color="1A73E8")
+    body_font   = Font(name="Arial", size=10)
+    num_fmt     = '#,##0.00'
+    thin_side   = Side(style="thin", color="E0E0E0")
+    thin_border = Border(bottom=Side(style="thin", color="E0E0E0"))
+    center      = Alignment(horizontal="center", vertical="center")
+
+    # Title row
+    ws.merge_cells("A1:F1")
+    ws["A1"] = f"{pm_name} — {month_name}/{filt_year}"
+    ws["A1"].font      = title_font
+    ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 22
+
+    # Header row
+    headers = ["Data", "Descrição", "Valor (R$)", "Parcela", "Categoria", "Observações"]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=2, column=col, value=h)
+        cell.font      = header_font
+        cell.fill      = blue_fill
+        cell.alignment = center
+    ws.row_dimensions[2].height = 18
+
+    # Data rows
+    total = 0.0
+    for i, (dt, desc, amt, parc, cat, notes) in enumerate(rows, start=3):
+        ws.cell(row=i, column=1, value=dt).number_format          = "DD/MM/YYYY"
+        ws.cell(row=i, column=1).font                              = body_font
+        ws.cell(row=i, column=2, value=desc).font                  = body_font
+        ws.cell(row=i, column=3, value=amt).number_format          = num_fmt
+        ws.cell(row=i, column=3).font                              = body_font
+        ws.cell(row=i, column=4, value=parc).font                  = body_font
+        ws.cell(row=i, column=4).alignment                         = center
+        ws.cell(row=i, column=5, value=cat).font                   = body_font
+        ws.cell(row=i, column=6, value=notes).font                 = body_font
+        for col in range(1, 7):
+            ws.cell(row=i, column=col).border = thin_border
+        total += amt if amt > 0 else 0
+
+    # Total row
+    total_row = len(rows) + 3
+    ws.cell(row=total_row, column=2, value="TOTAL").font  = Font(name="Arial", bold=True, size=10)
+    ws.cell(row=total_row, column=3, value=total).font    = Font(name="Arial", bold=True, size=10)
+    ws.cell(row=total_row, column=3).number_format        = num_fmt
+    ws.cell(row=total_row, column=3).fill                 = PatternFill("solid", fgColor="E8F0FE")
+
+    # Column widths
+    col_widths = [13, 38, 14, 10, 22, 28]
+    for col, width in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+    buf = _io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f"despesas_{pm_name.replace(' ','_')}_{filt_year}{filt_month:02d}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ── Open Finance (Pluggy) ─────────────────────────────────────────────────────
 
 def _pluggy_api_key() -> str:

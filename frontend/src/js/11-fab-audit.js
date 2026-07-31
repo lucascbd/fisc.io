@@ -259,6 +259,12 @@
                            background:#ccc;color:#fff;transition:.15s;">
                     Analisar arquivo
                   </button>
+                  <button id="auditExportBtn" onclick="runAuditExport()" disabled
+                    style="width:100%;margin-top:10px;padding:11px;border:1px solid #ccc;
+                           border-radius:10px;font-size:0.9rem;font-weight:500;cursor:not-allowed;
+                           background:transparent;color:#ccc;transition:.15s;">
+                    📊 Exportar Excel do mês
+                  </button>
                 </div>
 
                 <!-- Step 2: Loading -->
@@ -443,13 +449,24 @@
         }
 
         function _auditCheckReady() {
-            const btn = document.getElementById('auditRunBtn');
-            if (!btn) return;
             const month = document.getElementById('auditMonthSelect')?.value || window._auditMonth;
-            const ok = !!(window._auditFile && window._auditPmId && month);
-            btn.disabled = !ok;
-            btn.style.background = ok ? '#1a73e8' : '#ccc';
-            btn.style.cursor     = ok ? 'pointer'  : 'not-allowed';
+
+            const runBtn = document.getElementById('auditRunBtn');
+            if (runBtn) {
+                const ok = !!(window._auditFile && window._auditPmId && month);
+                runBtn.disabled      = !ok;
+                runBtn.style.background = ok ? '#1a73e8' : '#ccc';
+                runBtn.style.cursor     = ok ? 'pointer'  : 'not-allowed';
+            }
+
+            const expBtn = document.getElementById('auditExportBtn');
+            if (expBtn) {
+                const ok = !!(window._auditPmId && month);
+                expBtn.disabled           = !ok;
+                expBtn.style.borderColor  = ok ? '#1a73e8' : '#ccc';
+                expBtn.style.color        = ok ? '#1a73e8' : '#ccc';
+                expBtn.style.cursor       = ok ? 'pointer'  : 'not-allowed';
+            }
         }
 
         window.runAudit = async function runAudit() {
@@ -511,6 +528,42 @@
                 document.getElementById('auditStep2').style.display = 'none';
                 document.getElementById('auditStep1').style.display = 'block';
                 alert(e.message || 'Erro ao processar arquivo');
+            }
+        }
+
+        window.runAuditExport = async function runAuditExport() {
+            if (!window._auditPmId) return;
+            const mEl  = document.getElementById('auditMonthSelect');
+            const month = (mEl && mEl.value) || window._auditMonth;
+            if (!month) return;
+
+            const btn = document.getElementById('auditExportBtn');
+            const origText = btn ? btn.textContent : '';
+            if (btn) { btn.textContent = '⏳ Gerando...'; btn.disabled = true; }
+
+            try {
+                const token = localStorage.getItem('token');
+                const res   = await fetch(
+                    `${API}/audit/export?payment_method_id=${window._auditPmId}&audit_month=${month}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || `Erro ${res.status}`);
+                }
+                const blob = await res.blob();
+                const url  = URL.createObjectURL(blob);
+                const a    = document.createElement('a');
+                const cd   = res.headers.get('Content-Disposition') || '';
+                const fnMatch = cd.match(/filename="([^"]+)"/);
+                a.download = fnMatch ? fnMatch[1] : `despesas_${month}.xlsx`;
+                a.href = url;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch(e) {
+                alert(e.message || 'Erro ao exportar');
+            } finally {
+                if (btn) { btn.textContent = origText; btn.disabled = false; }
             }
         }
 
