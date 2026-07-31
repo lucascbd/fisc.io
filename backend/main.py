@@ -3532,7 +3532,7 @@ async def audit_export(
         active   = month_sp[0] if month_sp else None
         amt      = float(active.installment_amount) if active else float(exp.total_amount) / exp.installments
         parc     = f"{active.installment_number}/{exp.installments}" if active else ''
-        ref_date = active.due_date if active else exp.expense_date
+        ref_date = exp.expense_date
         cat_name = cats[exp.category_id].name if exp.category_id and exp.category_id in cats else ''
         cat_icon = cats[exp.category_id].icon if exp.category_id and exp.category_id in cats else ''
         rows.append((
