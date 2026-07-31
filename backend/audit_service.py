@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
 from difflib import SequenceMatcher
 from collections import defaultdict
+import openpyxl
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
@@ -326,6 +327,100 @@ def parse_ofx(content: str) -> Tuple[List[FileTxn], int]:
             txn_date=txn_date, description=base, amount=expense_amount,
             raw_line=memo, parcel_num=pnum, parcel_total=ptotal,
             fitid=fitid, is_micro=is_micro,
+        ))
+
+    return txns, silent
+
+
+# ── XLSX parser ───────────────────────────────────────────────────────────────
+def parse_xlsx(content: bytes) -> Tuple[List[FileTxn], int]:
+    """
+    Parse credit card XLSX statement (Itaú format).
+    Header is on row 14; data starts on row 15.
+    Columns: B=Data, C=Lançamento, D=Parcelamento, E=Valor
+    """
+    txns: List[FileTxn] = []
+    silent = 0
+
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    ws = wb.active
+
+    HEADER_ROW = 14   # 1-indexed; data begins at row 15
+    COL_DATE   = 2    # B
+    COL_DESC   = 3    # C
+    COL_PARCEL = 4    # D
+    COL_AMOUNT = 5    # E
+
+    for row in ws.iter_rows(min_row=HEADER_ROW + 1, values_only=True):
+        if len(row) < COL_AMOUNT:
+            continue
+
+        date_val   = row[COL_DATE   - 1]
+        desc_raw   = row[COL_DESC   - 1]
+        parcel_val = row[COL_PARCEL - 1]
+        amount_val = row[COL_AMOUNT - 1]
+
+        if date_val is None and desc_raw is None and amount_val is None:
+            continue
+
+        # Date — already a datetime object from openpyxl
+        if isinstance(date_val, datetime):
+            txn_date = date_val.date()
+        elif isinstance(date_val, date):
+            txn_date = date_val
+        else:
+            continue
+
+        if not desc_raw:
+            continue
+        desc_raw = str(desc_raw).strip()
+
+        # Silent filter
+        if any(k.lower() in desc_raw.lower() for k in CSV_SKIP):
+            silent += 1
+            continue
+
+        # Amount — already a float; positive = expense, negative = refund/payment
+        if amount_val is None:
+            continue
+        try:
+            amount = Decimal(str(amount_val))
+        except InvalidOperation:
+            continue
+
+        if amount == 0:
+            continue
+
+        # Parcel info from dedicated column (e.g. "2/12")
+        pnum: Optional[int] = None
+        ptotal: Optional[int] = None
+        if parcel_val is not None:
+            parts = str(parcel_val).strip().split('/')
+            if len(parts) == 2:
+                try:
+                    pn, pt = int(parts[0]), int(parts[1])
+                    if 1 <= pn <= pt:
+                        pnum, ptotal = pn, pt
+                except (ValueError, TypeError):
+                    pass
+
+        parcel_display = f"{pnum}/{ptotal}" if pnum else ""
+        raw_parts = [txn_date.isoformat(), desc_raw]
+        if parcel_display:
+            raw_parts.append(parcel_display)
+        raw_parts.append(f"{float(amount):.2f}")
+        raw_line = " | ".join(raw_parts)
+
+        is_micro = abs(amount) < MICRO_THRESHOLD
+
+        txns.append(FileTxn(
+            txn_date=txn_date,
+            description=desc_raw,
+            amount=amount,
+            raw_line=raw_line,
+            parcel_num=pnum,
+            parcel_total=ptotal,
+            is_micro=is_micro,
         ))
 
     return txns, silent

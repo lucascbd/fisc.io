@@ -3386,7 +3386,7 @@ def agent_list_models(_: User = Depends(get_current_user)):
 # AUDIT ENDPOINT — reconcile CSV/OFX bank files against DB expenses
 # ============================================================================
 
-from audit_service import parse_csv, parse_ofx, match_transactions as _audit_match, detect_csv_headers
+from audit_service import parse_csv, parse_ofx, parse_xlsx, match_transactions as _audit_match, detect_csv_headers
 
 @app.get(f"{settings.API_V1_PREFIX}/audit/csv-headers")
 async def audit_csv_headers(
@@ -3430,8 +3430,10 @@ async def audit_analyze(
         )
     elif fname.endswith('.ofx'):
         txns, silent = parse_ofx(text)
+    elif fname.endswith('.xlsx'):
+        txns, silent = parse_xlsx(content)
     else:
-        raise HTTPException(status_code=400, detail="Formato não suportado. Use .csv ou .ofx")
+        raise HTTPException(status_code=400, detail="Formato não suportado. Use .csv, .ofx ou .xlsx")
 
     result = _audit_match(db, txns, payment_method_id, audit_month=audit_month)
     result.silent_filtered = silent

@@ -192,11 +192,11 @@
                     <div style="font-size:2.2rem;margin-bottom:6px;">📂</div>
                     <div style="font-size:0.9rem;font-weight:500;color:${txt};margin-bottom:3px;">
                       Clique ou arraste o arquivo</div>
-                    <div style="font-size:0.78rem;color:${sub};">.csv (cartão) · .ofx (conta corrente)</div>
+                    <div style="font-size:0.78rem;color:${sub};">.csv (cartão) · .ofx (conta corrente) · .xlsx (cartão)</div>
                     <div id="auditFileName" style="margin-top:8px;font-size:0.85rem;
                                                    color:#1a73e8;font-weight:500;"></div>
                   </div>
-                  <input type="file" id="auditFileInput" accept=".csv,.ofx"
+                  <input type="file" id="auditFileInput" accept=".csv,.ofx,.xlsx"
                          style="display:none;" onchange="auditFileSelected(this)">
 
                   <!-- CSV column mapping (shown only for .csv files) -->
@@ -364,7 +364,8 @@
             window._auditFile = file;
             document.getElementById('auditFileName').textContent = `📄 ${file.name}`;
             document.getElementById('auditDropZone').style.borderColor = '#1a73e8';
-            const isCsv = file.name.toLowerCase().endsWith('.csv');
+            const fname = file.name.toLowerCase();
+            const isCsv = fname.endsWith('.csv');
             const mapDiv = document.getElementById('auditCsvMapping');
             if (mapDiv) mapDiv.style.display = isCsv ? 'block' : 'none';
             if (isCsv) {
@@ -418,7 +419,8 @@
                 document.getElementById('auditFileInput').files = dt.files;
             } catch(e) {}
             // Trigger same CSV-detection logic as file input
-            const isCsv = file.name.toLowerCase().endsWith('.csv');
+            const fname = file.name.toLowerCase();
+            const isCsv = fname.endsWith('.csv');
             const mapDiv = document.getElementById('auditCsvMapping');
             if (mapDiv) mapDiv.style.display = isCsv ? 'block' : 'none';
             if (isCsv) {
