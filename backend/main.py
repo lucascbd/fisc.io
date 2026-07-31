@@ -3443,6 +3443,7 @@ async def audit_analyze(
         "ambiguous":         result.ambiguous,
         "unmatched":         result.unmatched,
         "micro_adjustments": result.micro_adjustments,
+        "surplus":           result.surplus,
         "stats": {
             "total":    len(txns) + silent,
             "parsed":   len(txns),
@@ -3451,6 +3452,7 @@ async def audit_analyze(
             "ambiguous":len(result.ambiguous),
             "unmatched":len(result.unmatched),
             "micro":    len(result.micro_adjustments),
+            "surplus":  len(result.surplus),
         },
     }
 

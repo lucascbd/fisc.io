@@ -69,6 +69,7 @@ class AuditResult:
     ambiguous:         List[dict] = field(default_factory=list)
     unmatched:         List[dict] = field(default_factory=list)
     micro_adjustments: List[dict] = field(default_factory=list)
+    surplus:           List[dict] = field(default_factory=list)
     silent_filtered:   int = 0
 
 
@@ -617,5 +618,14 @@ def match_transactions(
                 'file':       _txn_dict(txn),
                 'candidates': clean,
             })
+
+    # ── Surplus: DB expenses not matched to any file transaction ─────────────
+    for exp in expenses:
+        if exp.id in used_ids:
+            continue
+        display_amt = float(exp.total_amount)
+        if exp.installments > 1 and exp.id in active_split_by_exp:
+            display_amt = float(active_split_by_exp[exp.id].installment_amount)
+        result.surplus.append(_exp_dict(exp, display_amt))
 
     return result

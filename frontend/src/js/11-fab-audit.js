@@ -294,6 +294,12 @@
                              border-bottom:3px solid transparent;">
                       ❌ Não encontrado <span id="auditCntUnmatched"></span>
                     </button>
+                    <button id="auditTabBtnSurplus" onclick="showAuditTab('surplus')"
+                      style="flex:1;padding:11px 4px;border:none;background:none;cursor:pointer;
+                             font-size:0.8rem;font-weight:600;color:${sub};
+                             border-bottom:3px solid transparent;">
+                      🔵 Excedente <span id="auditCntSurplus"></span>
+                    </button>
                   </div>
 
                   <div id="auditTabContent"
@@ -489,6 +495,7 @@
                     `<span style="color:#34a853;">✅ ${s.matched} matched</span>` +
                     `<span style="color:#f9ab00;">⚠️ ${s.ambiguous} ambíguo</span>` +
                     `<span style="color:#ea4335;">❌ ${s.unmatched} não encontrado</span>` +
+                    (s.surplus ? `<span style="color:#1a73e8;">🔵 ${s.surplus} excedente</span>` : '') +
                     (s.micro ? `<span style="color:#9aa0a6;">🔧 ${s.micro} micro-ajustes</span>` : '') +
                     (s.silent ? `<span style="color:#9aa0a6;">🔇 ${s.silent} filtrados</span>` : '');
 
@@ -497,6 +504,7 @@
                 // Open most actionable tab first
                 if (s.ambiguous > 0)       showAuditTab('ambiguous');
                 else if (s.unmatched > 0)  showAuditTab('unmatched');
+                else if (s.surplus > 0)    showAuditTab('surplus');
                 else                        showAuditTab('matched');
 
             } catch(e) {
@@ -514,13 +522,15 @@
             document.getElementById('auditCntAmbiguous').textContent = `(${s.ambiguous})`;
             document.getElementById('auditCntUnmatched').textContent =
                 `(${s.unmatched + (micro > 0 ? 1 : 0)})`;
+            const surplusEl = document.getElementById('auditCntSurplus');
+            if (surplusEl) surplusEl.textContent = `(${s.surplus ?? (window._auditData.surplus || []).length})`;
         }
 
         window.showAuditTab = function showAuditTab(tab) {
             const isDark = document.body.classList.contains('dark-mode');
             const sub    = isDark ? '#9aa0a6' : '#5f6368';
-            const colors = { matched:'#34a853', ambiguous:'#f9ab00', unmatched:'#ea4335' };
-            ['matched','ambiguous','unmatched'].forEach(t => {
+            const colors = { matched:'#34a853', ambiguous:'#f9ab00', unmatched:'#ea4335', surplus:'#1a73e8' };
+            ['matched','ambiguous','unmatched','surplus'].forEach(t => {
                 const btn = document.getElementById(
                     `auditTabBtn${t.charAt(0).toUpperCase()+t.slice(1)}`);
                 if (!btn) return;
@@ -533,6 +543,7 @@
             if (tab === 'matched')    el.innerHTML = _auditRenderMatched(d.matched);
             if (tab === 'ambiguous')  el.innerHTML = _auditRenderAmbiguous(d.ambiguous);
             if (tab === 'unmatched')  el.innerHTML = _auditRenderUnmatched(d.unmatched, d.micro_adjustments);
+            if (tab === 'surplus')    el.innerHTML = _auditRenderSurplus(d.surplus || []);
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────
@@ -576,6 +587,57 @@
                   <span style="font-size:1rem;">✅</span>
                 </div>`;
             }).join('');
+        }
+
+        // ── Tab: Surplus (in app, not in file) ──────────────────────────────
+        function _auditRenderSurplus(items) {
+            if (!items.length)
+                return `<div style="padding:32px;text-align:center;color:#9aa0a6;">
+                         🎉 Nenhuma despesa excedente encontrada</div>`;
+            const isDark = document.body.classList.contains('dark-mode');
+            const border = isDark ? '#3c4043' : '#f0f0f0';
+            const sub    = isDark ? '#9aa0a6' : '#5f6368';
+            const txt    = isDark ? '#e8eaed' : '#202124';
+            const hdr    = isDark ? '#2a3a5c' : '#e8f0fe';
+
+            return `<div style="padding:10px 20px 6px;background:${hdr};font-size:0.78rem;color:${isDark?'#8ab4f8':'#1a73e8'};">
+                      ℹ️ Estas despesas estão no app para o mês selecionado, mas não apareceram na fatura enviada.
+                    </div>` +
+            items.map((exp, idx) => {
+                const isParc = exp.installments > 1;
+                const parcLabel = isParc
+                    ? `<span style="font-size:0.72rem;color:${sub};margin-left:5px;">(${exp.installments}x)</span>` : '';
+                return `
+                <div id="surplus_${idx}" style="padding:11px 20px;border-bottom:1px solid ${border};
+                            display:flex;gap:10px;align-items:center;">
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85rem;font-weight:500;color:${txt};">
+                      ${exp.description}${parcLabel}
+                    </div>
+                    <div style="font-size:0.73rem;color:${sub};margin-top:2px;">
+                      ${_adate(exp.expense_date)}
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                    <span style="font-size:0.88rem;font-weight:600;white-space:nowrap;">
+                      R$ ${(exp.display_amount ?? exp.total_amount).toFixed(2).replace('.',',')}
+                    </span>
+                    <button onclick="_auditSurplusIgnore(${idx})"
+                      style="background:none;border:1px solid ${border};border-radius:6px;
+                             padding:2px 8px;font-size:0.73rem;cursor:pointer;color:${sub};">
+                      Ignorar</button>
+                    <button onclick="editExpense(${exp.id});closeModal()"
+                      style="background:none;border:1px solid ${border};border-radius:6px;
+                             padding:2px 8px;font-size:0.73rem;cursor:pointer;color:${sub};">
+                      Editar</button>
+                  </div>
+                </div>`;
+            }).join('');
+        }
+
+        window._auditSurplusIgnore = function _auditSurplusIgnore(idx) {
+            const el = document.getElementById(`surplus_${idx}`);
+            if (el) el.style.display = 'none';
         }
 
         // ── Tab: Ambiguous ───────────────────────────────────────────────────
