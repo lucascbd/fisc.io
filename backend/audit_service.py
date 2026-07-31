@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
 from difflib import SequenceMatcher
 from collections import defaultdict
-import openpyxl
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
@@ -342,6 +341,7 @@ def parse_xlsx(content: bytes) -> Tuple[List[FileTxn], int]:
     txns: List[FileTxn] = []
     silent = 0
 
+    import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
     ws = wb.active
 
