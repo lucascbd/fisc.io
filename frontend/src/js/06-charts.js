@@ -1023,15 +1023,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     },
                                     datalabels: {
                                         display: true,
-                                        anchor: 'end',
-                                        align: 'end',
+                                        anchor: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'center' : 'end',
+                                        align: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'right' : 'end',
                                         offset: 2,
                                         clip: false,
                                         color: textColor,
                                         font: { size: 11, weight: '600' },
                                         formatter: (v, ctx) => {
                                             const pct = totalPcts[ctx.dataIndex] ?? 0;
-                                            if (Math.abs(v) < 0.5) return `= 0 (0,0%)`;
+                                            if (Math.abs(v) < 0.5) return '= 0 (0,0%)';
                                             const sign = v >= 0 ? '+' : '-';
                                             return `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct), 1)}%)`;
                                         }
@@ -1218,15 +1218,15 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             },
                             datalabels: {
                                 display: true,
-                                anchor: 'end',
-                                align: 'end',
+                                anchor: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'center' : 'end',
+                                align: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'right' : 'end',
                                 offset: 2,
                                 clip: false,
                                 color: textColor,
                                 font: { size: 11, weight: '600' },
                                 formatter: (v, ctx) => {
-                                    if (Math.abs(v) < 0.5) return '';
                                     const pct = totalPcts[ctx.dataIndex] ?? 0;
+                                    if (Math.abs(v) < 0.5) return '= 0 (0,0%)';
                                     const sign = v >= 0 ? '+' : '-';
                                     return `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct),1)}%)`;
                                 }
