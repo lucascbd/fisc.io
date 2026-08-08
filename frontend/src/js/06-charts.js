@@ -930,7 +930,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 }
                 if (data.price_volume?.length && data.months?.length >= 2) {
                     const lastM = data.months[data.months.length - 1];
-                    const pvData = data.price_volume.filter(d => Math.abs(d.efeito_preco + d.efeito_volume) > 0.01);
+                    const pvData = data.price_volume.filter(d => Math.abs(d.efeito_preco + d.efeito_volume) >= 0.5);
 
                     if (!pvData.length) {
                         showInflMsg('priceVolume', 'Sem variação detectada entre os meses.');
@@ -1136,7 +1136,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     return;
                 }
 
-                const pvData = data.price_volume.filter(d => Math.abs(d.efeito_preco + d.efeito_volume) > 0.01);
+                const pvData = data.price_volume.filter(d => Math.abs(d.efeito_preco + d.efeito_volume) >= 0.5);
                 if (!pvData.length) { showMsg('Sem variação detectada entre os meses.'); return; }
 
                 // Totais baseados em TODOS os dados — incluindo categorias sem variação (efeitos zero)
