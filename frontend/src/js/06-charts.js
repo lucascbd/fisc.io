@@ -930,7 +930,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 }
                 if (data.price_volume?.length && data.months?.length >= 2) {
                     const lastM = data.months[data.months.length - 1];
-                    const pvData = data.price_volume.filter(d => d.avg_spend_prev > 0 || d.avg_spend_last > 0);
+                    const pvData = data.price_volume.filter(d => Math.abs(d.efeito_preco + d.efeito_volume) >= 0.5);
 
                     if (!pvData.length) {
                         showInflMsg('priceVolume', 'Sem variação detectada entre os meses.');
@@ -1023,15 +1023,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                                     },
                                     datalabels: {
                                         display: true,
-                                        anchor: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'center' : 'end',
-                                        align: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'right' : 'end',
+                                        anchor: 'end',
+                                        align: 'end',
                                         offset: 2,
                                         clip: false,
                                         color: textColor,
                                         font: { size: 11, weight: '600' },
                                         formatter: (v, ctx) => {
                                             const pct = totalPcts[ctx.dataIndex] ?? 0;
-                                            if (Math.abs(v) < 0.5) return '= 0 (0,0%)';
                                             const sign = v >= 0 ? '+' : '-';
                                             return `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct), 1)}%)`;
                                         }
@@ -1136,7 +1135,7 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     return;
                 }
 
-                const pvData = data.price_volume.filter(d => d.avg_spend_prev > 0 || d.avg_spend_last > 0);
+                const pvData = data.price_volume.filter(d => Math.abs(d.efeito_preco + d.efeito_volume) >= 0.5);
                 if (!pvData.length) { showMsg('Sem variação detectada entre os meses.'); return; }
 
                 // Totais baseados em TODOS os dados — incluindo categorias sem variação (efeitos zero)
@@ -1218,15 +1217,14 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                             },
                             datalabels: {
                                 display: true,
-                                anchor: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'center' : 'end',
-                                align: (ctx) => Math.abs(ctx.dataset.data[ctx.dataIndex]) < 0.5 ? 'right' : 'end',
+                                anchor: 'end',
+                                align: 'end',
                                 offset: 2,
                                 clip: false,
                                 color: textColor,
                                 font: { size: 11, weight: '600' },
                                 formatter: (v, ctx) => {
                                     const pct = totalPcts[ctx.dataIndex] ?? 0;
-                                    if (Math.abs(v) < 0.5) return '= 0 (0,0%)';
                                     const sign = v >= 0 ? '+' : '-';
                                     return `${sign}${Math.round(Math.abs(v)).toLocaleString('pt-BR')} (${fmtPct(Math.abs(pct),1)}%)`;
                                 }
