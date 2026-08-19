@@ -530,8 +530,8 @@
         }
 
         function renderPmFilterButtons() {
-            // Filtra métodos do usuário logado (apenas ativos)
-            const myPms = activePms(user.id);
+            // Filtra métodos do usuário logado (inclui inativos para histórico)
+            const myPms = userPms(user.id);
             const isDark = document.body.classList.contains('dark-mode');
             const db = isDark ? '#3c4043' : '#f1f3f4';
             const sg = isDark ? '#1e3a5f' : '#e8f0fe';
@@ -623,7 +623,7 @@
             id = parseInt(id);
             const idx = activeExpensePmFilter.indexOf(id);
             if (idx > -1) activeExpensePmFilter.splice(idx, 1); else activeExpensePmFilter.push(id);
-            const visibleCount = window._pmIdsExpense ? activePms(user.id).filter(p => window._pmIdsExpense.has(p.id)).length : activePms(user.id).length;
+            const visibleCount = window._pmIdsExpense ? userPms(user.id).filter(p => window._pmIdsExpense.has(p.id)).length : userPms(user.id).length;
             if (activeExpensePmFilter.length === visibleCount) activeExpensePmFilter = [];
             applyExpensePmFilterStyles();
             loadExpenses();
@@ -631,7 +631,7 @@
         function applyExpensePmFilterStyles() {
             const isDark = document.body.classList.contains('dark-mode');
             const sb = '#1a73e8', sg = isDark ? '#1e3a5f' : '#e8f0fe', db = isDark ? '#3c4043' : '#f1f3f4';
-            activePms(user.id).forEach(pm => {
+            userPms(user.id).forEach(pm => {
                 const btn = document.getElementById('expensePmFilter_' + pm.id);
                 if (!btn) return;
                 const on = activeExpensePmFilter.length > 0 && activeExpensePmFilter.includes(pm.id);
@@ -644,7 +644,7 @@
             id = parseInt(id);
             const idx=activeDailyPmFilter.indexOf(id);
             if(idx>-1) activeDailyPmFilter.splice(idx,1); else activeDailyPmFilter.push(id);
-            const visibleCount = window._pmIdsDiary ? activePms(user.id).filter(pm => window._pmIdsDiary.has(pm.id)).length : activePms(user.id).length;
+            const visibleCount = window._pmIdsDiary ? userPms(user.id).filter(pm => window._pmIdsDiary.has(pm.id)).length : userPms(user.id).length;
             if(activeDailyPmFilter.length === visibleCount) activeDailyPmFilter=[];
             applyDailyPmFilterStyles();
             updateDailyChart();
@@ -652,7 +652,7 @@
         function applyDailyPmFilterStyles(){
             const isDark=document.body.classList.contains('dark-mode');
             const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
-            activePms(user.id).forEach(pm=>{
+            userPms(user.id).forEach(pm=>{
                 const btn=document.getElementById('dailyPmFilter_'+pm.id);
                 if(!btn)return;
                 const on=activeDailyPmFilter.length>0&&activeDailyPmFilter.includes(pm.id);
@@ -676,7 +676,7 @@
             id = parseInt(id);
             const idx=activePmFilter.indexOf(id);
             if(idx>-1) activePmFilter.splice(idx,1); else activePmFilter.push(id);
-            const visibleCount = window._pmIdsInicio ? activePms(user.id).filter(pm => window._pmIdsInicio.has(pm.id)).length : activePms(user.id).length;
+            const visibleCount = window._pmIdsInicio ? userPms(user.id).filter(pm => window._pmIdsInicio.has(pm.id)).length : userPms(user.id).length;
             if(activePmFilter.length === visibleCount) activePmFilter=[];
             applyPmFilterStyles();
             loadDashboardData();
@@ -684,7 +684,7 @@
         function applyPmFilterStyles(){
             const isDark=document.body.classList.contains('dark-mode');
             const sb='#1a73e8',sg=isDark?'#1e3a5f':'#e8f0fe',db=isDark?'#3c4043':'#f1f3f4';
-            activePms(user.id).forEach(pm=>{
+            userPms(user.id).forEach(pm=>{
                 const btn=document.getElementById('pmFilter_'+pm.id);
                 if(!btn)return;
                 const on=activePmFilter.length>0&&activePmFilter.includes(pm.id);
@@ -696,7 +696,7 @@
             id = parseInt(id);
             const idx = activeMvmPmFilter.indexOf(id);
             if (idx > -1) activeMvmPmFilter.splice(idx, 1); else activeMvmPmFilter.push(id);
-            const total = activePms(user.id).length;
+            const total = userPms(user.id).length;
             if (activeMvmPmFilter.length === total) activeMvmPmFilter = [];
             applyMvmPmFilterStyles();
             updateMvMChart();
@@ -704,7 +704,7 @@
         function applyMvmPmFilterStyles() {
             const isDark = document.body.classList.contains('dark-mode');
             const sb = '#1a73e8', sg = isDark ? '#1e3a5f' : '#e8f0fe', db = isDark ? '#3c4043' : '#f1f3f4';
-            activePms(user.id).forEach(pm => {
+            userPms(user.id).forEach(pm => {
                 const btn = document.getElementById('mvmPmFilter_' + pm.id);
                 if (!btn) return;
                 const on = activeMvmPmFilter.length > 0 && activeMvmPmFilter.includes(pm.id);
@@ -717,7 +717,7 @@
             id = parseInt(id);
             const idx = activePvPmFilter.indexOf(id);
             if (idx > -1) activePvPmFilter.splice(idx, 1); else activePvPmFilter.push(id);
-            const total = activePms(user.id).length;
+            const total = userPms(user.id).length;
             if (activePvPmFilter.length === total) activePvPmFilter = [];
             applyPvPmFilterStyles();
             loadInflationDebounced();
@@ -725,7 +725,7 @@
         function applyPvPmFilterStyles() {
             const isDark = document.body.classList.contains('dark-mode');
             const sb = '#1a73e8', sg = isDark ? '#1e3a5f' : '#e8f0fe', db = isDark ? '#3c4043' : '#f1f3f4';
-            activePms(user.id).forEach(pm => {
+            userPms(user.id).forEach(pm => {
                 const btn = document.getElementById('pvPmFilter_' + pm.id);
                 if (!btn) return;
                 const on = activePvPmFilter.length > 0 && activePvPmFilter.includes(pm.id);
