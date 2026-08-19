@@ -339,7 +339,7 @@
         function renderExpensePmOptions(paidById) {
             const container = document.getElementById('expPmOptionsContainer');
             if (!container) return;
-            const pms = userPms(paidById || user.id);
+            const pms = activePms(paidById || user.id);
             const isDark = document.body.classList.contains('dark-mode');
             const optionBg = isDark ? '#3c4043' : '#f8f9fa';
             const optionSelectedBg = isDark ? '#8ab4f8' : '#e8f0fe';

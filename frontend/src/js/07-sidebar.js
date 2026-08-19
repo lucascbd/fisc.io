@@ -285,7 +285,7 @@
                 '<option value="' + c.id + '" ' + (c.id === (rec?.category_id||null) ? 'selected' : '') + '>' + (c.icon||'📁') + ' ' + c.name + '</option>'
             ).join('');
 
-            const _recPmList = userPms(rec?.paid_by_user_id || user.id);
+            const _recPmList = activePms(rec?.paid_by_user_id || user.id);
             const _recSelPmId = rec?.payment_method_id || user.preferred_payment_method || (_recPmList[0]?.id || null);
             const pmRow = _recPmList.map(pm => {
                 const on = pm.id === _recSelPmId;
@@ -434,7 +434,7 @@
         async function loadSidebarPaymentMethods() {
             const list = document.getElementById('sidebarPaymentsList');
             if (!list) return;
-            const pms = userPms(user.id);
+            const pms = activePms(user.id);
             if (!pms.length) {
                 list.innerHTML = '<p class="text-sm text-gray-400 p-4 text-center">Nenhum método cadastrado.</p>';
                 return;
