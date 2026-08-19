@@ -211,7 +211,7 @@
 
         // Helpers para métodos de pagamento
         function pmById(id) { return byId(paymentMethods, id) || null; }
-        function userPms(userId) { return paymentMethods.filter(pm => pm.user_id === userId); }
+        function userPms(userId) { return paymentMethods.filter(pm => pm.user_id === userId && pm.is_active !== false); }
         function pmIcon(pm) {
             if (!pm) return '';
             if (pm.icon_path) return `<img src="${pm.icon_path}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">`;
