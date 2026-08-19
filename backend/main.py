@@ -2135,7 +2135,8 @@ def get_dashboard(
     # 1b. Payment Methods (todos os métodos dos usuários ativos)
     user_ids = [u.id for u in users_list]
     pm_list = db.query(PaymentMethod).filter(
-        PaymentMethod.user_id.in_(user_ids)
+        PaymentMethod.user_id.in_(user_ids),
+        PaymentMethod.is_active == True,
     ).order_by(PaymentMethod.user_id, PaymentMethod.display_order).all()
     payment_methods_data = [_pm_dict(pm) for pm in pm_list]
     
