@@ -204,7 +204,7 @@
                                 <div>
                                     <label class="block text-sm font-medium mb-2" style="color:#5f6368;">Métodos de pagamento</label>
                                     <div class="flex gap-2 flex-wrap">
-                                        ${userPms(user.id).map(pm => {
+                                        ${activePms(user.id).map(pm => {
                                             const on = selPmIds.length===0||selPmIds.includes(pm.id);
                                             const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
                                             return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()">

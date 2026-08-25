@@ -1323,7 +1323,7 @@
                                         <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Método de pagamento preferencial</label>
                                         <input type="hidden" id="usr_payment_value" value="${prefPaymentId || ''}">
                                         <div class="flex gap-2 flex-wrap">
-                                            ${userPms(usr?.id || user.id).map(pm => {
+                                            ${activePms(usr?.id || user.id).map(pm => {
                                                 const on = pm.id === prefPaymentId;
                                                 const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
                                                 return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()">
@@ -1343,7 +1343,7 @@
                                         <label class="block text-sm font-medium mb-2" style="color: ${labelColor};">Método de saldo / reembolso</label>
                                         <input type="hidden" id="usr_balance_method" value="${prefBalanceId || ''}">
                                         <div class="flex gap-2 flex-wrap">
-                                            ${userPms(usr?.id || user.id).map(pm => {
+                                            ${activePms(usr?.id || user.id).map(pm => {
                                                 const on = pm.id === prefBalanceId;
                                                 const imgHtml = pm.icon_path ? `<img src="${pm.icon_path}" style="width:26px;height:26px;object-fit:contain;">` : `<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${pm.color||'#999'};font-size:12px;">💳</span>`;
                                                 return `<label class="flex flex-col items-center gap-1 cursor-pointer tgt-pm-label" onclick="event.stopPropagation()">
