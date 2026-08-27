@@ -14,7 +14,7 @@
                 body.classList.add('dark-mode');
                 toggle.classList.add('active');
                 localStorage.setItem('darkMode', 'true');
-                if (themeColor) themeColor.setAttribute('content', '#1f1f1f');
+                if (themeColor) themeColor.setAttribute('content', '#000000');
             }
             invalidateCache();
             _updateTotalVisibilityIcon();

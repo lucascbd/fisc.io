@@ -350,7 +350,7 @@
                 document.body.classList.add('dark-mode');
                 document.getElementById('darkModeToggle')?.classList.add('active');
                 const themeColor = document.getElementById('themeColorMeta');
-                if (themeColor) themeColor.setAttribute('content', '#1f1f1f');
+                if (themeColor) themeColor.setAttribute('content', '#000000');
             }
             
             // Mostrar FAB na aba inicial (home) - delay para garantir que existe no DOM
