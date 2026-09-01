@@ -1676,6 +1676,8 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                 const totals = days.map(d => dailyData[d].total);
 
                 // Bolinhas vazadas: despesas com original_date neste mês mas due_date no próximo
+                const _nmTgtCatIds = selTarget?.category_ids?.length ? new Set(selTarget.category_ids.map(Number)) : null;
+                const _nmTgtPmIds  = selTarget?.payment_methods?.length ? new Set(selTarget.payment_methods) : null;
                 const nextMonthDayTotals = {};
                 for (let d = 1; d <= daysInMonth; d++) nextMonthDayTotals[d] = 0;
                 for (const expense of expenses) {
@@ -1687,8 +1689,10 @@ const monthsToSend = checkedMonths.length > 0 ? checkedMonths : (window._allIpca
                     const isShared2 = allUids2.size > 1 || (allUids2.size === 1 && !allUids2.has(user.id));
                     if (isShared2 && !showShared) continue;
                     if (!isShared2 && !showIndividual) continue;
-                    if (activeDailyPmFilter.length > 0 && !activeDailyPmFilter.includes(expense.payment_method_id)) continue;
-                    if (selectedDailyCatIds !== null && !selectedDailyCatIds.includes(expense.category_id)) continue;
+                    if (_nmTgtCatIds && !_nmTgtCatIds.has(Number(expense.category_id))) continue;
+                    if (_nmTgtPmIds  && !_nmTgtPmIds.has(expense.payment_method_id)) continue;
+                    if (!selTarget && activeDailyPmFilter.length > 0 && !activeDailyPmFilter.includes(expense.payment_method_id)) continue;
+                    if (!selTarget && selectedDailyCatIds !== null && !selectedDailyCatIds.includes(expense.category_id)) continue;
                     const day2 = origDate2.getDate();
                     for (const split of expense.splits) {
                         if (split.user_id !== user.id) continue;
