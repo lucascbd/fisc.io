@@ -430,7 +430,7 @@
             try {
                 const _md=await api(`${API}/expenses/months`);
                 months=[..._md].reverse();
-                const currentMonth=new Date().toISOString().slice(0,7);
+                const _now=new Date();const currentMonth=`${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`;
                 const homeSelect=document.getElementById('homeMonthFilter');
                 const expenseSelect=document.getElementById('expenseMonthFilter');
                 const prevHome=homeSelect.value;
