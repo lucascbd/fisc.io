@@ -296,7 +296,7 @@
                                                             
                                                             let displayName = expense.description;
                                                             if (expense.installments > 1 && expense.splits.length > 0) {
-                                                                displayName = `${expense.description} (parcela ${expense.splits[0].installment_number}/${expense.installments})`;
+                                                                displayName = `${expense.description} (${expense.splits[0].installment_number}/${expense.installments})`;
                                                             }
                                                             
                                                             return `
@@ -444,7 +444,7 @@
                                                         const expBal = exp.splits.reduce((s, sp) => s + parseFloat(sp.balance), 0);
                                                         const pv = exp.splits.length > 0 ? parseFloat(exp.splits[0].user_amount) : 0;
                                                         let dn = exp.description;
-                                                        if (exp.installments > 1 && exp.splits.length > 0) dn += ' (parcela ' + exp.splits[0].installment_number + '/' + exp.installments + ')';
+                                                        if (exp.installments > 1 && exp.splits.length > 0) dn += ' (' + exp.splits[0].installment_number + '/' + exp.installments + ')';
                                                         const instSection = exp.installments > 1 ? `
                                                             <details class="mt-2">
                                                                 <summary class="text-xs text-blue-600 cursor-pointer hover:underline">Ver parcelas (${exp.installments})</summary>
