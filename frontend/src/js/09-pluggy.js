@@ -197,6 +197,10 @@
                 } else {
                     amountHtml = `<span style="font-size:13px;font-weight:600;color:${color};">${sign}${_ofFmtCurrency(Math.abs(brlAmt))}</span>`;
                 }
+                // Strip trailing "NN/MM" from description (already shown as badge)
+                const cleanDesc = tx.total_installments > 1
+                    ? tx.description.replace(/\s*\d{1,2}\/\d{1,2}$/, '').trim()
+                    : tx.description;
                 const instBadge = tx.total_installments > 1
                     ? `<span style="font-size:10px;padding:1px 6px;background:#e8f0fe;border-radius:8px;color:#1a73e8;margin-left:4px;">${tx.installment_number || '?'}/${tx.total_installments}</span>`
                     : '';
@@ -212,7 +216,7 @@
                 }
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f3f4;" id="ofRow_${tx.id}">
                     <div style="flex:1;min-width:0;margin-right:8px;">
-                        <div class="of-desc" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tx.description}${instBadge}</div>
+                        <div class="of-desc" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cleanDesc}${instBadge}</div>
                         <div class="of-date" style="font-size:11px;color:#5f6368;">${tx.date}</div>
                         <div style="font-size:11px;color:#5f6368;">${tx.type === 'CREDIT' ? 'CRÉDITO' : 'DÉBITO'}</div>
                     </div>
@@ -309,7 +313,7 @@
                         <div class="w-full max-w-sm flex flex-col" style="background:${modalBg};border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow:hidden;">
                             <div style="overflow-y:auto;flex:1;padding:1.25rem;">
                                 <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;color:${titleColor};">Importar como Despesa</h3>
-                                <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description}${tx.total_installments > 1 ? ` (${tx.installment_number || '?'}/${tx.total_installments})` : ''} • ${fmt(Math.abs(tx.import_amount !== undefined ? tx.import_amount : tx.brl_amount || tx.amount))}${tx.currency_code && tx.currency_code !== 'BRL' ? ` <span style="font-size:10px;">(${tx.currency_code} ${_ofFmtCurrency(Math.abs(tx.amount), tx.currency_code)})</span>` : ''} • ${tx.date}</p>
+                                <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description.replace(/\s*\d{1,2}\/\d{1,2}$/, '').trim()}${tx.total_installments > 1 ? ` <span style="background:#e8f0fe;border-radius:6px;padding:1px 5px;color:#1a73e8;">${tx.installment_number || '?'}/${tx.total_installments}</span>` : ''} • ${fmt(Math.abs(tx.import_amount !== undefined ? tx.import_amount : tx.brl_amount || tx.amount))}${tx.currency_code && tx.currency_code !== 'BRL' ? ` <span style="font-size:10px;">(${tx.currency_code} ${_ofFmtCurrency(Math.abs(tx.amount), tx.currency_code)})</span>` : ''} • ${tx.date}</p>
                                 ${dupWarning}
                                 <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Categoria</label>
                                 <input type="hidden" id="ofExpCat">

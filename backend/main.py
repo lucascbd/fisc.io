@@ -3790,34 +3790,80 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
             dt = str(tx.get("date", ""))[:10]
             return (amt, dt) in dup_keys
 
-        def _build_tx(tx):
+        import re as _re
+
+        def _enrich(tx):
             pd = tx.get("paymentData") or {}
             cm = pd.get("creditCardMetadata") or pd.get("creditData") or {}
-            inst_num   = cm.get("installmentNumber")
-            inst_total = cm.get("totalInstallments")
-            inst_amt_raw = cm.get("installmentAmount")
-            inst_amt   = float(inst_amt_raw) if inst_amt_raw is not None else None
-            currency   = tx.get("currencyCode") or "BRL"
-            raw_amount = float(tx.get("amount") or 0)
-            amt_in_acct = tx.get("amountInAccountCurrency")
-            brl_amount = float(amt_in_acct) if amt_in_acct is not None else raw_amount
-            # Import amount: installment amount if available, else raw (already installment for card txns)
-            import_amount = inst_amt if inst_amt is not None else brl_amount
+            inst_n   = cm.get("installmentNumber")
+            inst_tot = cm.get("totalInstallments")
+            inst_a   = cm.get("installmentAmount")
+            # Fallback: parse "NN/MM" from description when creditCardMetadata absent
+            if not (inst_n and inst_tot):
+                m = _re.search(r'(\d{1,2})/(\d{1,2})$', tx.get("description", "").strip())
+                if m:
+                    a, b = int(m.group(1)), int(m.group(2))
+                    if 1 <= a <= b <= 99:
+                        inst_n, inst_tot = a, b
+            currency = tx.get("currencyCode") or "BRL"
+            raw_amt  = float(tx.get("amount") or 0)
+            acct_amt = tx.get("amountInAccountCurrency")
+            brl_amt  = float(acct_amt) if acct_amt is not None else raw_amt
+            imp_amt  = float(inst_a) if inst_a is not None else brl_amt
+            base     = _re.sub(r'\s*\d{1,2}/\d{1,2}$', '', tx.get("description", "")).strip()
+            return {"tx": tx, "inst_n": inst_n, "inst_tot": inst_tot,
+                    "imp_amt": imp_amt, "brl_amt": brl_amt, "raw_amt": raw_amt,
+                    "currency": currency, "base_desc": base}
+
+        enriched = [_enrich(tx) for tx in all_txns]
+
+        # Deduplicate installment series: show only the first unimported installment per purchase
+        series = {}  # (base_desc, inst_tot, amt, date) → sorted indices
+        solo   = []
+        for i, e in enumerate(enriched):
+            if e["inst_n"] and e["inst_tot"] and e["inst_tot"] > 1:
+                k = (e["base_desc"], e["inst_tot"],
+                     f"{e['raw_amt']:.2f}", str(e["tx"].get("date",""))[:10])
+                series.setdefault(k, []).append(i)
+            else:
+                solo.append(i)
+
+        keep = set(solo)
+        for idxs in series.values():
+            idxs.sort(key=lambda i: enriched[i]["inst_n"] or 0)
+            first_unimported = next(
+                (i for i in idxs if str(enriched[i]["tx"].get("id","")) not in imported), None)
+            keep.add(first_unimported if first_unimported is not None else idxs[-1])
+
+        # Detect in-list foreign-currency duplicates: flag the foreign one when a BRL
+        # version with the same BRL amount and date already exists in the list
+        brl_keys = {(f"{enriched[i]['brl_amt']:.2f}", str(enriched[i]["tx"].get("date",""))[:10])
+                    for i in keep if enriched[i]["currency"] == "BRL"}
+
+        def _build_result(i):
+            e  = enriched[i]
+            tx = e["tx"]
+            tx_id   = str(tx.get("id", ""))
+            already = tx_id in imported
+            is_fx_dup = (e["currency"] != "BRL" and
+                         (f"{e['brl_amt']:.2f}", str(tx.get("date",""))[:10]) in brl_keys)
+            dup = not already and (_is_dup(tx) or is_fx_dup)
             return {
-                "id": str(tx.get("id", "")),
+                "id": tx_id,
                 "description": tx.get("description", ""),
-                "amount": raw_amount,
-                "brl_amount": brl_amount,
-                "import_amount": import_amount,
-                "currency_code": currency,
+                "amount": e["raw_amt"],
+                "brl_amount": e["brl_amt"],
+                "import_amount": e["imp_amt"],
+                "currency_code": e["currency"],
                 "date": str(tx.get("date", ""))[:10],
                 "type": str(tx.get("type", "DEBIT")),
-                "installment_number": inst_num,
-                "total_installments": inst_total,
-                "already_imported": str(tx.get("id", "")) in imported,
-                "possible_duplicate": not (str(tx.get("id", "")) in imported) and _is_dup(tx),
+                "installment_number": e["inst_n"],
+                "total_installments": e["inst_tot"],
+                "already_imported": already,
+                "possible_duplicate": dup,
             }
-        return {"transactions": [_build_tx(tx) for tx in all_txns]}
+
+        return {"transactions": [_build_result(i) for i in sorted(keep)]}
     except HTTPException:
         raise
     except Exception as e:
