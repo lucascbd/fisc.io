@@ -3790,13 +3790,34 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
             dt = str(tx.get("date", ""))[:10]
             return (amt, dt) in dup_keys
 
-        return {"transactions": [{"id": str(tx.get("id", "")),
-                 "description": tx.get("description", ""),
-                 "amount": float(tx.get("amount") or 0),
-                 "date": str(tx.get("date", ""))[:10],
-                 "type": str(tx.get("type", "DEBIT")),
-                 "already_imported": str(tx.get("id", "")) in imported,
-                 "possible_duplicate": not (str(tx.get("id", "")) in imported) and _is_dup(tx)} for tx in all_txns]}
+        def _build_tx(tx):
+            pd = tx.get("paymentData") or {}
+            cm = pd.get("creditCardMetadata") or pd.get("creditData") or {}
+            inst_num   = cm.get("installmentNumber")
+            inst_total = cm.get("totalInstallments")
+            inst_amt_raw = cm.get("installmentAmount")
+            inst_amt   = float(inst_amt_raw) if inst_amt_raw is not None else None
+            currency   = tx.get("currencyCode") or "BRL"
+            raw_amount = float(tx.get("amount") or 0)
+            amt_in_acct = tx.get("amountInAccountCurrency")
+            brl_amount = float(amt_in_acct) if amt_in_acct is not None else raw_amount
+            # Import amount: installment amount if available, else raw (already installment for card txns)
+            import_amount = inst_amt if inst_amt is not None else brl_amount
+            return {
+                "id": str(tx.get("id", "")),
+                "description": tx.get("description", ""),
+                "amount": raw_amount,
+                "brl_amount": brl_amount,
+                "import_amount": import_amount,
+                "currency_code": currency,
+                "date": str(tx.get("date", ""))[:10],
+                "type": str(tx.get("type", "DEBIT")),
+                "installment_number": inst_num,
+                "total_installments": inst_total,
+                "already_imported": str(tx.get("id", "")) in imported,
+                "possible_duplicate": not (str(tx.get("id", "")) in imported) and _is_dup(tx),
+            }
+        return {"transactions": [_build_tx(tx) for tx in all_txns]}
     except HTTPException:
         raise
     except Exception as e:

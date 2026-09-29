@@ -172,17 +172,34 @@
             }
         }
 
+        function _ofFmtCurrency(v, code) {
+            return new Intl.NumberFormat('pt-BR', {style:'currency', currency: code || 'BRL'}).format(v);
+        }
+
         function _ofRenderTransactions(txs) {
             const list = document.getElementById('ofTransactionsList');
             if (!txs.length) {
                 list.innerHTML = '<p class="text-center text-sm text-gray-500 py-4">Nenhuma transação encontrada</p>';
                 return;
             }
-            const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
             const rows = txs.map(tx => {
                 const isDebit = tx.type === 'DEBIT';
                 const color = isDebit ? '#d93025' : '#1e8e3e';
                 const sign = isDebit ? '-' : '+';
+                const isForeign = tx.currency_code && tx.currency_code !== 'BRL';
+                const brlAmt = tx.brl_amount !== undefined ? tx.brl_amount : tx.amount;
+                let amountHtml;
+                if (isForeign) {
+                    amountHtml = `<div style="text-align:right;">
+                        <div style="font-size:13px;font-weight:600;color:${color};">${sign}${_ofFmtCurrency(Math.abs(brlAmt))}</div>
+                        <div style="font-size:10px;color:#5f6368;">${tx.currency_code} ${_ofFmtCurrency(Math.abs(tx.amount), tx.currency_code)}</div>
+                    </div>`;
+                } else {
+                    amountHtml = `<span style="font-size:13px;font-weight:600;color:${color};">${sign}${_ofFmtCurrency(Math.abs(brlAmt))}</span>`;
+                }
+                const instBadge = tx.total_installments > 1
+                    ? `<span style="font-size:10px;padding:1px 6px;background:#e8f0fe;border-radius:8px;color:#1a73e8;margin-left:4px;">${tx.installment_number || '?'}/${tx.total_installments}</span>`
+                    : '';
                 let actionHtml;
                 if (tx.already_imported) {
                     actionHtml = '<span class="of-tag" style="font-size:11px;padding:2px 8px;background:#f1f3f4;border-radius:10px;color:#5f6368;">importado</span>';
@@ -195,12 +212,12 @@
                 }
                 return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f3f4;" id="ofRow_${tx.id}">
                     <div style="flex:1;min-width:0;margin-right:8px;">
-                        <div class="of-desc" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tx.description}</div>
+                        <div class="of-desc" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tx.description}${instBadge}</div>
                         <div class="of-date" style="font-size:11px;color:#5f6368;">${tx.date}</div>
                         <div style="font-size:11px;color:#5f6368;">${tx.type === 'CREDIT' ? 'CRÉDITO' : 'DÉBITO'}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-                        <span style="font-size:13px;font-weight:600;color:${color};">${sign}${fmt(Math.abs(tx.amount))}</span>
+                        ${amountHtml}
                         ${actionHtml}
                     </div>
                 </div>`;
@@ -246,7 +263,7 @@
             const tx = _ofTxStore[txId];
             if (!tx) return;
             try {
-                const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
+                const fmt = v => _ofFmtCurrency(v);
                 const [catsArr, profsArr] = await Promise.all([
                     api(`${API}/categories`),
                     api(`${API}/profiles`),
@@ -292,7 +309,7 @@
                         <div class="w-full max-w-sm flex flex-col" style="background:${modalBg};border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;overflow:hidden;">
                             <div style="overflow-y:auto;flex:1;padding:1.25rem;">
                                 <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;color:${titleColor};">Importar como Despesa</h3>
-                                <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description} • ${fmt(Math.abs(tx.amount))} • ${tx.date}</p>
+                                <p style="font-size:12px;color:${optionTextColor};margin-bottom:10px;">${tx.description}${tx.total_installments > 1 ? ` (${tx.installment_number || '?'}/${tx.total_installments})` : ''} • ${fmt(Math.abs(tx.import_amount !== undefined ? tx.import_amount : tx.brl_amount || tx.amount))}${tx.currency_code && tx.currency_code !== 'BRL' ? ` <span style="font-size:10px;">(${tx.currency_code} ${_ofFmtCurrency(Math.abs(tx.amount), tx.currency_code)})</span>` : ''} • ${tx.date}</p>
                                 ${dupWarning}
                                 <label class="block text-sm font-medium mb-2" style="color:${titleColor};">Categoria</label>
                                 <input type="hidden" id="ofExpCat">
@@ -322,10 +339,11 @@
             const accId = document.getElementById('ofAccountSelect').value;
             const acc = _ofAccounts.find(a => String(a.id) === String(accId));
             try {
+                const importAmt = tx.import_amount !== undefined ? tx.import_amount : (tx.brl_amount || tx.amount);
                 await api(`${API}/openfinance/import/expense`, { method: 'POST', body: JSON.stringify({
                     pluggy_transaction_id: txId,
                     description: tx.description,
-                    amount: tx.amount,
+                    amount: importAmt,
                     expense_date: tx.date,
                     category_id: catId,
                     split_profile_id: profId,
@@ -344,16 +362,16 @@
         async function _ofImportIncome(txId) {
             const tx = _ofTxStore[txId];
             if (!tx) return;
-            const fmt = v => new Intl.NumberFormat('pt-BR', {style:'currency',currency:'BRL'}).format(v);
+            const fmt = v => _ofFmtCurrency(v);
             document.getElementById('modalContainer').innerHTML = `
                 <div class="fixed inset-0 flex items-center justify-center z-50" style="background:rgba(0,0,0,0.32);backdrop-filter:blur(4px);padding:1rem;" onclick="if(event.target===this)this.remove()">
                     <div class="bg-white w-full max-w-sm overflow-auto flex flex-col" style="border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,0.2);max-height:90vh;padding:1.25rem;">
                         <h3 style="font-weight:600;font-size:1rem;margin-bottom:4px;">Importar como Receita</h3>
-                        <p style="font-size:12px;color:#5f6368;margin-bottom:12px;">${tx.description} • ${fmt(tx.amount)} • ${tx.date}</p>
+                        <p style="font-size:12px;color:#5f6368;margin-bottom:12px;">${tx.description} • ${fmt(tx.brl_amount || tx.amount)} • ${tx.date}</p>
                         <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Descrição</label>
                         <input id="ofIncDesc" value="${tx.description.replace(/"/g,'&quot;')}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
                         <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Valor</label>
-                        <input id="ofIncAmt" type="number" step="0.01" value="${tx.amount}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
+                        <input id="ofIncAmt" type="number" step="0.01" value="${tx.brl_amount || tx.amount}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
                         <label style="font-size:12px;font-weight:500;margin-bottom:3px;">Data</label>
                         <input id="ofIncDate" type="date" value="${tx.date}" style="border:1px solid #ccc;border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:8px;width:100%;box-sizing:border-box;">
                         <button onclick="_ofDoImportIncome('${txId}')" style="background:#1e8e3e;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:500;cursor:pointer;width:100%;margin-top:4px;">Importar</button>
