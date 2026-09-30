@@ -3774,19 +3774,33 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
             imported.add(row[0])
 
         # Duplicatas por (valor, data, método de pagamento)
+        # Para despesas parceladas, comparar pelo valor da PARCELA (installment_amount),
+        # não pelo total — o Pluggy retorna o valor de cada parcela individualmente.
         dup_keys = set()
         if acct.payment_method_id:
-            rows = db.execute(_text(
-                "SELECT total_amount::text, expense_date::text FROM expenses "
-                "WHERE payment_method_id = :pm AND pluggy_transaction_id IS NULL"
-            ), {"pm": acct.payment_method_id}).fetchall()
+            rows = db.execute(_text("""
+                SELECT
+                    CASE WHEN e.installments > 1
+                         THEN COALESCE(
+                             (SELECT CAST(s.installment_amount AS numeric)
+                              FROM expense_splits s
+                              WHERE s.expense_id = e.id AND s.installment_number = 1
+                              LIMIT 1),
+                             e.total_amount / e.installments
+                         )
+                         ELSE e.total_amount
+                    END AS check_amount,
+                    e.expense_date::text
+                FROM expenses e
+                WHERE e.payment_method_id = :pm AND e.pluggy_transaction_id IS NULL
+            """), {"pm": acct.payment_method_id}).fetchall()
             for r in rows:
-                dup_keys.add((str(r[0]), str(r[1])))
+                dup_keys.add((f"{float(r[0]):.2f}", str(r[1])))
 
-        def _is_dup(tx):
+        def _is_dup(tx, override_amt=None):
             if acct.payment_method_id is None:
                 return False
-            amt = f"{float(tx.get('amount') or 0):.2f}"
+            amt = f"{float(override_amt if override_amt is not None else tx.get('amount') or 0):.2f}"
             dt = str(tx.get("date", ""))[:10]
             return (amt, dt) in dup_keys
 
@@ -3847,7 +3861,9 @@ def openfinance_transactions(account_id: int, date_from: str = None, date_to: st
             already = tx_id in imported
             is_fx_dup = (e["currency"] != "BRL" and
                          (f"{e['brl_amt']:.2f}", str(tx.get("date",""))[:10]) in brl_keys)
-            dup = not already and (_is_dup(tx) or is_fx_dup)
+            # Use imp_amt (installment amount in BRL) for dup check so parcelada
+            # expenses are matched by their per-installment value, not the total
+            dup = not already and (_is_dup(tx, override_amt=e["imp_amt"]) or is_fx_dup)
             return {
                 "id": tx_id,
                 "description": tx.get("description", ""),
