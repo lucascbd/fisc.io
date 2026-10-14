@@ -108,6 +108,7 @@
                                 expense_installments: expense.installments,
                                 expense_profile_name: expense.profile_name,
                                 expense_total_amount: expense.total_amount,
+                                expense_payment_method_id: expense.payment_method_id,
                                 category_emoji: expense.category_emoji
                             });
                         });
@@ -142,6 +143,7 @@
                                 profile_name: split.expense_profile_name,
                                 installments: split.expense_installments,
                                 total_amount: split.expense_total_amount,
+                                payment_method_id: split.expense_payment_method_id,
                                 splits: []
                             };
                         }
@@ -311,7 +313,10 @@
                                                                             <p class="text-xs text-gray-500">⚖️ ${expense.profile_name}</p>
                                                                         </div>
                                                                         <div class="text-right ml-4" style="flex-shrink:0;">
-                                                                            <p class="font-bold" style="white-space:nowrap;">R$ ${formatBRL(parcelaValor)}</p>
+                                                                            <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;">
+                                                                                <p class="font-bold" style="white-space:nowrap;">R$ ${formatBRL(parcelaValor)}</p>
+                                                                                ${(() => { const _pm = pmById(expense.payment_method_id); if (!_pm) return ''; return _pm.icon_path ? `<img src="${_pm.icon_path}" style="width:18px;height:18px;object-fit:contain;border-radius:3px;flex-shrink:0;">` : `<span style="width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:${_pm.color||'#999'};font-size:9px;flex-shrink:0;">💳</span>`; })()}
+                                                                            </div>
                                                                             ${totalPaidAmount > 0 ? `
                                                                                 <p class="text-xs text-blue-600" style="white-space:nowrap;">Pagou: R$ ${formatBRL(totalPaidAmount)}</p>
                                                                             ` : ''}
@@ -394,7 +399,7 @@
                         for (const expense of sharedExpenses) {
                             expense.splits
                                 .filter(s => { const d = new Date(s.due_date + 'T00:00:00'); return s.user_id === balance.user_id && d.getFullYear() === syear && d.getMonth() + 1 === smon; })
-                                .forEach(split => allSplits.push({ ...split, expense_id: expense.id, expense_description: expense.description, expense_category: expense.category_name, expense_date: expense.expense_date, original_date: expense.original_date || expense.expense_date, expense_installments: expense.installments, expense_profile_name: expense.profile_name, expense_total_amount: expense.total_amount, category_emoji: expense.category_emoji }));
+                                .forEach(split => allSplits.push({ ...split, expense_id: expense.id, expense_description: expense.description, expense_category: expense.category_name, expense_date: expense.expense_date, original_date: expense.original_date || expense.expense_date, expense_installments: expense.installments, expense_profile_name: expense.profile_name, expense_total_amount: expense.total_amount, expense_payment_method_id: expense.payment_method_id, category_emoji: expense.category_emoji }));
                         }
                         if (allSplits.length === 0) return '';
                         const totalUserAmount = allSplits.reduce((sum, s) => sum + parseFloat(s.user_amount), 0);
@@ -404,7 +409,7 @@
                             if (!groupedByCategory[split.expense_category]) groupedByCategory[split.expense_category] = { category: split.expense_category, category_emoji: split.category_emoji, expenses: {} };
                             const eid = `${split.expense_id}`;
                             if (!groupedByCategory[split.expense_category].expenses[eid]) {
-                                groupedByCategory[split.expense_category].expenses[eid] = { id: split.expense_id, description: split.expense_description, date: split.original_date || split.expense_date, original_date: split.original_date || split.expense_date, profile_name: split.expense_profile_name, installments: split.expense_installments, total_amount: split.expense_total_amount, splits: [] };
+                                groupedByCategory[split.expense_category].expenses[eid] = { id: split.expense_id, description: split.expense_description, date: split.original_date || split.expense_date, original_date: split.original_date || split.expense_date, profile_name: split.expense_profile_name, installments: split.expense_installments, total_amount: split.expense_total_amount, payment_method_id: split.expense_payment_method_id, splits: [] };
                             }
                             groupedByCategory[split.expense_category].expenses[eid].splits.push(split);
                         });
